@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.auth import get_current_user
 from app.database import get_db
@@ -28,8 +28,15 @@ def get_analytics(
             select(LogEntry)
             .where(LogEntry.car_id == car.id)
             .order_by(LogEntry.date, LogEntry.odometer)
+            .options(
+                selectinload(LogEntry.refuel),
+                selectinload(LogEntry.maintenance),
+                selectinload(LogEntry.repair),
+            )
         )
         .scalars()
         .all()
     )
-    return AnalyticsOut(**compute_analytics(logs), forecast=build_forecast(db, car))
+    return AnalyticsOut(
+        **compute_analytics(logs), forecast=build_forecast(db, car, logs=logs)
+    )

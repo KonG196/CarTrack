@@ -9,7 +9,7 @@ from collections.abc import Sequence
 from statistics import median
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models import Car, LogEntry, ServiceInterval
 from app.services.intervals import compute_avg_daily_km, compute_interval_status
@@ -184,20 +184,35 @@ def estimate_interval_cost(interval_title: str, logs: Sequence[LogEntry]) -> flo
     return round(median(matched_costs), 2)
 
 
-def build_forecast(db: Session, car: Car, today: dt.date | None = None) -> dict:
-    """Assemble the forecast payload for a car per the API contract."""
+def build_forecast(
+    db: Session,
+    car: Car,
+    today: dt.date | None = None,
+    logs: Sequence[LogEntry] | None = None,
+) -> dict:
+    """Assemble the forecast payload for a car per the API contract.
+
+    ``logs`` lets callers that already loaded the car's log entries (with
+    detail rows eager-loaded) reuse them instead of re-querying.
+    """
     if today is None:
         today = dt.date.today()
 
-    logs = (
-        db.execute(
-            select(LogEntry)
-            .where(LogEntry.car_id == car.id)
-            .order_by(LogEntry.date, LogEntry.odometer)
+    if logs is None:
+        logs = (
+            db.execute(
+                select(LogEntry)
+                .where(LogEntry.car_id == car.id)
+                .order_by(LogEntry.date, LogEntry.odometer)
+                .options(
+                    selectinload(LogEntry.refuel),
+                    selectinload(LogEntry.maintenance),
+                    selectinload(LogEntry.repair),
+                )
+            )
+            .scalars()
+            .all()
         )
-        .scalars()
-        .all()
-    )
     intervals = (
         db.execute(
             select(ServiceInterval)

@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime as dt
 from io import BytesIO
 from pathlib import Path
+from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -14,7 +15,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models import Car, LogEntry, ServiceInterval
 from app.services.fuel import compute_fuel_stats
@@ -180,6 +181,11 @@ def build_car_report(db: Session, car: Car) -> bytes:
             select(LogEntry)
             .where(LogEntry.car_id == car.id)
             .order_by(LogEntry.date, LogEntry.odometer)
+            .options(
+                selectinload(LogEntry.refuel),
+                selectinload(LogEntry.maintenance),
+                selectinload(LogEntry.repair),
+            )
         )
         .scalars()
         .all()
@@ -200,10 +206,10 @@ def build_car_report(db: Session, car: Car) -> bytes:
     story.append(Paragraph("Kapot Tracker — Сервісна історія", styles["title"]))
     story.append(Spacer(1, 3 * mm))
     car_title = f"{car.brand} {car.model}, {car.year}"
-    story.append(Paragraph(car_title, styles["subtitle"]))
+    story.append(Paragraph(escape(car_title), styles["subtitle"]))
     details = " · ".join(part for part in (car.generation, car.engine) if part)
     if details:
-        story.append(Paragraph(details, styles["muted"]))
+        story.append(Paragraph(escape(details), styles["muted"]))
     story.append(
         Paragraph(f"Звіт згенеровано: {_fmt_date(dt.date.today())}", styles["muted"])
     )
@@ -281,7 +287,7 @@ def build_car_report(db: Session, car: Car) -> bytes:
                 [
                     Paragraph(_fmt_date(log.date), styles["cell"]),
                     Paragraph(_fmt_km(log.odometer), styles["cell"]),
-                    Paragraph(_service_log_description(log), styles["cell"]),
+                    Paragraph(escape(_service_log_description(log)), styles["cell"]),
                     Paragraph(_fmt_money(float(log.total_cost or 0)), styles["cell"]),
                 ]
             )
@@ -339,7 +345,7 @@ def build_car_report(db: Session, car: Car) -> bytes:
             )
             rows.append(
                 [
-                    Paragraph(interval.title, styles["cell"]),
+                    Paragraph(escape(interval.title), styles["cell"]),
                     Paragraph(last_text, styles["cell"]),
                     Paragraph(next_text, styles["cell"]),
                     Paragraph(STATUS_LABELS.get(computed["status"], computed["status"]), styles["cell"]),
