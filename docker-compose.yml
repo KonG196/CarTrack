@@ -1,0 +1,58 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-kapot_tracker}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kapot_tracker}
+      POSTGRES_DB: ${POSTGRES_DB:-kapot_tracker_db}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-kapot_tracker} -d ${POSTGRES_DB:-kapot_tracker_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-kapot_tracker}:${POSTGRES_PASSWORD:-kapot_tracker}@db:5432/${POSTGRES_DB:-kapot_tracker_db}
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
+      LINK_CODE_EXPIRE_MINUTES: ${LINK_CODE_EXPIRE_MINUTES:-15}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Telegram-бот: окремий процес на тому самому образі, що й backend.
+  # Не стартує при звичайному `docker compose up` — увімкнення:
+  #   docker compose --profile bot up
+  bot:
+    build: ./backend
+    command: python -m app.bot.main
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-kapot_tracker}:${POSTGRES_PASSWORD:-kapot_tracker}@db:5432/${POSTGRES_DB:-kapot_tracker_db}
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
+      LINK_CODE_EXPIRE_MINUTES: ${LINK_CODE_EXPIRE_MINUTES:-15}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    profiles: ["bot"]
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:

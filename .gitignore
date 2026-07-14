@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+kapot_tracker.db
+*.sqlite3
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# Environment
+.env
+.env.local
+
+# OS / editor junk
+.DS_Store
+.idea/
+.vscode/
+
+# Coverage
+coverage/
+.coverage
+htmlcov/
+coverage.xml
+
+# User notes (chat log with project spec)
+.txt

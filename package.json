@@ -1,0 +1,12 @@
+{
+  "name": "kapot-tracker",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Kapot Tracker monorepo: FastAPI backend (backend/) + Vite React PWA frontend (frontend/)",
+  "scripts": {
+    "dev": "bash scripts/dev.sh",
+    "build": "npm --prefix frontend run build",
+    "test": "npm --prefix frontend run test",
+    "test:backend": "cd backend && pytest"
+  }
+}

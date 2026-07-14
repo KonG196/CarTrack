@@ -1,0 +1,145 @@
+# Kapot Tracker
+
+Бортовий журнал вашого авто: витрати, заправки, розхід пального та сервісні інтервали — все в одному застосунку.
+
+## Архітектура
+
+- **Backend** — FastAPI (Python 3.12), REST API з JWT-авторизацією. База даних: SQLite за замовчуванням для локальної розробки, PostgreSQL у Docker/продакшені (SQLAlchemy, `postgresql+psycopg2`).
+- **Frontend** — React (Vite) як PWA. У Docker збирається у статичні файли та роздається через nginx, який проксіює `/api` на backend.
+- **Авторизація** — JWT (access-токени, термін дії налаштовується через `ACCESS_TOKEN_EXPIRE_MINUTES`).
+
+```
+frontend (React PWA, nginx :80) ──/api──> backend (FastAPI :8000) ──> PostgreSQL / SQLite
+```
+
+## Можливості MVP
+
+- Авторизація: реєстрація та вхід (JWT).
+- Гараж: кілька авто на одного користувача.
+- Журнал записів 4 типів: заправка, ТО, ремонт, витрата.
+- Розхід пального за методом «повний-до-повного».
+- Сервісні інтервали з прогнозом дати наступного обслуговування.
+- Аналітика з графіками: витрати за категоріями та періодами, динаміка розходу.
+- PWA: встановлення на телефон/десктоп, робота як окремий застосунок.
+- OCR чеків: фото чека з заправки автозаповнює форму запису.
+- Telegram-бот: пробіг, швидкі витрати та нагадування про ТО прямо з месенджера.
+
+## OCR чеків
+
+Як це працює: ви фотографуєте чек — фронтенд надсилає фото на `POST /api/ocr/scan` — розпізнаний текст (сума, літри, дата) автозаповнює форму нового запису, залишається лише перевірити й зберегти.
+
+Розпізнавання виконує [Tesseract](https://github.com/tesseract-ocr/tesseract) (українська + англійська мови):
+
+- **Локальна розробка**: потрібен системний бінарник tesseract. На macOS:
+
+  ```bash
+  brew install tesseract tesseract-lang
+  ```
+
+- **Docker**: нічого робити не треба — tesseract уже встановлено в образ backend.
+- Якщо бінарник не знайдено, ендпоінт відповідає `503`, решта API працює як звичайно.
+
+## Telegram-бот
+
+Бот дозволяє вести журнал, не відкриваючи застосунок.
+
+Налаштування:
+
+1. Створіть бота через [@BotFather](https://t.me/BotFather) і отримайте токен.
+2. Впишіть `TELEGRAM_BOT_TOKEN` і `TELEGRAM_BOT_USERNAME` (без `@`) у `.env`.
+3. Запустіть бота:
+
+   ```bash
+   # Локально (у venv backend-а)
+   python -m app.bot.main
+
+   # Docker (окремий сервіс, не стартує при звичайному up)
+   docker compose --profile bot up
+   ```
+
+Можливості:
+
+- Привʼязка акаунта через код із розділу «Гараж» (діє `LINK_CODE_EXPIRE_MINUTES` хвилин).
+- `/status` — стан кожного авто: пробіг і до трьох найближчих сервісних інтервалів.
+- Оновлення пробігу: просто надішліть число.
+- Швидкі витрати одним повідомленням: `мийка 300`.
+- Нагадування про наближення сервісних інтервалів (ТО).
+
+## Швидкий старт: локальна розробка (без Docker)
+
+### Backend
+
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
+```
+
+За замовчуванням використовується SQLite (`kapot_tracker.db`), окрема БД не потрібна. API-документація: http://localhost:8000/docs
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Відкрийте http://localhost:5173
+
+## Швидкий старт: Docker
+
+```bash
+cp .env.example .env   # відредагуйте SECRET_KEY та інші значення
+docker compose up --build
+```
+
+Відкрийте http://localhost:3000
+
+## Змінні середовища
+
+| Змінна | Опис | Приклад / за замовчуванням |
+|---|---|---|
+| `SECRET_KEY` | Ключ підпису JWT | довгий випадковий рядок |
+| `DATABASE_URL` | URL бази даних (SQLAlchemy) | `sqlite:///./kapot_tracker.db` або `postgresql+psycopg2://kapot_tracker:kapot_tracker@db:5432/kapot_tracker_db` |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | Термін дії access-токена (хв) | `60` |
+| `CORS_ORIGINS` | Дозволені origin-и (через кому) | `http://localhost:5173,http://localhost:3000` |
+| `TELEGRAM_BOT_TOKEN` | Токен бота від @BotFather (порожній — бот не запускається) | — |
+| `TELEGRAM_BOT_USERNAME` | Username бота без `@`, для deep-link кнопки | `KapotTrackerBot` |
+| `LINK_CODE_EXPIRE_MINUTES` | Термін дії коду привʼязки Telegram (хв) | `15` |
+| `POSTGRES_USER` | Користувач PostgreSQL (Docker) | `kapot_tracker` |
+| `POSTGRES_PASSWORD` | Пароль PostgreSQL (Docker) | `kapot_tracker` |
+| `POSTGRES_DB` | Назва БД PostgreSQL (Docker) | `kapot_tracker_db` |
+
+## Огляд API
+
+| Група ендпоінтів | Призначення |
+|---|---|
+| `/api/auth` | Реєстрація (`/register`), вхід (`/token`), профіль (`/me`) |
+| `/api/cars` | CRUD авто в гаражі |
+| `/api/cars/{car_id}/logs`, `/api/logs/{log_id}` | Журнал записів (заправка, ТО, ремонт, витрата) |
+| `/api/cars/{car_id}/intervals`, `/api/intervals/{interval_id}` | Сервісні інтервали та прогноз наступного ТО |
+| `/api/cars/{car_id}/analytics` | Агреговані дані для графіків, у т.ч. розхід пального (повний-до-повного) |
+| `/api/ocr/scan` | Розпізнавання фото чека (tesseract) для автозаповнення форми запису |
+| `/api/telegram/*` | Привʼязка Telegram-акаунта: генерація коду, статус, відвʼязка |
+
+Повна інтерактивна документація доступна на `/docs` (Swagger UI) після запуску backend.
+
+## Тестування
+
+```bash
+# Backend
+cd backend
+pytest
+
+# Frontend
+cd frontend
+npm run test   # vitest
+```
+
+## Дорожня карта
+
+- **Етап 2** ✅: OCR чеків із заправок, Telegram-бот для швидкого додавання записів — реалізовано.
+- **Етап 3** (наступний): PDF-звіти по авто, прогнозна аналітика витрат і обслуговування.
