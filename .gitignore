@@ -6,6 +6,10 @@ __pycache__/
 kapot_tracker.db
 *.sqlite3
 
+# User uploads and database backups (local data, never committed)
+backend/uploads/
+backend/backups/
+
 # Node
 node_modules/
 dist/

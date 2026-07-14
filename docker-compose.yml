@@ -25,6 +25,13 @@ services:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
       LINK_CODE_EXPIRE_MINUTES: ${LINK_CODE_EXPIRE_MINUTES:-15}
+      UPLOADS_DIR: /app/uploads
+      BACKUP_DIR: /app/backups
+      BACKUP_KEEP: ${BACKUP_KEEP:-14}
+      BACKUP_TELEGRAM_CHAT_ID: ${BACKUP_TELEGRAM_CHAT_ID:-}
+    volumes:
+      - uploads:/app/uploads
+      - backups:/app/backups
     depends_on:
       db:
         condition: service_healthy
@@ -41,6 +48,11 @@ services:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
       LINK_CODE_EXPIRE_MINUTES: ${LINK_CODE_EXPIRE_MINUTES:-15}
+      BACKUP_DIR: /app/backups
+      BACKUP_KEEP: ${BACKUP_KEEP:-14}
+      BACKUP_TELEGRAM_CHAT_ID: ${BACKUP_TELEGRAM_CHAT_ID:-}
+    volumes:
+      - backups:/app/backups
     depends_on:
       db:
         condition: service_healthy
@@ -56,3 +68,7 @@ services:
 
 volumes:
   pgdata:
+  # Фото записів (backend/uploads) — переживають перезбирання контейнера.
+  uploads:
+  # Локальні бекапи БД; основна офсайт-копія — доставка у Telegram.
+  backups:
