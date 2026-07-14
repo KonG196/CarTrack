@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import Base, engine
 from app.migrations import ensure_schema
-from app.routers import analytics, auth, cars, intervals, logs, ocr, telegram
+from app.routers import analytics, auth, cars, intervals, logs, ocr, reports, telegram
 
 
 @asynccontextmanager
@@ -34,6 +34,7 @@ app.include_router(cars.router, prefix="/api")
 app.include_router(logs.router, prefix="/api")
 app.include_router(intervals.router, prefix="/api")
 app.include_router(analytics.router, prefix="/api")
+app.include_router(reports.router, prefix="/api")
 app.include_router(ocr.router, prefix="/api")
 app.include_router(telegram.router, prefix="/api")
 

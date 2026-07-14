@@ -33,7 +33,7 @@ def test_analytics_shape_for_empty_car(
     assert response.status_code == 200
     body = response.json()
 
-    assert set(body.keys()) == {"totals", "monthly", "fuel"}
+    assert set(body.keys()) == {"totals", "monthly", "fuel", "forecast"}
     assert body["totals"]["all_time"] == 0.0
     assert body["totals"]["this_month"] == 0.0
     assert body["totals"]["by_type"] == {

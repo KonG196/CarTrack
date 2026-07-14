@@ -297,10 +297,27 @@ class FuelStatsOut(BaseModel):
     history: list[FuelHistoryItem]
 
 
+class ForecastUpcomingItem(BaseModel):
+    interval_id: int
+    title: str
+    predicted_due_date: Optional[dt.date]
+    km_left: Optional[int]
+    days_left: Optional[int]
+    estimated_cost: Optional[float]
+
+
+class Forecast(BaseModel):
+    monthly_km_rate: Optional[float]
+    avg_monthly_spend: Optional[float]
+    projected_month_total: Optional[float]
+    upcoming: list[ForecastUpcomingItem]
+
+
 class AnalyticsOut(BaseModel):
     totals: Totals
     monthly: list[MonthlyBucket]
     fuel: FuelStatsOut
+    forecast: Forecast
 
 
 # ---------------------------------------------------------------------------

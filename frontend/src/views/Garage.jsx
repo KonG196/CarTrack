@@ -11,9 +11,12 @@ import {
   Send,
   Copy,
   ExternalLink,
+  FileDown,
+  Loader2,
 } from 'lucide-react';
 import { useCarStore } from '../store/carStore';
 import { extractError } from '../api/client';
+import { downloadCarReport } from '../api/reports';
 import * as telegramApi from '../api/telegram';
 import { formatKm, formatDate } from '../utils/format';
 import { Button, Input, Select, Card, Spinner, ErrorMessage } from '../components/UI';
@@ -379,6 +382,7 @@ export default function Garage() {
   const [formMode, setFormMode] = useState(null); // null | 'new' | car.id
   const [showIntervalForm, setShowIntervalForm] = useState(false);
   const [presetsLoading, setPresetsLoading] = useState(false);
+  const [reportingCarId, setReportingCarId] = useState(null);
   const [toast, setToast] = useState('');
   const [actionError, setActionError] = useState('');
 
@@ -430,6 +434,20 @@ export default function Garage() {
       await removeInterval(interval.id);
     } catch (err) {
       setActionError(extractError(err, 'Не вдалося видалити інтервал'));
+    }
+  };
+
+  const handleDownloadReport = async (car) => {
+    if (reportingCarId != null) return;
+    setActionError('');
+    setReportingCarId(car.id);
+    try {
+      await downloadCarReport(car.id);
+      setToast('Звіт PDF завантажено');
+    } catch (err) {
+      setActionError(extractError(err, 'Не вдалося сформувати PDF-звіт'));
+    } finally {
+      setReportingCarId(null);
     }
   };
 
@@ -534,6 +552,20 @@ export default function Garage() {
                       Зробити активним
                     </Button>
                   )}
+                  <Button
+                    variant="ghost"
+                    onClick={() => handleDownloadReport(car)}
+                    disabled={reportingCarId != null}
+                    aria-label="Завантажити звіт PDF"
+                    title="Звіт PDF"
+                    className="px-3 py-2"
+                  >
+                    {String(reportingCarId) === String(car.id) ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <FileDown className="h-4 w-4" />
+                    )}
+                  </Button>
                   <Button
                     variant="ghost"
                     onClick={() => setFormMode(car.id)}

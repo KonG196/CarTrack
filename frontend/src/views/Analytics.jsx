@@ -1,4 +1,5 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { FileDown, Loader2, Wrench } from 'lucide-react';
 import {
   ResponsiveContainer,
   BarChart,
@@ -13,8 +14,10 @@ import {
   ReferenceLine,
 } from 'recharts';
 import { useCarStore } from '../store/carStore';
-import { formatMoney, formatDate, monthLabel } from '../utils/format';
-import { Card, Spinner, ErrorMessage } from '../components/UI';
+import { extractError } from '../api/client';
+import { downloadCarReport } from '../api/reports';
+import { formatMoney, formatKm, formatDate, monthLabel } from '../utils/format';
+import { Button, Card, Spinner, ErrorMessage } from '../components/UI';
 
 // Categorical palette validated for the slate-900 surface (dataviz skill,
 // scripts/validate_palette.js: CVD worst adjacent dE 41.3, contrast >= 3:1)
@@ -52,6 +55,80 @@ function compactHryvnia(v) {
   return String(v);
 }
 
+function ForecastSection({ forecast }) {
+  const upcoming = forecast?.upcoming || [];
+
+  return (
+    <div className="space-y-2.5">
+      <h2 className="px-1 text-sm font-semibold text-white">Прогноз</h2>
+
+      <div className="grid grid-cols-3 gap-2.5">
+        <Card className="p-3">
+          <p className="text-xs text-slate-500">Середні витрати/міс</p>
+          <p className="mt-1 text-sm font-semibold text-white">
+            {formatMoney(forecast?.avg_monthly_spend)}
+          </p>
+        </Card>
+        <Card className="p-3">
+          <p className="text-xs text-slate-500">Прогноз на цей місяць</p>
+          <p className="mt-1 text-sm font-semibold text-white">
+            {formatMoney(forecast?.projected_month_total)}
+          </p>
+        </Card>
+        <Card className="p-3">
+          <p className="text-xs text-slate-500">Пробіг км/міс</p>
+          <p className="mt-1 text-sm font-semibold text-white">
+            {formatKm(forecast?.monthly_km_rate)}
+          </p>
+        </Card>
+      </div>
+
+      <Card>
+        <h3 className="mb-1 flex items-center gap-2 text-sm font-semibold text-white">
+          <Wrench className="h-4 w-4 text-blue-500" />
+          Найближчі ТО
+        </h3>
+        {upcoming.length === 0 ? (
+          <p className="py-3 text-sm text-slate-500">
+            У найближчі 90 днів планових робіт не передбачається.
+          </p>
+        ) : (
+          <div className="divide-y divide-slate-800">
+            {upcoming.map((item) => (
+              <div
+                key={item.interval_id}
+                className="flex items-start justify-between gap-3 py-2.5"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-slate-100">{item.title}</p>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    {item.predicted_due_date
+                      ? formatDate(item.predicted_due_date)
+                      : item.km_left != null
+                        ? `через ${formatKm(item.km_left)}`
+                        : '—'}
+                    {item.predicted_due_date && item.km_left != null && (
+                      <span className="text-slate-600"> · через {formatKm(item.km_left)}</span>
+                    )}
+                  </p>
+                </div>
+                {item.estimated_cost != null && (
+                  <div className="flex-shrink-0 text-right">
+                    <p className="text-sm font-medium text-slate-200">
+                      ~{formatMoney(item.estimated_cost)}
+                    </p>
+                    <p className="text-[10px] text-slate-600">орієнтовно</p>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
 export default function Analytics() {
   const activeCarId = useCarStore((s) => s.activeCarId);
   const carsLoaded = useCarStore((s) => s.carsLoaded);
@@ -59,6 +136,9 @@ export default function Analytics() {
   const analyticsLoading = useCarStore((s) => s.analyticsLoading);
   const analyticsError = useCarStore((s) => s.analyticsError);
   const fetchAnalytics = useCarStore((s) => s.fetchAnalytics);
+
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState('');
 
   useEffect(() => {
     if (activeCarId) {
@@ -74,8 +154,56 @@ export default function Analytics() {
     );
   }
 
-  if (analyticsError) return <ErrorMessage>{analyticsError}</ErrorMessage>;
-  if (analyticsLoading || !analytics) return <Spinner />;
+  const handleDownloadReport = async () => {
+    if (!activeCarId || reportLoading) return;
+    setReportError('');
+    setReportLoading(true);
+    try {
+      await downloadCarReport(activeCarId);
+    } catch (err) {
+      setReportError(extractError(err, 'Не вдалося сформувати PDF-звіт'));
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
+  const header = (
+    <div className="flex items-center justify-between px-1">
+      <h1 className="text-lg font-semibold text-white">Аналітика</h1>
+      <Button
+        variant="secondary"
+        onClick={handleDownloadReport}
+        disabled={reportLoading}
+        className="px-3 py-1.5"
+      >
+        {reportLoading ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <FileDown className="h-4 w-4" />
+        )}
+        {reportLoading ? 'Формування…' : 'Звіт PDF'}
+      </Button>
+    </div>
+  );
+
+  if (analyticsError) {
+    return (
+      <div className="space-y-4">
+        {header}
+        {reportError && <ErrorMessage>{reportError}</ErrorMessage>}
+        <ErrorMessage>{analyticsError}</ErrorMessage>
+      </div>
+    );
+  }
+
+  if (analyticsLoading || !analytics) {
+    return (
+      <div className="space-y-4">
+        {header}
+        <Spinner />
+      </div>
+    );
+  }
 
   const monthly = (analytics.monthly || []).map((m) => ({
     ...m,
@@ -91,6 +219,11 @@ export default function Analytics() {
 
   return (
     <div className="space-y-4">
+      {header}
+      {reportError && <ErrorMessage>{reportError}</ErrorMessage>}
+
+      <ForecastSection forecast={analytics.forecast} />
+
       <div className="grid grid-cols-2 gap-2.5">
         <Card className="p-3.5">
           <p className="text-xs text-slate-500">Всього витрачено</p>

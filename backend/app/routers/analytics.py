@@ -9,6 +9,7 @@ from app.database import get_db
 from app.models import LogEntry, User
 from app.routers.cars import get_owned_car
 from app.schemas import AnalyticsOut
+from app.services.forecast import build_forecast
 from app.services.stats import compute_analytics
 
 router = APIRouter(tags=["analytics"])
@@ -20,7 +21,7 @@ def get_analytics(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> AnalyticsOut:
-    """Return spending totals, monthly breakdown and fuel stats for a car."""
+    """Return spending totals, monthly breakdown, fuel stats and forecast for a car."""
     car = get_owned_car(db, current_user, car_id)
     logs = (
         db.execute(
@@ -31,4 +32,4 @@ def get_analytics(
         .scalars()
         .all()
     )
-    return AnalyticsOut(**compute_analytics(logs))
+    return AnalyticsOut(**compute_analytics(logs), forecast=build_forecast(db, car))
