@@ -1,11 +1,3 @@
-/* Поля введення: підпис «пливе» над значенням, коли поле у фокусі або вже
-   заповнене. Порт з alpivault.
-
-   Стан визначає CSS, а не React: `placeholder=" "` робить порожнє поле
-   `:placeholder-shown`, і сусідній селектор піднімає підпис. Тому автозаповнення
-   браузера теж коректно піднімає підпис — на відміну від відстеження value у
-   стані. Селектори написані вручну (а не через peer-* Tailwind), щоб порядок
-   каскаду між :focus і :not(:placeholder-shown) був гарантованим. */
 
 @layer components {
   .field {
@@ -23,13 +15,6 @@
     @apply cursor-not-allowed opacity-60;
   }
 
-  /* Автозаповнення. Chrome малює підставлені поля власним світлим тлом і
-     чорним текстом — на темній темі це біла пляма (в alpivault тема світла,
-     тому там це непомітно). Звичайний background-color Chrome ігнорує, тож
-     тло перекриваємо внутрішньою тінню, а колір тексту — text-fill-color.
-     Правила для -webkit- і стандартного :autofill мусять бути окремими: у
-     списку через кому браузер, який не знає одного селектора, викидає все
-     правило цілком. */
   .field-input:-webkit-autofill,
   .field-input:-webkit-autofill:hover {
     -webkit-text-fill-color: theme('colors.fg');
@@ -46,21 +31,16 @@
     box-shadow: 0 0 0 1000px theme('colors.raised') inset;
     caret-color: theme('colors.fg');
   }
-  /* Значення-число читається як на чеку: моноширинний, цифри в колонку. */
   .field-input.is-numeric {
     @apply font-mono tabular-nums;
   }
   .field-input.has-trailing {
     @apply pr-12;
   }
-  /* Нотатки в кілька рядків: вигляд той самий, змінюється лише висота —
-     фіксована h-14 поступається місцем рядкам, які можна дотягнути. */
   .field-input.field-textarea {
     @apply h-auto min-h-[5.5rem] resize-y;
   }
 
-  /* <select> завжди має значення, тож підпис у нього завжди піднятий; своя
-     стрілка замість системної. */
   .field-select {
     @apply cursor-pointer appearance-none pr-11;
   }
@@ -81,26 +61,22 @@
   }
   .field-input:focus + .field-label,
   .field-input:not(:placeholder-shown) + .field-label {
-    @apply top-[9px] translate-y-0 text-[11px] uppercase tracking-[0.09em];
+    @apply top-[9px] translate-y-0 text-[11px];
   }
-  /* Поки Chrome лише підставив значення і ще не віддав його сторінці, поле
-     формально лишається порожнім (:placeholder-shown), тож підпис не піднявся
-     б і ліг просто поверх підставленого тексту. Автозаповнення — окремий
-     сигнал «значення є». Знову двома правилами: несумісний селектор у списку
-     вбив би все правило. */
+  /* An autofilled field is still :placeholder-shown until Chrome hands the
+     value to the page, so the label would sit on top of the filled text.
+     Two rules, not one list: an unknown selector would kill the whole rule. */
   .field-input:-webkit-autofill + .field-label {
-    @apply top-[9px] translate-y-0 text-[11px] uppercase tracking-[0.09em];
+    @apply top-[9px] translate-y-0 text-[11px];
   }
   .field-input:autofill + .field-label {
-    @apply top-[9px] translate-y-0 text-[11px] uppercase tracking-[0.09em];
+    @apply top-[9px] translate-y-0 text-[11px];
   }
   .field-input:focus + .field-label {
     @apply text-amber;
   }
-  /* Поля з власним UI (дата) ніколи не бувають :placeholder-shown —
-     тримаємо підпис піднятим завжди. */
   .field-label.is-static {
-    @apply top-[9px] translate-y-0 text-[11px] uppercase tracking-[0.09em];
+    @apply top-[9px] translate-y-0 text-[11px];
   }
 
   .field-error .field-input {
