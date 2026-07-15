@@ -51,8 +51,8 @@ def _build_reminder_text(
     latest = service.latest_log_date(db, user)
     if latest is None or (today - latest).days > NUDGE_AFTER_DAYS:
         lines.append(
-            "\nІ ще: давно не було нових записів. Надішліть поточний пробіг "
-            "простим числом — так прогнози будуть точнішими."
+            "\nІ ще: давно не було нових записів. Надішліть «пробіг 240054» "
+            "— так прогнози будуть точнішими."
         )
     return "\n".join(lines)
 

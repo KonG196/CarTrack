@@ -284,7 +284,7 @@ async def cmd_status(message: Message) -> None:
         if user is None:
             await message.answer(NOT_LINKED_TEXT)
             return
-        await message.answer(service.status_summary(db, user))
+        await message.answer(service.status_summary(db, user), reply_markup=MAIN_KEYBOARD)
 
 
 @router.message(Command("digest"))
@@ -407,7 +407,7 @@ async def handle_text(message: Message) -> None:
             await _handle_expense(message, db, user, expense)
             return
 
-        await message.answer(UNKNOWN_TEXT)
+        await message.answer(UNKNOWN_TEXT, reply_markup=MAIN_KEYBOARD)
 
 
 async def _handle_odometer(message: Message, db: Session, user: User, value: int) -> None:
@@ -775,7 +775,7 @@ async def handle_unknown(message: Message) -> None:
     only handler with no filter at all. Without it those messages got
     silence, which reads as a broken bot rather than a misunderstood one.
     """
-    await message.answer(UNKNOWN_TEXT)
+    await message.answer(UNKNOWN_TEXT, reply_markup=MAIN_KEYBOARD)
 
 
 @router.callback_query(F.data.startswith("snooze:"))
