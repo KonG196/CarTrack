@@ -155,6 +155,20 @@ def _parse_score(text: str) -> int:
     return 2 * parsed.found_in_text + sum(v is not None for v in extra)
 
 
+# A phone shoots 4000 px wide; receipt glyphs are legible far below that, and
+# tesseract's cost scales with pixels. On the one core this runs on, the
+# difference is tens of seconds per photo.
+_MAX_OCR_EDGE = 1600
+
+
+def _downscale(image: Image.Image) -> Image.Image:
+    if max(image.size) <= _MAX_OCR_EDGE:
+        return image
+    resized = image.copy()
+    resized.thumbnail((_MAX_OCR_EDGE, _MAX_OCR_EDGE), Image.LANCZOS)
+    return resized
+
+
 def extract_text(image_bytes: bytes) -> str:
     """OCR an image with tesseract, preferring Ukrainian + English.
 
@@ -169,6 +183,7 @@ def extract_text(image_bytes: bytes) -> str:
     binary itself is absent — propagates to the caller.
     """
     image = ImageOps.grayscale(Image.open(io.BytesIO(image_bytes)))
+    image = _downscale(image)
     best_text = _ocr(image, psm=6)
     best_score = _parse_score(best_text)
     if best_score >= 6:  # liters, price and total all recognized

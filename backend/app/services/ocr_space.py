@@ -13,9 +13,11 @@ Ukrainian receipts, while engine 1 needs an explicit `language` and rejects
 from __future__ import annotations
 
 import base64
+import io
 import logging
 
 import httpx
+from PIL import Image
 
 from app.config import settings
 
@@ -27,15 +29,37 @@ _TIMEOUT_SECONDS = 45
 # out of the box, and a private key only raises the ceiling.
 _DEMO_KEY = "helloworld"
 
+_MAX_UPLOAD_EDGE = 1600
+
 
 def enabled() -> bool:
     return bool(settings.OCR_SPACE_API_KEY or settings.OCR_SPACE_USE_DEMO_KEY)
+
+
+def _shrink_for_upload(image_bytes: bytes) -> tuple[bytes, str]:
+    """Downscale before sending: a 4 MB phone photo is minutes of round trip.
+
+    Their engine reads a 1600 px receipt as well as a 4000 px one — the glyphs
+    are the same size relative to the text, and the upload is a tenth of it.
+    """
+    try:
+        image = Image.open(io.BytesIO(image_bytes))
+    except Exception:
+        return image_bytes, "image/jpeg"
+    if max(image.size) <= _MAX_UPLOAD_EDGE:
+        return image_bytes, "image/jpeg"
+    image = image.convert("RGB")
+    image.thumbnail((_MAX_UPLOAD_EDGE, _MAX_UPLOAD_EDGE), Image.LANCZOS)
+    buffer = io.BytesIO()
+    image.save(buffer, format="JPEG", quality=85)
+    return buffer.getvalue(), "image/jpeg"
 
 
 def recognize_text(image_bytes: bytes, content_type: str = "image/jpeg") -> str | None:
     """Return the text OCR.space reads on the image, or None on any failure."""
     if not enabled():
         return None
+    image_bytes, content_type = _shrink_for_upload(image_bytes)
 
     payload = {
         "apikey": settings.OCR_SPACE_API_KEY or _DEMO_KEY,
