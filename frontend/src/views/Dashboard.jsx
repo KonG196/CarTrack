@@ -24,7 +24,6 @@ import { formatMoney, formatKm, formatDate } from '../utils/format';
 import { Card, Spinner, ErrorMessage, ConfirmDialog } from '../components/UI';
 import Toast from '../components/Toast';
 import CompleteIntervalModal from '../components/CompleteIntervalModal';
-import TripCostCard from '../components/TripCostCard';
 
 const STATUS_STYLES = {
   ok: { bar: 'bg-ok', text: 'text-ok', label: 'В нормі' },
@@ -445,7 +444,6 @@ export default function Dashboard() {
         )}
       </Card>
 
-      <TripCostCard analytics={analytics} refuelContext={refuelContext} />
     </div>
   );
 }

@@ -23,13 +23,15 @@ export function computeTripCost({ distanceKm, consumption, pricePerLiter, people
   };
 }
 
+// Both numbers are prefills, not requirements: the card works on typed values
+// alone, and history only saves the typing when it has something to say.
+// Consumption exists once two full tanks are logged; the price is simply the
+// last one paid, which needs no measurement at all.
 export function tripInputsFrom(analytics, refuelContext) {
-  // Consumption comes from full-to-full segments, so it exists only once the
-  // car has two full tanks logged. Without it there is nothing honest to show.
   const consumption = analytics?.fuel?.avg_consumption_l_100km ?? null;
+  const history = analytics?.price_history ?? [];
+  const lastPriced = history.length ? history[history.length - 1] : null;
   const price =
-    refuelContext?.last_price_per_liter ??
-    analytics?.fuel?.last_price_per_liter ??
-    null;
+    refuelContext?.last_price_per_liter ?? lastPriced?.price_per_liter ?? null;
   return { consumption, pricePerLiter: price };
 }

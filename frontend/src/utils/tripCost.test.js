@@ -70,3 +70,29 @@ describe('tripInputsFrom', () => {
     });
   });
 });
+
+describe('tripInputsFrom price sources', () => {
+  it('takes the last price from the analytics history when no context is given', () => {
+    // The Analytics screen has no refuel-context call of its own; the price
+    // chart already carries what was last paid.
+    const inputs = tripInputsFrom(
+      {
+        fuel: { avg_consumption_l_100km: 5.9 },
+        price_history: [
+          { date: '2026-05-01', price_per_liter: 52.5 },
+          { date: '2026-07-01', price_per_liter: 55.99 },
+        ],
+      },
+      null,
+    );
+    expect(inputs.pricePerLiter).toBe(55.99);
+  });
+
+  it('prefers a fresh context price over the chart', () => {
+    const inputs = tripInputsFrom(
+      { price_history: [{ price_per_liter: 52.5 }] },
+      { last_price_per_liter: 55.99 },
+    );
+    expect(inputs.pricePerLiter).toBe(55.99);
+  });
+});

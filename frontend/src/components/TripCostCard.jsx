@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Minus, Plus, Route } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Minus, Plus, Route, Sparkles } from 'lucide-react';
 
 import { computeTripCost, tripInputsFrom } from '../utils/tripCost';
 import { formatMoney } from '../utils/format';
@@ -8,17 +8,40 @@ import { Card, TextField } from './UI';
 export default function TripCostCard({ analytics, refuelContext }) {
   const [distance, setDistance] = useState('');
   const [people, setPeople] = useState(1);
+  const [consumption, setConsumption] = useState('');
+  const [price, setPrice] = useState('');
+  // What the car's own history filled in. Cleared per field the moment the
+  // user types over it: the green mark promises the number came from their
+  // data, so it must stop claiming that the instant it did not.
+  const [auto, setAuto] = useState({ consumption: false, price: false });
 
-  const { consumption, pricePerLiter } = useMemo(
+  const known = useMemo(
     () => tripInputsFrom(analytics, refuelContext),
     [analytics, refuelContext],
   );
 
-  // Without a measured consumption there is nothing to count with, and a
-  // brochure figure would be a different car's number.
-  if (!consumption || !pricePerLiter) return null;
+  useEffect(() => {
+    // Only fills empty fields: a number the user typed outranks history.
+    setConsumption((current) => {
+      if (current || !known.consumption) return current;
+      setAuto((a) => ({ ...a, consumption: true }));
+      return String(known.consumption);
+    });
+    setPrice((current) => {
+      if (current || !known.pricePerLiter) return current;
+      setAuto((a) => ({ ...a, price: true }));
+      return String(known.pricePerLiter);
+    });
+  }, [known.consumption, known.pricePerLiter]);
 
-  const result = computeTripCost({ distanceKm: distance, consumption, pricePerLiter, people });
+  const result = computeTripCost({
+    distanceKm: distance,
+    consumption: Number(String(consumption).replace(',', '.')) || null,
+    pricePerLiter: Number(String(price).replace(',', '.')) || null,
+    people,
+  });
+
+  const autoClass = 'border-ok/60 text-ok';
 
   return (
     <Card>
@@ -26,20 +49,23 @@ export default function TripCostCard({ analytics, refuelContext }) {
         <Route className="h-5 w-5 text-amber" />
         <h2 className="font-display text-base font-semibold text-fg">Скільки коштує поїздка</h2>
       </div>
-      <p className="mb-3 text-sm text-mist">
-        За вашими цифрами: {consumption} л/100 км · {formatMoney(pricePerLiter)}/л
-      </p>
 
-      <div className="flex items-end gap-3">
+      {(auto.consumption || auto.price) && (
+        <p className="mb-3 flex items-center gap-1.5 text-xs text-ok">
+          <Sparkles className="h-3.5 w-3.5" />
+          Заповнено з вашої історії — можна змінити
+        </p>
+      )}
+
+      <div className="grid grid-cols-2 gap-3">
         <TextField
           label="Відстань, км"
           inputMode="decimal"
           numeric
           value={distance}
           onChange={(e) => setDistance(e.target.value)}
-          containerClassName="flex-1"
         />
-        <div className="mb-1 flex items-center gap-1.5">
+        <div className="flex items-end justify-end gap-1.5 pb-1">
           <button
             type="button"
             aria-label="Менше людей"
@@ -48,7 +74,7 @@ export default function TripCostCard({ analytics, refuelContext }) {
           >
             <Minus className="h-3.5 w-3.5" />
           </button>
-          <span className="w-10 text-center text-sm text-fg">
+          <span className="w-12 text-center text-sm text-fg">
             {people} <span className="text-mist">ос.</span>
           </span>
           <button
@@ -62,7 +88,32 @@ export default function TripCostCard({ analytics, refuelContext }) {
         </div>
       </div>
 
-      {result && (
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <TextField
+          label="Розхід, л/100 км"
+          inputMode="decimal"
+          numeric
+          value={consumption}
+          className={auto.consumption ? autoClass : ''}
+          onChange={(e) => {
+            setConsumption(e.target.value);
+            setAuto((a) => ({ ...a, consumption: false }));
+          }}
+        />
+        <TextField
+          label="Ціна за літр, ₴"
+          inputMode="decimal"
+          numeric
+          value={price}
+          className={auto.price ? autoClass : ''}
+          onChange={(e) => {
+            setPrice(e.target.value);
+            setAuto((a) => ({ ...a, price: false }));
+          }}
+        />
+      </div>
+
+      {result ? (
         <div className="mt-3 space-y-2 rounded-xl bg-garage/60 px-3.5 py-3">
           <div className="flex items-baseline justify-between">
             <span className="text-sm text-mist">В один бік · {result.liters} л</span>
@@ -83,6 +134,10 @@ export default function TripCostCard({ analytics, refuelContext }) {
             </div>
           )}
         </div>
+      ) : (
+        <p className="mt-3 text-xs text-mist">
+          Вкажіть відстань, розхід і ціну — порахую вартість і скільки з кожного.
+        </p>
       )}
     </Card>
   );

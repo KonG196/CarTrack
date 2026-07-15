@@ -28,6 +28,7 @@ import {
   shouldShowPriceChart,
 } from '../utils/fuelKind';
 import { Button, Card, Spinner, ErrorMessage } from '../components/UI';
+import TripCostCard from '../components/TripCostCard';
 
 // Categorical chart palette — a colour system of its own, separate from the app's
 // amber accent: here colour marks record type, not importance. Validated against
@@ -589,6 +590,8 @@ export default function Analytics() {
           </div>
         </Card>
       )}
+
+      <TripCostCard analytics={analytics} />
     </div>
   );
 }
