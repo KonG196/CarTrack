@@ -25,6 +25,14 @@ services:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
       LINK_CODE_EXPIRE_MINUTES: ${LINK_CODE_EXPIRE_MINUTES:-15}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-Kapot Tracker <noreply@localhost>}
+      SMTP_STARTTLS: ${SMTP_STARTTLS:-true}
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:5173}
+      VERIFY_CODE_EXPIRE_HOURS: ${VERIFY_CODE_EXPIRE_HOURS:-24}
       UPLOADS_DIR: /app/uploads
       BACKUP_DIR: /app/backups
       BACKUP_KEEP: ${BACKUP_KEEP:-14}
@@ -36,8 +44,8 @@ services:
       db:
         condition: service_healthy
 
-  # Telegram-бот: окремий процес на тому самому образі, що й backend.
-  # Не стартує при звичайному `docker compose up` — увімкнення:
+  # Same image as the backend, second process. Kept out of a plain
+  # `docker compose up` behind a profile:
   #   docker compose --profile bot up
   bot:
     build: ./backend
@@ -68,7 +76,5 @@ services:
 
 volumes:
   pgdata:
-  # Фото записів (backend/uploads) — переживають перезбирання контейнера.
   uploads:
-  # Локальні бекапи БД; основна офсайт-копія — доставка у Telegram.
   backups:
