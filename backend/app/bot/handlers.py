@@ -80,24 +80,19 @@ NOT_LINKED_TEXT = "Ваш Telegram ще не прив'язано до акаун
 # rest hide behind a menu so the keyboard stays two rows tall.
 MAIN_KEYBOARD = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text="⛽ Заправка"), KeyboardButton(text="🛣 Пробіг")],
-        [KeyboardButton(text="📊 Стан"), KeyboardButton(text="⚙️ Ще")],
+        [
+            KeyboardButton(text="⛽ Заправка"),
+            KeyboardButton(text="🛣 Пробіг"),
+            KeyboardButton(text="💸 Витрата"),
+        ],
+        [
+            KeyboardButton(text="📊 Стан"),
+            KeyboardButton(text="📄 Звіт"),
+            KeyboardButton(text="❓ Довідка"),
+        ],
     ],
     resize_keyboard=True,
     is_persistent=True,
-)
-
-MORE_KEYBOARD = InlineKeyboardMarkup(
-    inline_keyboard=[
-        [
-            InlineKeyboardButton(text="💸 Витрата", callback_data="menu:expense"),
-            InlineKeyboardButton(text="📄 PDF-звіт", callback_data="menu:report"),
-        ],
-        [
-            InlineKeyboardButton(text="📬 Дайджест", callback_data="menu:digest"),
-            InlineKeyboardButton(text="❓ Довідка", callback_data="menu:help"),
-        ],
-    ]
 )
 
 ASK_ODOMETER = "Надішліть поточний пробіг — просто числом, напр. 240054."
@@ -266,23 +261,19 @@ async def key_status(message: Message) -> None:
     await cmd_status(message)
 
 
-@router.message(F.text == "⚙️ Ще")
-async def key_more(message: Message) -> None:
-    await message.answer("Що зробити?", reply_markup=MORE_KEYBOARD)
+@router.message(F.text == "💸 Витрата")
+async def key_expense(message: Message) -> None:
+    await message.answer(ASK_EXPENSE)
 
 
-@router.callback_query(F.data.startswith("menu:"))
-async def menu_choice(callback: CallbackQuery) -> None:
-    action = callback.data.split(":", 1)[1]
-    await callback.answer()
-    if action == "expense":
-        await callback.message.answer(ASK_EXPENSE)
-    elif action == "report":
-        await cmd_report(callback.message)
-    elif action == "digest":
-        await callback.message.answer("Увімкнути або вимкнути: /digest on або /digest off")
-    elif action == "help":
-        await callback.message.answer(HELP_TEXT)
+@router.message(F.text == "📄 Звіт")
+async def key_report(message: Message) -> None:
+    await cmd_report(message)
+
+
+@router.message(F.text == "❓ Довідка")
+async def key_help(message: Message) -> None:
+    await cmd_help(message)
 
 
 @router.message(Command("help"))
