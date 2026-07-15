@@ -3,6 +3,8 @@
 import asyncio
 import datetime as dt
 
+from app.config import settings
+
 import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
@@ -311,3 +313,21 @@ def test_completing_a_snoozed_interval_clears_the_snooze(
         assert interval.snoozed_until is None
         # It is fresh now, so it is quiet on its own merits, not by snooze.
         assert interval.last_odometer == car.current_odometer
+
+
+def test_backup_skipped_when_one_exists_for_today(tmp_path, monkeypatch) -> None:
+    """A day of redeploys must not mean a dump in the chat per restart."""
+    from app.bot import reminders
+
+    monkeypatch.setattr(settings, "BACKUP_DIR", str(tmp_path))
+    assert reminders._backed_up_today() is False
+
+    (tmp_path / f"kapot_tracker-{dt.date.today():%Y%m%d}-131500.db").write_bytes(b"x")
+    assert reminders._backed_up_today() is True
+
+    # Yesterday's file does not count as today's.
+    for item in tmp_path.iterdir():
+        item.unlink()
+    yesterday = dt.date.today() - dt.timedelta(days=1)
+    (tmp_path / f"kapot_tracker-{yesterday:%Y%m%d}-131500.db").write_bytes(b"x")
+    assert reminders._backed_up_today() is False

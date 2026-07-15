@@ -1,7 +1,8 @@
 """Receipt OCR: pure text parsing + the /api/ocr/scan endpoint.
 
 The tesseract binary is never invoked: parsing is tested on canned receipt
-texts and the endpoint tests monkeypatch extract_text.
+texts and the endpoint tests monkeypatch extract_text inside ocr_llm,
+where both the API and the bot now read receipts.
 """
 
 import pytest
@@ -386,7 +387,7 @@ def _post_scan(client: TestClient, headers: dict, **file_overrides) -> object:
 def test_scan_endpoint_returns_parsed_fields(
     client: TestClient, auth_headers: dict, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("app.routers.ocr.extract_text", lambda image_bytes: OKKO_RECEIPT)
+    monkeypatch.setattr("app.services.ocr_llm.extract_text", lambda image_bytes: OKKO_RECEIPT)
     response = _post_scan(client, auth_headers)
     assert response.status_code == 200, response.text
     body = response.json()
@@ -404,7 +405,7 @@ def test_scan_endpoint_maps_missing_tesseract_to_503(
     def raise_not_found(image_bytes: bytes) -> str:
         raise TesseractNotFoundError()
 
-    monkeypatch.setattr("app.routers.ocr.extract_text", raise_not_found)
+    monkeypatch.setattr("app.services.ocr_llm.extract_text", raise_not_found)
     response = _post_scan(client, auth_headers)
     assert response.status_code == 503
     assert "brew install tesseract tesseract-lang" in response.json()["detail"]

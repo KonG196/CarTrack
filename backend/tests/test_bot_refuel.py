@@ -1,6 +1,6 @@
 """Bot refuel flows: message parsing, confirm-before-save, receipt photos.
 
-The OCR binary is never involved: extract_text is monkeypatched everywhere,
+The OCR binary is never involved: extract_text is monkeypatched in ocr_llm,
 so these tests describe the bot's behaviour, not tesseract's.
 """
 
@@ -74,8 +74,13 @@ def bot_db(
 def replies(monkeypatch: pytest.MonkeyPatch) -> list[dict]:
     sent: list[dict] = []
 
-    async def fake_answer(self, text: str = "", **kwargs) -> None:
-        sent.append({"text": text, "reply_markup": kwargs.get("reply_markup")})
+    async def fake_answer(self, text: str = "", **kwargs):
+        entry = {"text": text, "reply_markup": kwargs.get("reply_markup")}
+        sent.append(entry)
+        # Telegram answers with the message it sent, and the progress loader
+        # edits that one in place rather than sending a second: the fake has to
+        # do the same, or a test would count messages the user never sees.
+        return _SentMessage(entry)
 
     async def fake_answer_document(self, document, **kwargs) -> None:
         sent.append({"document": document, "caption": kwargs.get("caption")})
@@ -106,6 +111,18 @@ def _seed_user_with_car(db: Session, odometer: int = 50000) -> tuple[User, Car]:
     db.add(car)
     db.commit()
     return user, car
+
+
+class _SentMessage:
+    """What Message.answer returns: a handle whose edits rewrite the entry."""
+
+    def __init__(self, entry: dict) -> None:
+        self._entry = entry
+
+    async def edit_text(self, text: str, **kwargs) -> None:
+        self._entry["text"] = text
+        if "reply_markup" in kwargs:
+            self._entry["reply_markup"] = kwargs["reply_markup"]
 
 
 def _message(text: str | None = None, photo: bool = False) -> Message:
@@ -302,9 +319,10 @@ def test_photo_flow_creates_log_and_photo_row(
         _user, car = _seed_user_with_car(db)
         car_id, user_id = car.id, car.user_id
 
+    # The bot reads receipts through the shared entry point now, so the mock
+    # goes where the API's does: one reader, one place to patch.
     monkeypatch.setattr(
-        service,
-        "extract_text",
+        "app.services.ocr_llm.extract_text",
         lambda image_bytes: "ОККО\nПАЛЬНЕ А-95\n45.00 Л\nЦІНА 55.99\nДО СПЛАТИ 2519.55",
     )
 
@@ -348,7 +366,9 @@ def test_photo_flow_reports_missing_tesseract_in_ukrainian(
     def _no_binary(image_bytes: bytes) -> str:
         raise pytesseract.TesseractNotFoundError()
 
-    monkeypatch.setattr(service, "extract_text", _no_binary)
+    monkeypatch.setattr(
+        "app.services.ocr_llm.extract_text",
+_no_binary)
 
     asyncio.run(handlers.handle_photo(_message(photo=True), _FakeBot()))
 
@@ -365,7 +385,9 @@ def test_photo_flow_without_recognized_values_asks_for_text(
     with bot_db() as db:
         _seed_user_with_car(db)
 
-    monkeypatch.setattr(service, "extract_text", lambda image_bytes: "розмитий чек")
+    monkeypatch.setattr(
+        "app.services.ocr_llm.extract_text",
+lambda image_bytes: "розмитий чек")
 
     asyncio.run(handlers.handle_photo(_message(photo=True), _FakeBot()))
 
@@ -378,7 +400,9 @@ def test_photo_flow_requires_a_linked_account(
     bot_db: sessionmaker, replies: list[dict], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     called: list[bytes] = []
-    monkeypatch.setattr(service, "extract_text", lambda image: called.append(image))
+    monkeypatch.setattr(
+        "app.services.ocr_llm.extract_text",
+lambda image: called.append(image))
 
     asyncio.run(handlers.handle_photo(_message(photo=True), _FakeBot()))
 
@@ -507,6 +531,31 @@ def test_recognize_refuel_translates_missing_binary(
     def _no_binary(image_bytes: bytes) -> str:
         raise pytesseract.TesseractNotFoundError()
 
-    monkeypatch.setattr(service, "extract_text", _no_binary)
+    monkeypatch.setattr(
+        "app.services.ocr_llm.extract_text",
+_no_binary)
     with pytest.raises(service.OcrUnavailableError):
         service.recognize_refuel(JPEG_BYTES)
+
+
+def test_photo_progress_becomes_the_result_in_one_message(
+    bot_db: sessionmaker,
+    replies: list[dict],
+    uploads_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The «Розпізнаю чек» line turns into the answer, it does not pile up."""
+    with bot_db() as db:
+        _seed_user_with_car(db)
+
+    monkeypatch.setattr(
+        "app.services.ocr_llm.extract_text",
+        lambda image_bytes: "ОККО\nПАЛЬНЕ А-95\n45.00 Л\nЦІНА 55.99\nДО СПЛАТИ 2519.55",
+    )
+
+    asyncio.run(handlers.handle_photo(_message(photo=True), _FakeBot()))
+
+    assert len(replies) == 1
+    assert "Розпізнаю чек" not in replies[0]["text"]
+    assert "45.00 л" in replies[0]["text"]
+    assert replies[0]["reply_markup"] is not None

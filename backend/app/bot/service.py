@@ -28,7 +28,8 @@ from app.routers.telegram import InvalidLinkCodeError, decode_link_code
 from app.services.fuel import compute_fuel_stats
 from app.services.intervals import compute_interval_status, effective_avg_daily_km
 from app.services.intervals_complete import IntervalCompletion, complete_interval
-from app.services.ocr import ParsedReceipt, extract_text, parse_receipt_text
+from app.services.ocr import ParsedReceipt
+from app.services.ocr_llm import recognize_receipt
 from app.services.photos import new_photo_filename, write_photo_file
 from app.services.report import build_car_report
 from app.services.stats import build_refuel_points, compute_analytics
@@ -360,10 +361,9 @@ def recognize_refuel(image_bytes: bytes) -> ParsedReceipt:
     into a friendly Ukrainian reply instead of a stack trace.
     """
     try:
-        text = extract_text(image_bytes)
+        return recognize_receipt(image_bytes)
     except pytesseract.TesseractNotFoundError as exc:
         raise OcrUnavailableError("tesseract binary is not installed") from exc
-    return parse_receipt_text(text)
 
 
 def build_report(db: Session, car: Car) -> bytes:

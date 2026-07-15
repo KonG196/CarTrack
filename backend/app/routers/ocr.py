@@ -7,8 +7,7 @@ from app.auth import get_current_user
 from app.config import settings
 from app.models import User
 from app.schemas import OcrScanResult
-from app.services.ocr import extract_text, parse_receipt_text
-from app.services.ocr_llm import recognize_receipt_llm
+from app.services.ocr_llm import recognize_receipt
 
 router = APIRouter(prefix="/ocr", tags=["ocr"])
 
@@ -39,7 +38,7 @@ async def scan_receipt(
         raise too_large
 
     try:
-        raw_text = extract_text(image_bytes)
+        parsed = recognize_receipt(image_bytes, file.content_type or "image/jpeg")
     except TesseractNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -50,25 +49,11 @@ async def scan_receipt(
             ),
         )
 
-    parsed = parse_receipt_text(raw_text)
-    # Tesseract could not read the money fields (crumpled paper, glare,
-    # tiny photo): give the configured vision model a try. Any failure of
-    # the fallback keeps the local result — the endpoint must not break
-    # because an external API is down.
-    if parsed.found_in_text < 2 and settings.GEMINI_API_KEY:
-        try:
-            llm_parsed = recognize_receipt_llm(
-                image_bytes, file.content_type or "image/jpeg"
-            )
-        except Exception:
-            llm_parsed = None
-        if llm_parsed is not None and llm_parsed.found_in_text > parsed.found_in_text:
-            parsed = llm_parsed
     return OcrScanResult(
         liters=parsed.liters,
         price_per_liter=parsed.price_per_liter,
         total_cost=parsed.total_cost,
         date=parsed.date,
         gas_station=parsed.gas_station,
-        raw_text=raw_text,
+        raw_text=parsed.raw_text,
     )

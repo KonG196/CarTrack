@@ -122,6 +122,9 @@ class ParsedReceipt:
     # How many of liters/price/total were read from the text rather than
     # derived from the other two; multi-pass OCR uses it to rank passes.
     found_in_text: int = 0
+    # What the reader actually saw. The API returns it so a failed scan can be
+    # debugged from the response instead of the server logs.
+    raw_text: str = ""
 
 
 # Below this size (min dimension, px) a receipt photo is a thumbnail whose
@@ -467,6 +470,7 @@ def parse_receipt_text(text: str) -> ParsedReceipt:
         found_in_text=sum(
             value is not None for value in (liters, price_per_liter, total)
         ),
+        raw_text=text,
     )
     _fill_missing_third(result)
     return result

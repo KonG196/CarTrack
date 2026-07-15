@@ -15,6 +15,8 @@ from typing import Any, Optional
 
 import httpx
 
+import logging
+
 from app.config import settings
 from app.services.ocr import (
     GAS_STATION_BRANDS,
@@ -24,7 +26,11 @@ from app.services.ocr import (
     MIN_TOTAL,
     ParsedReceipt,
     _fill_missing_third,
+    extract_text,
+    parse_receipt_text,
 )
+
+logger = logging.getLogger(__name__)
 
 _GEMINI_URL = (
     "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
@@ -153,3 +159,26 @@ def recognize_receipt_llm(
         return parsed_receipt_from_llm(json.loads(answer))
     except (KeyError, IndexError, TypeError, json.JSONDecodeError):
         return None
+
+
+def recognize_receipt(image_bytes: bytes, content_type: str = "image/jpeg") -> ParsedReceipt:
+    """Read a receipt: tesseract first, the vision model when it comes up short.
+
+    The single entry point for every caller. It used to live inline in the API
+    router, so the bot — which runs OCR in-process — quietly had no fallback at
+    all: a crumpled photo simply failed there while the web read it fine.
+
+    A failure of the remote model keeps the local result: nothing may break
+    because someone else's API is down.
+    """
+    parsed = parse_receipt_text(extract_text(image_bytes))
+    if parsed.found_in_text >= 2 or not settings.GEMINI_API_KEY:
+        return parsed
+    try:
+        llm_parsed = recognize_receipt_llm(image_bytes, content_type)
+    except Exception:
+        logger.warning("Vision fallback failed, keeping the tesseract result", exc_info=True)
+        return parsed
+    if llm_parsed is not None and llm_parsed.found_in_text > parsed.found_in_text:
+        return llm_parsed
+    return parsed

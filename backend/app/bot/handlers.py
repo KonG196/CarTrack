@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from aiogram import Bot, F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandObject, CommandStart
 from aiogram.types import (
     BufferedInputFile,
@@ -210,6 +211,65 @@ def _car_choice_keyboard(
     )
 
 
+class _Progress:
+    """A single message that animates while work happens, then becomes the result.
+
+    Recognising a receipt can take the best part of a minute once the vision
+    fallback is involved, and silence for that long reads as a dead bot. The
+    dots live in one message that is edited in place: a new message per frame
+    would bury the chat.
+    """
+
+    FRAMES = ("", ".", "..", "...")
+
+    def __init__(self, message: Message, text: str) -> None:
+        self._message = message
+        self._text = text
+        self._sent: Message | None = None
+        self._task: asyncio.Task | None = None
+
+    async def __aenter__(self) -> "_Progress":
+        sent = await self._message.answer(self._text)
+        # No handle on the sent message (an old Bot API, a stub) means no
+        # animation — but the work and its result must go on regardless.
+        if hasattr(sent, "edit_text"):
+            self._sent = sent
+            self._task = asyncio.create_task(self._animate())
+        return self
+
+    async def _animate(self) -> None:
+        frame = 0
+        while True:
+            await asyncio.sleep(0.7)
+            frame = (frame + 1) % len(self.FRAMES)
+            try:
+                await self._sent.edit_text(f"{self._text}{self.FRAMES[frame]}")
+            except TelegramBadRequest:
+                # Telegram rejects an edit to identical text; nothing to do.
+                pass
+            except Exception:
+                return
+
+    async def finish(self, text: str, **kwargs) -> None:
+        """Replace the animation with the result, in the same message."""
+        self._stop()
+        if self._sent is None:
+            await self._message.answer(text, **kwargs)
+            return
+        try:
+            await self._sent.edit_text(text, **kwargs)
+        except Exception:
+            await self._message.answer(text, **kwargs)
+
+    def _stop(self) -> None:
+        if self._task is not None:
+            self._task.cancel()
+            self._task = None
+
+    async def __aexit__(self, *exc_info) -> None:
+        self._stop()
+
+
 @router.message(CommandStart())
 async def cmd_start(message: Message, command: CommandObject) -> None:
     """Link the chat when a code is supplied, otherwise explain how to."""
@@ -326,31 +386,33 @@ async def handle_photo(message: Message, bot: Bot) -> None:
         await bot.download(message.photo[-1], destination=buffer)
         image_bytes = buffer.getvalue()
 
-        try:
-            # OCR is CPU-bound and slow: keep the event loop free for other
-            # chats while tesseract works.
-            parsed = await asyncio.to_thread(service.recognize_refuel, image_bytes)
-        except service.OcrUnavailableError:
-            await message.answer(OCR_UNAVAILABLE_TEXT)
-            return
+        async with _Progress(message, "Розпізнаю чек") as progress:
+            try:
+                # OCR is CPU-bound and slow: keep the event loop free for other
+                # chats while tesseract works.
+                parsed = await asyncio.to_thread(service.recognize_refuel, image_bytes)
+            except service.OcrUnavailableError:
+                await progress.finish(OCR_UNAVAILABLE_TEXT)
+                return
 
-        if not parsed.liters or not parsed.total_cost or not parsed.price_per_liter:
-            await message.answer(OCR_FAILED_TEXT)
-            return
+            if not parsed.liters or not parsed.total_cost or not parsed.price_per_liter:
+                await progress.finish(OCR_FAILED_TEXT)
+                return
 
-        await _handle_refuel(
-            message,
-            db,
-            user,
-            PendingRefuel(
-                liters=parsed.liters,
-                price_per_liter=parsed.price_per_liter,
-                total_cost=parsed.total_cost,
-                date=parsed.date or dt.date.today(),
-                gas_station=parsed.gas_station,
-                photo=service.RefuelPhoto(image_bytes=image_bytes),
-            ),
-        )
+            await _handle_refuel(
+                message,
+                db,
+                user,
+                PendingRefuel(
+                    liters=parsed.liters,
+                    price_per_liter=parsed.price_per_liter,
+                    total_cost=parsed.total_cost,
+                    date=parsed.date or dt.date.today(),
+                    gas_station=parsed.gas_station,
+                    photo=service.RefuelPhoto(image_bytes=image_bytes),
+                ),
+                progress,
+            )
 
 
 @router.message(Command("report"))
@@ -511,7 +573,11 @@ async def _ask_expense_confirm(
 
 
 async def _handle_refuel(
-    message: Message, db: Session, user: User, pending: PendingRefuel
+    message: Message,
+    db: Session,
+    user: User,
+    pending: PendingRefuel,
+    progress: Optional["_Progress"] = None,
 ) -> None:
     cars = service.list_writable_cars(db, user)
     if not cars:
@@ -520,16 +586,22 @@ async def _handle_refuel(
     _pending_refuels[message.chat.id] = pending
     if len(cars) == 1:
         pending.car_id = cars[0].id
-        await _ask_refuel_confirm(message, cars[0], pending, user)
+        await _ask_refuel_confirm(message, cars[0], pending, user, progress)
         return
-    await message.answer(
-        f"До якого авто записати заправку на {pending.total_cost:.2f} грн?",
-        reply_markup=_car_choice_keyboard(cars, "ref", user),
-    )
+    text = f"До якого авто записати заправку на {pending.total_cost:.2f} грн?"
+    keyboard = _car_choice_keyboard(cars, "ref", user)
+    if progress is not None:
+        await progress.finish(text, reply_markup=keyboard)
+        return
+    await message.answer(text, reply_markup=keyboard)
 
 
 async def _ask_refuel_confirm(
-    message: Message, car, pending: PendingRefuel, user: Optional[User] = None
+    message: Message,
+    car,
+    pending: PendingRefuel,
+    user: Optional[User] = None,
+    progress: Optional["_Progress"] = None,
 ) -> None:
     lines = [
         f"Заправка: {pending.liters:.2f} л × {pending.price_per_liter:.2f} грн/л "
@@ -542,9 +614,14 @@ async def _ask_refuel_confirm(
     if pending.photo is not None:
         lines.append("Фото чека буде додано до запису.")
     lines.append("\nЗберегти?")
-    await message.answer(
-        "\n".join(lines), reply_markup=_confirm_keyboard("refok", "refno")
-    )
+    text = "\n".join(lines)
+    keyboard = _confirm_keyboard("refok", "refno")
+    # Turn the «Розпізнаю чек…» message into the answer rather than leaving a
+    # spent progress line above it.
+    if progress is not None:
+        await progress.finish(text, reply_markup=keyboard)
+        return
+    await message.answer(text, reply_markup=keyboard)
 
 
 @router.callback_query(F.data.startswith("odo:"))

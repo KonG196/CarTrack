@@ -25,15 +25,16 @@ DEFAULT_PASSWORD = "secret123"
 
 
 @pytest.fixture(autouse=True)
-def _no_real_mail(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Never send a real letter from a test.
+def _no_outside_calls(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Never touch the outside world from a test.
 
-    Settings are read from .env, so a developer with SMTP configured would
-    otherwise have the suite mail verification codes to example.com — and the
-    bounces land in their own inbox. A test that wants the mail path patches
-    it explicitly.
+    Settings are read from .env, so a developer with real credentials had the
+    suite mail verification codes to example.com — the bounces landed in their
+    own inbox — and send every unreadable receipt to Gemini for real money and
+    real seconds. A test that wants either path patches it explicitly.
     """
     monkeypatch.setattr(settings, "SMTP_HOST", "")
+    monkeypatch.setattr(settings, "GEMINI_API_KEY", "")
 
 
 @pytest.fixture(autouse=True)

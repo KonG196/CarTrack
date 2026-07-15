@@ -139,8 +139,25 @@ async def send_weekly_digests(bot: Bot, today: dt.date | None = None) -> None:
                     )
 
 
-async def run_daily_backup(bot: Bot) -> None:
+def _backed_up_today() -> bool:
+    """Whether a backup for today already exists on disk.
+
+    The loop starts sixty seconds after the process does, so a day of deploys
+    used to mean a dump in the chat per restart. The dated filenames are the
+    record — no extra state to keep in sync.
+    """
+    stamp = dt.date.today().strftime("%Y%m%d")
+    directory = Path(settings.BACKUP_DIR)
+    if not directory.exists():
+        return False
+    return any(stamp in item.name for item in directory.iterdir() if item.is_file())
+
+
+async def run_daily_backup(bot: Bot, force: bool = False) -> None:
     """Create, rotate and deliver the daily backup; failures only get logged."""
+    if not force and _backed_up_today():
+        logger.info("Backup for today already exists, skipping")
+        return
     try:
         path = await asyncio.to_thread(backup.create_backup)
         await asyncio.to_thread(
