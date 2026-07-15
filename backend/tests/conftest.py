@@ -1,5 +1,6 @@
 """Shared pytest fixtures: isolated in-memory database + auth helpers."""
 
+import json
 from collections.abc import Callable, Generator
 
 import pytest
@@ -11,18 +12,40 @@ from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
 from app.main import app
+from app.routers.auth import (
+    login_limiter,
+    register_limiter,
+    reset_confirm_limiter,
+    reset_request_limiter,
+)
 
 DEFAULT_EMAIL = "user@example.com"
 DEFAULT_PASSWORD = "secret123"
 
 
+@pytest.fixture(autouse=True)
+def _clear_rate_limiters() -> None:
+    """Rate-limiter state is process-global; every test starts with a clean slate
+    (all TestClient requests share one client IP, so tests would otherwise
+    exhaust the per-IP register budget across the suite)."""
+    for limiter in (
+        login_limiter,
+        register_limiter,
+        reset_request_limiter,
+        reset_confirm_limiter,
+    ):
+        limiter.clear()
+
+
 @pytest.fixture()
 def db_engine() -> Generator[Engine, None, None]:
-    """A fresh in-memory SQLite engine with the full schema per test."""
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
+        # Match the app engine: JSON stored as readable UTF-8 (search relies
+        # on LIKE over the serialized maintenance items).
+        json_serializer=lambda obj: json.dumps(obj, ensure_ascii=False),
     )
     Base.metadata.create_all(bind=engine)
     yield engine
@@ -31,7 +54,6 @@ def db_engine() -> Generator[Engine, None, None]:
 
 @pytest.fixture()
 def db_session_factory(db_engine: Engine) -> sessionmaker:
-    """Session factory on the test engine, for direct (non-HTTP) DB access."""
     return sessionmaker(bind=db_engine, autocommit=False, autoflush=False)
 
 
@@ -60,7 +82,6 @@ def client(db_session_factory: sessionmaker) -> Generator[TestClient, None, None
 
 @pytest.fixture()
 def make_user(client: TestClient) -> Callable[..., dict[str, str]]:
-    """Factory registering a user and returning Bearer auth headers."""
 
     def _make_user(
         email: str = DEFAULT_EMAIL, password: str = DEFAULT_PASSWORD
@@ -81,13 +102,11 @@ def make_user(client: TestClient) -> Callable[..., dict[str, str]]:
 
 @pytest.fixture()
 def auth_headers(make_user: Callable[..., dict[str, str]]) -> dict[str, str]:
-    """Auth headers for a default registered user."""
     return make_user()
 
 
 @pytest.fixture()
 def make_car(client: TestClient, auth_headers: dict[str, str]) -> Callable[..., dict]:
-    """Factory creating a car (default user unless headers are given)."""
 
     def _make_car(headers: dict[str, str] | None = None, **overrides) -> dict:
         payload = {

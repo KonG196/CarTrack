@@ -27,7 +27,6 @@ def make_log(
     category: str | None = None,
     part_name: str | None = None,
 ) -> LogEntry:
-    """Build a transient (non-persisted) LogEntry for pure-function tests."""
     log = LogEntry(
         type=type_,
         odometer=odometer,
@@ -42,9 +41,7 @@ def make_log(
     return log
 
 
-# ---------------------------------------------------------------------------
 # compute_monthly_km_rate
-# ---------------------------------------------------------------------------
 
 
 def test_monthly_km_rate_from_known_span() -> None:
@@ -69,9 +66,7 @@ def test_monthly_km_rate_requires_week_span() -> None:
     assert compute_monthly_km_rate(logs) is None
 
 
-# ---------------------------------------------------------------------------
 # compute_avg_monthly_spend
-# ---------------------------------------------------------------------------
 
 
 def test_avg_monthly_spend_over_six_complete_months() -> None:
@@ -98,9 +93,7 @@ def test_avg_monthly_spend_none_without_complete_month_data() -> None:
     assert compute_avg_monthly_spend(only_current, today=PINNED_TODAY) is None
 
 
-# ---------------------------------------------------------------------------
 # compute_projected_month_total
-# ---------------------------------------------------------------------------
 
 
 def test_projected_month_total_mid_month() -> None:
@@ -156,9 +149,7 @@ def test_avg_monthly_spend_ignores_future_months() -> None:
     assert compute_avg_monthly_spend(logs, today=PINNED_TODAY) == 300.0
 
 
-# ---------------------------------------------------------------------------
 # estimate_interval_cost
-# ---------------------------------------------------------------------------
 
 
 def test_estimate_interval_cost_median_of_matches() -> None:
@@ -231,9 +222,7 @@ def test_estimate_interval_cost_normalizes_case_and_punctuation() -> None:
     assert estimate_interval_cost("ОЛИВА ДВИГУНА", logs) == 1200.0
 
 
-# ---------------------------------------------------------------------------
 # /analytics endpoint: forecast key
-# ---------------------------------------------------------------------------
 
 
 def _post_interval(client: TestClient, headers: dict, car_id: int, payload: dict) -> dict:
@@ -397,13 +386,10 @@ def test_forecast_estimated_cost_scoped_to_one_car(
     assert match["estimated_cost"] is None
 
 
-# ---------------------------------------------------------------------------
 # /analytics endpoint: query efficiency (no per-log lazy loading)
-# ---------------------------------------------------------------------------
 
 
 def _count_selects_during_get(client: TestClient, db_engine, url: str, headers: dict) -> int:
-    """Count SELECT statements issued while serving a GET request."""
     statements: list[str] = []
 
     def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):

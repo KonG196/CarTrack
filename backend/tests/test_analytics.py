@@ -8,7 +8,6 @@ TODAY = dt.date.today()
 
 
 def months_ago(day: dt.date, n: int) -> dt.date:
-    """First day of the calendar month n months before `day`."""
     year, month = day.year, day.month - n
     while month <= 0:
         month += 12
@@ -33,7 +32,22 @@ def test_analytics_shape_for_empty_car(
     assert response.status_code == 200
     body = response.json()
 
-    assert set(body.keys()) == {"totals", "monthly", "fuel", "forecast"}
+    assert set(body.keys()) == {
+        "totals",
+        "monthly",
+        "expense_by_category",
+        "stations",
+        "fuel",
+        "price_history",
+        "forecast",
+        "range_km",
+        "budget",
+    }
+    assert body["stations"] == []
+    # An empty car has neither a tank volume nor a budget set: both cards are
+    # absent rather than zeroed. See test_range.py / test_budget.py.
+    assert body["range_km"] is None
+    assert body["budget"] is None
     assert body["totals"]["all_time"] == 0.0
     assert body["totals"]["this_month"] == 0.0
     assert body["totals"]["by_type"] == {

@@ -2,7 +2,11 @@
 
 import datetime as dt
 
+import pytest
 from fastapi.testclient import TestClient
+
+from app.models import LogEntry
+from app.services.intervals import DEFAULT_AVG_DAILY_KM, compute_avg_daily_km
 
 TODAY = dt.date.today()
 
@@ -273,3 +277,122 @@ def test_interval_ownership_isolation(
         client.delete(f"/api/intervals/{interval['id']}", headers=other_headers).status_code
         == 404
     )
+
+
+# avg_daily_km: a rolling window, not the car's whole life
+
+
+def _logs(*pairs: tuple[dt.date, int]) -> list[LogEntry]:
+    """Throwaway LogEntry objects; the pace engine only reads date+odometer."""
+    return [LogEntry(car_id=1, type="expense", date=d, odometer=o) for d, o in pairs]
+
+
+def test_avg_daily_km_uses_the_last_90_days() -> None:
+    logs = _logs(
+        (TODAY - dt.timedelta(days=400), 0),  # ancient history: 100 km/day
+        (TODAY - dt.timedelta(days=200), 20000),
+        (TODAY - dt.timedelta(days=60), 30000),  # the window starts here
+        (TODAY, 31200),  # 1200 km over 60 days -> 20 km/day
+    )
+    assert compute_avg_daily_km(logs, today=TODAY) == 20.0
+
+
+def test_avg_daily_km_window_widens_to_180_then_365_when_data_is_thin() -> None:
+    # Only one log inside 90 days -> widen to 180, which has two.
+    logs = _logs(
+        (TODAY - dt.timedelta(days=170), 10000),
+        (TODAY - dt.timedelta(days=70), 12000),  # 2000 km over 100 days -> 20/day
+    )
+    assert compute_avg_daily_km(logs, today=TODAY) == 20.0
+
+    # Nothing inside 180 either -> widen to 365.
+    logs = _logs(
+        (TODAY - dt.timedelta(days=360), 10000),
+        (TODAY - dt.timedelta(days=260), 13000),  # 3000 km over 100 days -> 30/day
+    )
+    assert compute_avg_daily_km(logs, today=TODAY) == 30.0
+
+
+def test_avg_daily_km_window_widens_when_the_span_is_under_a_week() -> None:
+    logs = _logs(
+        (TODAY - dt.timedelta(days=300), 0),
+        (TODAY - dt.timedelta(days=3), 24000),
+        (TODAY, 24300),  # a 300 km weekend -> 100 km/day, too short to trust
+    )
+    # 90 and 180 both span only 3 days, so the 365 window answers:
+    # 24300 km over 300 days -> 81 km/day, not the 100 of the weekend.
+    assert compute_avg_daily_km(logs, today=TODAY) == 81.0
+
+
+def test_avg_daily_km_falls_back_to_lifetime_then_to_the_default() -> None:
+    # Everything older than a year -> lifetime average.
+    logs = _logs(
+        (TODAY - dt.timedelta(days=1000), 0),
+        (TODAY - dt.timedelta(days=500), 25000),  # 25000 km / 500 days -> 50/day
+    )
+    assert compute_avg_daily_km(logs, today=TODAY) == 50.0
+
+    # A single log carries no pace at all.
+    assert compute_avg_daily_km(_logs((TODAY, 1000)), today=TODAY) == DEFAULT_AVG_DAILY_KM
+    assert compute_avg_daily_km([], today=TODAY) == DEFAULT_AVG_DAILY_KM
+
+
+def test_avg_daily_km_spans_the_window_extremes_not_its_first_and_last_row() -> None:
+    """Min/max keep a mistyped reading from making the delta negative.
+
+    First-and-last would read -26880 km here, give up, and hand back the 40
+    km/day default for a car with a perfectly usable 60-day history.
+    """
+    logs = _logs(
+        (TODAY - dt.timedelta(days=60), 30000),
+        (TODAY - dt.timedelta(days=30), 31200),
+        (TODAY, 3120),  # a typo: a digit dropped
+    )
+    assert compute_avg_daily_km(logs, today=TODAY) == pytest.approx(28080 / 60)
+
+
+# The owner's real Golf history: 19 logs, Germany 2016-2022, Ukraine 2022-2026.
+GOLF_LOGS: tuple[tuple[str, int], ...] = (
+    ("2016-07-15", 0),
+    ("2017-12-20", 34104),
+    ("2018-03-07", 60857),
+    ("2019-08-23", 93636),
+    ("2020-02-26", 105478),
+    ("2020-07-02", 122507),
+    ("2021-06-30", 146617),
+    ("2022-10-19", 189000),
+    ("2022-12-03", 190011),
+    ("2022-12-23", 190563),
+    ("2023-03-17", 193437),
+    ("2023-10-06", 202373),
+    ("2023-11-17", 204017),
+    ("2024-08-13", 214600),
+    ("2025-06-15", 236000),
+    ("2025-07-18", 224900),
+    ("2026-05-08", 235700),
+    ("2026-06-15", 238000),
+    ("2026-07-06", 238150),
+)
+
+
+def test_golf_pace_comes_from_the_ukrainian_period_not_the_german_one() -> None:
+    """The bug this replaces: 66 km/day averaged over the car's whole life.
+
+    The German years ran the car far harder than the Ukrainian ones, and the
+    ТО forecast is built on this number — so the window must describe how the
+    car is driven *now*.
+    """
+    today = dt.date(2026, 7, 15)
+    logs = _logs(*((dt.date.fromisoformat(d), o) for d, o in GOLF_LOGS))
+
+    windowed = compute_avg_daily_km(logs, today=today)
+
+    # The 90-day window holds 2026-05-08 (235700) .. 2026-07-06 (238150):
+    # 2450 km over 59 days.
+    assert windowed == pytest.approx(2450 / 59, abs=0.05)
+    assert 35.0 < windowed < 50.0
+
+    # The old lifetime average, for contrast: ~65 km/day over ~10 years.
+    lifetime = 238150 / (dt.date(2026, 7, 6) - dt.date(2016, 7, 15)).days
+    assert lifetime > 60.0
+    assert windowed < lifetime * 0.75

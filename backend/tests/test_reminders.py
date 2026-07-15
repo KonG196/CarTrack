@@ -4,6 +4,7 @@ import asyncio
 import datetime as dt
 
 import pytest
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.bot import reminders, service
@@ -13,7 +14,6 @@ TODAY = dt.date.today()
 
 
 def _setup_overdue_interval(db: Session) -> tuple[User, Car, ServiceInterval]:
-    """A linked user with one car whose oil-change interval is overdue."""
     user = User(
         email="linked@example.com", hashed_password="x", telegram_chat_id="42"
     )
@@ -93,16 +93,17 @@ def test_healthy_interval_is_not_targeted(db_session_factory: sessionmaker) -> N
 
 
 class _FlakyBot:
-    """Fake aiogram Bot: raises for the given chat ids, records the rest."""
 
     def __init__(self, failing_chat_ids: set[str]) -> None:
         self.failing_chat_ids = failing_chat_ids
         self.sent: list[tuple[str, str]] = []
+        self.markups: list[object] = []
 
-    async def send_message(self, chat_id: str, text: str) -> None:
+    async def send_message(self, chat_id: str, text: str, reply_markup=None) -> None:
         if chat_id in self.failing_chat_ids:
             raise RuntimeError("bot was blocked by the user")
         self.sent.append((chat_id, text))
+        self.markups.append(reply_markup)
 
 
 def test_send_due_reminders_isolates_per_user_failures(
@@ -163,3 +164,150 @@ def test_latest_log_date_across_cars(db_session_factory: sessionmaker) -> None:
         )
         db.commit()
         assert service.latest_log_date(db, user) == TODAY - dt.timedelta(days=10)
+
+
+
+
+def test_reminder_message_carries_action_buttons(
+    db_session_factory: sessionmaker, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with db_session_factory() as db:
+        _user, _car, interval = _setup_overdue_interval(db)
+        interval_id = interval.id
+
+    monkeypatch.setattr(reminders, "SessionLocal", db_session_factory)
+    bot = _FlakyBot(failing_chat_ids=set())
+    asyncio.run(reminders.send_due_reminders(bot))
+
+    markup = bot.markups[0]
+    assert markup is not None
+    buttons = [button for row in markup.inline_keyboard for button in row]
+    assert [button.text for button in buttons] == [
+        "Виконано",
+        "Нагадати через 7 днів",
+    ]
+    assert [button.callback_data for button in buttons] == [
+        f"done:{interval_id}",
+        f"snooze:{interval_id}",
+    ]
+
+
+def test_reminder_keyboard_names_each_interval_when_several_are_due(
+    db_session_factory: sessionmaker,
+) -> None:
+    with db_session_factory() as db:
+        _user, car, first = _setup_overdue_interval(db)
+        second = ServiceInterval(
+            car_id=car.id, title="Гальмівна рідина", interval_km=60000, last_odometer=1000
+        )
+        db.add(second)
+        db.commit()
+        items = [
+            service.ReminderItem(car=car, interval=first, computed={}),
+            service.ReminderItem(car=car, interval=second, computed={}),
+        ]
+        markup = reminders.build_reminder_keyboard(items)
+
+    assert [row[0].text for row in markup.inline_keyboard] == [
+        "Виконано: Олива двигуна",
+        "Виконано: Гальмівна рідина",
+    ]
+
+
+def test_reminder_keyboard_shortens_long_titles(
+    db_session_factory: sessionmaker,
+) -> None:
+    with db_session_factory() as db:
+        _user, car, interval = _setup_overdue_interval(db)
+        interval.title = "Заміна оливи та масляного фільтра"
+        db.commit()
+        items = [
+            service.ReminderItem(car=car, interval=interval, computed={}),
+            service.ReminderItem(car=car, interval=interval, computed={}),
+        ]
+        markup = reminders.build_reminder_keyboard(items)
+
+    label = markup.inline_keyboard[0][0].text
+    assert label.endswith("…")
+    assert len(label) <= len("Виконано: ") + 20
+
+
+def test_done_button_completes_the_interval_through_the_shared_service(
+    db_session_factory: sessionmaker,
+) -> None:
+    """«Виконано» writes the same history the REST endpoint would."""
+    with db_session_factory() as db:
+        _user, car, interval = _setup_overdue_interval(db)
+        interval.last_notified_at = TODAY
+        db.commit()
+
+        completion = service.complete_interval_now(db, interval)
+
+        assert completion.log.type == "maintenance"
+        assert completion.log.car_id == car.id
+        assert completion.log.odometer == car.current_odometer  # 50000
+        assert completion.log.date == TODAY
+        assert float(completion.log.total_cost) == 0.0
+        assert completion.log.maintenance.items == ["Олива двигуна"]
+        # The interval starts over and may be reminded about again.
+        assert completion.interval.last_odometer == 50000
+        assert completion.interval.last_date == TODAY
+        assert completion.interval.last_notified_at is None
+        assert service.reminder_targets(db, today=TODAY) == []
+
+
+def test_snooze_button_silences_the_interval_for_its_own_seven_days(
+    db_session_factory: sessionmaker,
+) -> None:
+    """The debt this pays off: «Нагадати через 7 днів» used to only stamp
+    last_notified_at — byte for byte what an ordinary reminder already does,
+    so the button promised nothing the 7-day cooldown did not already give.
+    Now it books a date of its own.
+    """
+    with db_session_factory() as db:
+        _user, _car, interval = _setup_overdue_interval(db)
+        assert service.reminder_targets(db, today=TODAY) != []
+
+        service.snooze_interval(db, interval, today=TODAY)
+
+        assert interval.snoozed_until == TODAY + dt.timedelta(days=7)
+        # Silenced for the promised seven days...
+        for offset in range(0, 8):
+            day = TODAY + dt.timedelta(days=offset)
+            assert service.reminder_targets(db, today=day) == [], day
+        # ...and back on the eighth.
+        assert service.reminder_targets(db, today=TODAY + dt.timedelta(days=8)) != []
+        # Snoozing is not completing: no history is written.
+        assert db.execute(select(func.count()).select_from(LogEntry)).scalar_one() == 0
+
+
+def test_snooze_outlives_the_ordinary_notification_cooldown(
+    db_session_factory: sessionmaker,
+) -> None:
+    with db_session_factory() as db:
+        _user, _car, interval = _setup_overdue_interval(db)
+        # Reminded five days ago: the plain cooldown lapses in two more days.
+        interval.last_notified_at = TODAY - dt.timedelta(days=5)
+        db.commit()
+
+        service.snooze_interval(db, interval, today=TODAY)
+
+        # Day 7 would be free of the cooldown, but the snooze still holds.
+        assert service.reminder_targets(db, today=TODAY + dt.timedelta(days=7)) == []
+        assert service.reminder_targets(db, today=TODAY + dt.timedelta(days=8)) != []
+
+
+def test_completing_a_snoozed_interval_clears_the_snooze(
+    db_session_factory: sessionmaker,
+) -> None:
+    with db_session_factory() as db:
+        _user, car, interval = _setup_overdue_interval(db)
+        service.snooze_interval(db, interval, today=TODAY)
+        assert service.reminder_targets(db, today=TODAY) == []
+
+        service.complete_interval_now(db, interval, today=TODAY)
+
+        db.refresh(interval)
+        assert interval.snoozed_until is None
+        # It is fresh now, so it is quiet on its own merits, not by snooze.
+        assert interval.last_odometer == car.current_odometer

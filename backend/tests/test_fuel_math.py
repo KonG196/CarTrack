@@ -44,10 +44,6 @@ def _fuel(client: TestClient, headers: dict, car_id: int) -> dict:
 def test_full_partial_full_segment(
     client: TestClient, auth_headers: dict, make_car
 ) -> None:
-    """Full at 10000, partial 20L at 10400, full 25L at 10800.
-
-    One segment: 45 L over 800 km -> 5.625 l/100km (~5.63).
-    """
     car = make_car(current_odometer=10000)
     _refuel(client, auth_headers, car["id"], 10000, 40, True, 60.0, days_ago=30)
     _refuel(client, auth_headers, car["id"], 10400, 20, False, 30.0, days_ago=20)

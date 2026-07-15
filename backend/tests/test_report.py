@@ -16,7 +16,6 @@ def _post_log(client: TestClient, headers: dict, car_id: int, payload: dict) -> 
 
 
 def _seed_mixed_logs(client: TestClient, headers: dict, car_id: int) -> None:
-    """Seed one log of every type plus one service interval."""
     _post_log(
         client,
         headers,
