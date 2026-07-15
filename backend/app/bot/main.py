@@ -7,19 +7,28 @@ import logging
 import sys
 
 from aiogram import Bot, Dispatcher
+from aiogram.types import BotCommand
 
 from app.bot.handlers import router
 from app.bot.reminders import reminder_loop
 from app.config import settings
-from app.database import Base, engine
-from app.migrations import ensure_schema
+from app.database import engine
+from app.migrations import run_migrations
+
+# Published to Telegram's command menu on startup.
+BOT_COMMANDS: list[BotCommand] = [
+    BotCommand(command="start", description="Прив'язати акаунт Kapot Tracker"),
+    BotCommand(command="help", description="Довідка та формати повідомлень"),
+    BotCommand(command="status", description="Стан авто та найближчі ТО"),
+    BotCommand(command="report", description="PDF-звіт по авто"),
+]
 
 
 async def run() -> None:
-    """Start long polling with the reminder loop as a background task."""
     bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
     dispatcher = Dispatcher()
     dispatcher.include_router(router)
+    await bot.set_my_commands(BOT_COMMANDS)
     reminder_task = asyncio.create_task(reminder_loop(bot))
     try:
         await dispatcher.start_polling(bot)
@@ -28,7 +37,6 @@ async def run() -> None:
 
 
 def main() -> None:
-    """Validate configuration, prepare the schema and run the bot."""
     logging.basicConfig(level=logging.INFO)
     if not settings.TELEGRAM_BOT_TOKEN:
         print(
@@ -37,8 +45,7 @@ def main() -> None:
         )
         sys.exit(0)
 
-    Base.metadata.create_all(bind=engine)
-    ensure_schema(engine)
+    run_migrations(engine)
     asyncio.run(run())
 
 
