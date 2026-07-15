@@ -20,17 +20,18 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         runtimeCaching: [
           {
-            // GET-читання API: мережа має пріоритет, але вже за 3 с показуємо
-            // останню відому відповідь — на заправці «крутилка» назавжди гірша
-            // за вчорашній пробіг. Функція серіалізується в sw.js як є, тож
-            // усі значення всередині — без зовнішніх змінних.
-            urlPattern: ({ url, request, sameOrigin }) => {
-              if (!sameOrigin || request.method !== 'GET') return false;
+            // Network first, but a three-second wait beats a spinner at a
+            // pump: yesterday's odometer is worth more than nothing.
+            // Any origin: the API sits on this one when nginx serves the app
+            // and on another when a CDN does. The page only ever calls our own
+            // API, so matching the path alone is both enough and honest.
+            urlPattern: ({ url, request }) => {
+              if (request.method !== 'GET') return false;
               if (!url.pathname.startsWith('/api/')) return false;
-              // /api/auth — токени й коди, /api/export, /api/photos і
-              // /api/documents — бінарні відповіді: кешувати нічого з цього не
-              // можна й не варто. Список документів авто (/api/cars/N/documents)
-              // під цей префікс не підпадає — він JSON і кешується.
+              // Tokens and codes under /api/auth, and the binary bodies of
+              // /api/export, /api/photos and /api/documents, are never cached.
+              // A car's document list (/api/cars/N/documents) does not match
+              // that prefix — it is JSON and is cached.
               return !['/api/auth', '/api/export', '/api/photos', '/api/documents'].some(
                 (prefix) => url.pathname.startsWith(prefix),
               );

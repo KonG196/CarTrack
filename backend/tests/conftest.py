@@ -10,6 +10,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.config import settings
 from app.database import Base, get_db
 from app.main import app
 from app.routers.auth import (
@@ -21,6 +22,18 @@ from app.routers.auth import (
 
 DEFAULT_EMAIL = "user@example.com"
 DEFAULT_PASSWORD = "secret123"
+
+
+@pytest.fixture(autouse=True)
+def _no_real_mail(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Never send a real letter from a test.
+
+    Settings are read from .env, so a developer with SMTP configured would
+    otherwise have the suite mail verification codes to example.com — and the
+    bounces land in their own inbox. A test that wants the mail path patches
+    it explicitly.
+    """
+    monkeypatch.setattr(settings, "SMTP_HOST", "")
 
 
 @pytest.fixture(autouse=True)

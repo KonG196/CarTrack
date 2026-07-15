@@ -8,29 +8,36 @@ from app.bot.parsers import parse_odometer, parse_quick_expense, parse_refuel
 @pytest.mark.parametrize(
     ("text", "expected"),
     [
-        ("123456", 123456),
-        ("  123456  ", 123456),
-        ("1", 1),
-        ("2000000", 2000000),
+        ("пробіг 123456", 123456),
+        ("  Пробіг 123456  ", 123456),
+        ("пробіг: 240054", 240054),
+        ("пробіг 240 054", 240054),
+        ("пробег 123456", 123456),
+        ("пробіг 1", 1),
+        ("пробіг 2000000", 2000000),
     ],
 )
-def test_parse_odometer_accepts_plain_integers(text: str, expected: int) -> None:
+def test_parse_odometer_accepts_the_word_and_a_number(text: str, expected: int) -> None:
     assert parse_odometer(text) == expected
 
 
 @pytest.mark.parametrize(
     "text",
     [
-        "0",
-        "2000001",
-        "-5000",
-        "123.45",
-        "123,45",
-        "123456 км",
+        # A bare number is no longer an odometer: it used to be, and «300»
+        # meant something entirely different from «мийка 300» by accident.
+        "123456",
+        "  123456  ",
+        "пробіг 0",
+        "пробіг 2000001",
+        "пробіг -5000",
+        "пробіг 123.45",
+        "пробіг 123,45",
         "мийка 300",
         "",
         "   ",
         "abc",
+        "пробіг",
     ],
 )
 def test_parse_odometer_rejects_invalid_input(text: str) -> None:
@@ -70,8 +77,9 @@ def test_parse_quick_expense_rejects_invalid_input(text: str) -> None:
     assert parse_quick_expense(text) is None
 
 
-def test_bare_number_routes_to_odometer_not_expense() -> None:
-    assert parse_odometer("300") == 300
+def test_bare_number_is_neither_odometer_nor_expense() -> None:
+    """A number alone is ambiguous, so it is now nobody's — the bot asks."""
+    assert parse_odometer("300") is None
     assert parse_quick_expense("300") is None
 
 
@@ -176,8 +184,8 @@ def test_fallback_hint_lists_every_shape_the_parsers_understand() -> None:
     """
     from app.bot.handlers import UNKNOWN_TEXT
 
-    assert parse_odometer("123456") == 123456
-    assert "123456" in UNKNOWN_TEXT
+    assert parse_odometer("пробіг 240054") == 240054
+    assert "пробіг 240054" in UNKNOWN_TEXT
 
     assert parse_quick_expense("мийка 300") == ("мийка", 300.0)
     assert "мийка 300" in UNKNOWN_TEXT

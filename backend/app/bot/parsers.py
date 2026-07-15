@@ -8,7 +8,11 @@ from typing import Optional
 MIN_ODOMETER = 1
 MAX_ODOMETER = 2_000_000
 
-_ODOMETER_RE = re.compile(r"\d+")
+# «пробіг 240054», «пробег 240 054», «Пробіг: 240054» — the word carries the
+# intent so a stray number can never be one.
+_ODOMETER_WORD_RE = re.compile(
+    r"(?:пробіг|пробіr|пробег|probig|odo)\s*[:=]?\s*([\d\s\u00a0]+)", re.IGNORECASE
+)
 # "<title> <amount>": the title must contain at least one non-space character
 # before the trailing amount, so a bare number never matches (that is an
 # odometer update, not an expense).
@@ -26,15 +30,24 @@ _REFUEL_PLAIN_NUMBER_RE = re.compile(rf"(?<![\d.,/])({_REFUEL_NUMBER})")
 
 
 def parse_odometer(text: str) -> Optional[int]:
-    """Parse a plain odometer message: an integer between 1 and 2,000,000.
+    """Parse an odometer message: the word «пробіг» and an integer.
 
-    Decimals, signs and any surrounding words are rejected; only outer
-    whitespace is stripped.
+    A bare number is deliberately not accepted. It used to be, and it made
+    «мийка 300» and «300» mean different things by accident — a typo silently
+    rewrote the odometer instead of logging an expense. The word is cheap to
+    type and impossible to confuse.
+
+    Spaces inside the number are tolerated («пробіг 240 054»), decimals and
+    signs are not.
     """
     value = text.strip()
-    if _ODOMETER_RE.fullmatch(value) is None:
+    match = _ODOMETER_WORD_RE.fullmatch(value)
+    if match is None:
         return None
-    number = int(value)
+    digits = re.sub(r"[\s\u00a0]", "", match.group(1))
+    if not digits.isdigit():
+        return None
+    number = int(digits)
     if not MIN_ODOMETER <= number <= MAX_ODOMETER:
         return None
     return number

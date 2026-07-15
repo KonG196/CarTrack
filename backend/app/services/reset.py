@@ -50,11 +50,13 @@ async def send_reset_code(chat_id: str, code: str) -> None:
         await bot.session.close()
 
 
-async def initiate_reset(db: Session, email: str) -> None:
-    """Store a hashed reset code and deliver it via Telegram, else by email.
+async def initiate_reset(db: Session, email: str, channel: str | None = None) -> None:
+    """Store a hashed reset code and deliver it.
 
-    Silently does nothing for unknown emails, or when neither channel can
-    reach the account — a code nobody can receive is only an attack surface.
+    ``channel`` is what the user picked; it is honoured when that channel can
+    actually reach the account and quietly swapped for the other when it
+    cannot. Silently does nothing for unknown emails, or when neither channel
+    can reach the account — a code nobody can receive is only attack surface.
     The caller answers 202 regardless, so responses never reveal whether an
     account exists.
     """
@@ -70,14 +72,18 @@ async def initiate_reset(db: Session, email: str) -> None:
         minutes=RESET_CODE_TTL_MINUTES
     )
     db.commit()
+    # The pick is honoured when that channel can reach the account, and quietly
+    # swapped when it cannot: silence would be worse than the other channel.
+    use_telegram = bool(user.telegram_chat_id) and channel != "email"
     try:
-        if user.telegram_chat_id:
+        if use_telegram:
             await send_reset_code(user.telegram_chat_id, code)
-        else:
-            # No bot linked: the letter is the only way back into the account.
+        elif mail_enabled():
             send_reset_code_mail(user.email, code)
+        elif user.telegram_chat_id:
+            await send_reset_code(user.telegram_chat_id, code)
     except Exception:  # noqa: BLE001 - delivery failures must not break the 202
-        logger.warning("Failed to send a reset code via Telegram", exc_info=True)
+        logger.warning("Failed to send a reset code", exc_info=True)
 
 
 def confirm_reset(db: Session, email: str, code: str, new_password: str) -> bool:

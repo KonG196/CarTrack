@@ -15,6 +15,8 @@ from aiogram.types import (
     CallbackQuery,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    KeyboardButton,
+    ReplyKeyboardMarkup,
     Message,
 )
 from sqlalchemy.orm import Session
@@ -61,6 +63,35 @@ LINK_HINT = (
 
 NOT_LINKED_TEXT = "Ваш Telegram ще не прив'язано до акаунта Kapot Tracker.\n\n" + LINK_HINT
 
+# Persistent keys under the input field. Commands still work, but nothing has
+# to be remembered or typed: the two everyday actions sit one tap away and the
+# rest hide behind a menu so the keyboard stays two rows tall.
+MAIN_KEYBOARD = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton(text="⛽ Заправка"), KeyboardButton(text="🛣 Пробіг")],
+        [KeyboardButton(text="📊 Стан"), KeyboardButton(text="⚙️ Ще")],
+    ],
+    resize_keyboard=True,
+    is_persistent=True,
+)
+
+MORE_KEYBOARD = InlineKeyboardMarkup(
+    inline_keyboard=[
+        [
+            InlineKeyboardButton(text="💸 Витрата", callback_data="menu:expense"),
+            InlineKeyboardButton(text="📄 PDF-звіт", callback_data="menu:report"),
+        ],
+        [
+            InlineKeyboardButton(text="📬 Дайджест", callback_data="menu:digest"),
+            InlineKeyboardButton(text="❓ Довідка", callback_data="menu:help"),
+        ],
+    ]
+)
+
+ASK_ODOMETER = "Надішліть поточний пробіг числом, напр. «пробіг 240054»."
+ASK_REFUEL = "Надішліть заправку: «заправка 45л 2500» або фото чека."
+ASK_EXPENSE = "Надішліть витрату: «мийка 300»."
+
 HELP_TEXT = (
     "Доступні команди:\n"
     "/start <код> — прив'язати акаунт Kapot Tracker\n"
@@ -69,15 +100,15 @@ HELP_TEXT = (
     "/digest on|off — тижневий підсумок у неділю\n"
     "/help — ця довідка\n\n"
     "Також можна просто надіслати:\n"
-    "- число (наприклад, 123456) — оновити пробіг;\n"
-    "- «назва сума» (наприклад, мийка 300) — швидка витрата;\n"
+    "- «пробіг 240054» — оновити пробіг;\n"
+    "- «мийка 300» — швидка витрата;\n"
     "- «заправка 45л 2500» — запис про заправку;\n"
     "- фото чека — розпізнаю заправку автоматично."
 )
 
 UNKNOWN_TEXT = (
     "Не зрозумів повідомлення. Ось що я вмію:\n"
-    "- число (наприклад, 123456) — оновити пробіг;\n"
+    "- «пробіг 240054» — оновити пробіг;\n"
     "- «мийка 300» — швидка витрата;\n"
     "- «заправка 45л 2500» — запис про заправку;\n"
     "- фото чека — розпізнаю заправку автоматично;\n"
@@ -196,18 +227,54 @@ async def cmd_start(message: Message, command: CommandObject) -> None:
             await message.answer(
                 "Акаунт прив'язано! Ваші авто:\n"
                 f"{car_lines}\n\n"
-                "Надішліть /help, щоб побачити всі можливості."
+                "Користуйтеся кнопками нижче або надішліть /help.",
+                reply_markup=MAIN_KEYBOARD,
             )
         else:
             await message.answer(
                 "Акаунт прив'язано! У гаражі поки немає авто — додайте перше "
-                "у веб-додатку Kapot Tracker."
+                "у веб-додатку Kapot Tracker.",
+                reply_markup=MAIN_KEYBOARD,
             )
+
+
+@router.message(F.text == "⛽ Заправка")
+async def key_refuel(message: Message) -> None:
+    await message.answer(ASK_REFUEL)
+
+
+@router.message(F.text == "🛣 Пробіг")
+async def key_odometer(message: Message) -> None:
+    await message.answer(ASK_ODOMETER)
+
+
+@router.message(F.text == "📊 Стан")
+async def key_status(message: Message) -> None:
+    await cmd_status(message)
+
+
+@router.message(F.text == "⚙️ Ще")
+async def key_more(message: Message) -> None:
+    await message.answer("Що зробити?", reply_markup=MORE_KEYBOARD)
+
+
+@router.callback_query(F.data.startswith("menu:"))
+async def menu_choice(callback: CallbackQuery) -> None:
+    action = callback.data.split(":", 1)[1]
+    await callback.answer()
+    if action == "expense":
+        await callback.message.answer(ASK_EXPENSE)
+    elif action == "report":
+        await cmd_report(callback.message)
+    elif action == "digest":
+        await callback.message.answer("Увімкнути або вимкнути: /digest on або /digest off")
+    elif action == "help":
+        await callback.message.answer(HELP_TEXT)
 
 
 @router.message(Command("help"))
 async def cmd_help(message: Message) -> None:
-    await message.answer(HELP_TEXT)
+    await message.answer(HELP_TEXT, reply_markup=MAIN_KEYBOARD)
 
 
 @router.message(Command("status"))

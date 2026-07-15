@@ -160,6 +160,10 @@ class VerifyConfirmIn(BaseModel):
 
 class ResetRequestIn(BaseModel):
     email: str = Field(min_length=3, max_length=255)
+    # Which channel the user asked for. Honoured when that channel can reach
+    # the account, otherwise the other one is used — the response never says
+    # which, because that would leak whether the account has a bot linked.
+    channel: Optional[Literal["telegram", "email"]] = None
 
 
 class ResetConfirmIn(BaseModel):

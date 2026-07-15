@@ -47,7 +47,7 @@ def test_reset_happy_path(
     response = client.post("/api/auth/reset/request", json={"email": EMAIL})
     assert response.status_code == 202, response.text
     assert response.json()["detail"] == (
-        "Якщо акаунт існує і привʼязаний Telegram — код надіслано."
+        "Якщо акаунт існує — ми надіслали код."
     )
     assert len(sent_codes) == 1
     chat_id, code = sent_codes[0]
@@ -214,3 +214,53 @@ def test_reset_without_telegram_goes_by_email(client, monkeypatch) -> None:
         ).status_code
         == 200
     )
+
+
+def test_channel_email_is_honoured_even_with_telegram_linked(
+    client, monkeypatch, db_session_factory
+) -> None:
+    """Picking email must not be overridden by a linked bot."""
+    from app.services import reset as reset_service
+
+    mailed: list[tuple[str, str]] = []
+    telegrammed: list[str] = []
+    monkeypatch.setattr(reset_service, "mail_enabled", lambda: True)
+    monkeypatch.setattr(
+        reset_service, "send_reset_code_mail", lambda to, code: mailed.append((to, code)) or True
+    )
+
+    async def fake_telegram(chat_id, code):
+        telegrammed.append(chat_id)
+
+    monkeypatch.setattr(reset_service, "send_reset_code", fake_telegram)
+
+    client.post(
+        "/api/auth/register", json={"email": "both@example.com", "password": "password123"}
+    )
+    _link_telegram(db_session_factory, "both@example.com")
+
+    client.post(
+        "/api/auth/reset/request", json={"email": "both@example.com", "channel": "email"}
+    )
+    assert len(mailed) == 1
+    assert telegrammed == []
+
+
+def test_channel_telegram_falls_back_to_mail_when_not_linked(client, monkeypatch) -> None:
+    """Asking for the bot without one linked still gets the user back in."""
+    from app.services import reset as reset_service
+
+    mailed: list[tuple[str, str]] = []
+    monkeypatch.setattr(reset_service, "mail_enabled", lambda: True)
+    monkeypatch.setattr(
+        reset_service, "send_reset_code_mail", lambda to, code: mailed.append((to, code)) or True
+    )
+
+    client.post(
+        "/api/auth/register", json={"email": "nobot2@example.com", "password": "password123"}
+    )
+    response = client.post(
+        "/api/auth/reset/request", json={"email": "nobot2@example.com", "channel": "telegram"}
+    )
+    assert response.status_code == 202
+    assert len(mailed) == 1

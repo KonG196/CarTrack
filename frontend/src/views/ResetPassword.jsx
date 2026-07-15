@@ -10,6 +10,7 @@ export default function ResetPassword() {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [email, setEmail] = useState('');
+  const [channel, setChannel] = useState('email');
   const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -23,8 +24,8 @@ export default function ResetPassword() {
     setError('');
     setLoading(true);
     try {
-      const data = await requestPasswordReset(email.trim());
-      setInfo(data?.detail || 'Якщо акаунт існує і привʼязаний Telegram — код надіслано.');
+      const data = await requestPasswordReset(email.trim(), channel);
+      setInfo(data?.detail || 'Якщо акаунт існує — ми надіслали код.');
       setStep(2);
     } catch (err) {
       setError(extractError(err, 'Не вдалося надіслати код'));
@@ -76,9 +77,33 @@ export default function ResetPassword() {
           {step === 1 ? (
             <form onSubmit={handleRequest} className="flex flex-col gap-3.5">
               <p className="text-sm text-mist">
-                Вкажіть email акаунта. Якщо до нього привʼязаний Telegram, бот надішле 6-значний
-                код.
+                Вкажіть email акаунта — надішлемо 6-значний код.
               </p>
+              <div className="flex flex-col gap-1.5">
+                <span className="text-xs text-mist">Куди надіслати код</span>
+                <div className="flex gap-2">
+                  {[
+                    { value: 'email', label: 'На пошту' },
+                    { value: 'telegram', label: 'У Telegram' },
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setChannel(option.value)}
+                      className={`flex-1 rounded-xl border px-3 py-2 text-sm transition-colors ${
+                        channel === option.value
+                          ? 'border-amber bg-amber/10 text-amber'
+                          : 'border-edge text-mist hover:text-fg'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+                <span className="text-xs text-mist">
+                  Telegram спрацює, лише якщо ви привʼязали бота — інакше код прийде на пошту.
+                </span>
+              </div>
               <TextField
                 label="Email"
                 type="email"
@@ -95,9 +120,9 @@ export default function ResetPassword() {
             </form>
           ) : (
             <form onSubmit={handleConfirm} className="flex flex-col gap-3.5">
-              {info && <p className="text-sm text-ok">{info} Перевірте Telegram.</p>}
+              {info && <p className="text-sm text-ok">{info}</p>}
               <TextField
-                label="Код з Telegram"
+                label="Код з листа або Telegram"
                 inputMode="numeric"
                 enterKeyHint="next"
                 autoComplete="one-time-code"

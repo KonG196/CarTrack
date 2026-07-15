@@ -132,8 +132,8 @@ async def request_password_reset(
     _enforce_rate_limit(
         reset_request_limiter, (client_ip(request), payload.email.strip().lower())
     )
-    await initiate_reset(db, payload.email)
-    return {"detail": "Якщо акаунт існує і привʼязаний Telegram — код надіслано."}
+    await initiate_reset(db, payload.email, payload.channel)
+    return {"detail": "Якщо акаунт існує — ми надіслали код."}
 
 
 @router.post("/reset/confirm")

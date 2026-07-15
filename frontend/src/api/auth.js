@@ -25,8 +25,8 @@ export async function updateMe(displayName) {
   return data;
 }
 
-export async function requestPasswordReset(email) {
-  const { data } = await client.post('/auth/reset/request', { email });
+export async function requestPasswordReset(email, channel) {
+  const { data } = await client.post('/auth/reset/request', { email, channel });
   return data;
 }
 
