@@ -1,20 +1,15 @@
 FROM python:3.12-slim
 
-# postgresql-client-16 provides pg_dump for app.backup against the db service;
-# it must be >= the postgres:16 server version, so install from PGDG, not Debian.
+# postgresql-client is only used by app.backup against a Postgres deployment
+# (the SQLite path uses the sqlite3 online backup API and needs none of this).
+# Debian ships client 15, so compose pins postgres:15 to match: pg_dump refuses
+# a server newer than itself, and PGDG's client-16 will not resolve against
+# this base image.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         tesseract-ocr \
         tesseract-ocr-ukr \
         tesseract-ocr-eng \
-        curl \
-        ca-certificates \
-        gnupg \
-    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
-        | gpg --dearmor -o /usr/share/keyrings/pgdg.gpg \
-    && echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] http://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" \
-        > /etc/apt/sources.list.d/pgdg.list \
-    && apt-get update && apt-get install -y --no-install-recommends postgresql-client-16 \
-    && apt-get purge -y curl gnupg && apt-get autoremove -y \
+        postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
