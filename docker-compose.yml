@@ -25,6 +25,8 @@ services:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
       LINK_CODE_EXPIRE_MINUTES: ${LINK_CODE_EXPIRE_MINUTES:-15}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-flash-latest}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}
@@ -58,6 +60,8 @@ services:
       LINK_CODE_EXPIRE_MINUTES: ${LINK_CODE_EXPIRE_MINUTES:-15}
       BACKUP_DIR: /app/backups
       BACKUP_KEEP: ${BACKUP_KEEP:-14}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-flash-latest}
       BACKUP_TELEGRAM_CHAT_ID: ${BACKUP_TELEGRAM_CHAT_ID:-}
     volumes:
       - backups:/app/backups
