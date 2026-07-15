@@ -1,0 +1,35 @@
+# Overrides for a 1 GB host (Oracle Always Free VM.Standard.E2.1.Micro).
+#
+#   docker compose -f docker-compose.yml -f docker-compose.lite.yml up -d
+#
+# Drops PostgreSQL for SQLite — the whole test suite runs on SQLite anyway, and
+# for a single-digit number of users the difference is a saved 150 MB, not a
+# compromise. Move back to Postgres by simply omitting this file.
+services:
+  db:
+    # Compose has no "remove a service" directive, so the container is scaled to
+    # zero instead: `replicas: 0` keeps the definition valid and starts nothing.
+    deploy:
+      replicas: 0
+
+  backend:
+    environment:
+      DATABASE_URL: sqlite:////app/data/kapot_tracker.db
+    volumes:
+      - sqlite_data:/app/data
+    depends_on: !reset []
+    mem_limit: 400m
+
+  bot:
+    environment:
+      DATABASE_URL: sqlite:////app/data/kapot_tracker.db
+    volumes:
+      - sqlite_data:/app/data
+    depends_on: !reset []
+    mem_limit: 250m
+
+  frontend:
+    mem_limit: 100m
+
+volumes:
+  sqlite_data:
