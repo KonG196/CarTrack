@@ -6,7 +6,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Runtime configuration for the Kapot Tracker API."""
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -21,16 +20,26 @@ class Settings(BaseSettings):
     TELEGRAM_BOT_TOKEN: str = ""
     TELEGRAM_BOT_USERNAME: str = ""
     LINK_CODE_EXPIRE_MINUTES: int = 15
+    UPLOADS_DIR: str = "./uploads"
+    BACKUP_DIR: str = "./backups"
+    BACKUP_KEEP: int = 14
+    # Admin-only chat for daily backup delivery: in hosted mode the backup
+    # holds EVERY user's data, so it must never be broadcast to linked users.
+    BACKUP_TELEGRAM_CHAT_ID: str = ""
+    # Gemini vision fallback for receipt OCR: empty key disables it and the
+    # app stays fully offline on tesseract alone.
+    GEMINI_API_KEY: str = ""
+    # "-latest" alias tracks the current flash generation: Google retires
+    # concrete versions for new accounts (2.5-flash already returns 404).
+    GEMINI_MODEL: str = "gemini-flash-latest"
 
     @property
     def cors_origins_list(self) -> list[str]:
-        """Parse the comma-separated CORS_ORIGINS string into a list."""
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
 
 
 @lru_cache
 def get_settings() -> Settings:
-    """Return the cached application settings instance."""
     return Settings()
 
 

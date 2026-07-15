@@ -3,10 +3,10 @@
 from fastapi import APIRouter, Depends, Response
 from sqlalchemy.orm import Session
 
+from app.access import ROLE_VIEWER, get_accessible_car
 from app.auth import get_current_user
 from app.database import get_db
 from app.models import User
-from app.routers.cars import get_owned_car
 from app.services.report import build_car_report
 
 router = APIRouter(tags=["reports"])
@@ -18,8 +18,7 @@ def get_report(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> Response:
-    """Generate the service-history PDF report for a car owned by the user."""
-    car = get_owned_car(db, current_user, car_id)
+    car = get_accessible_car(db, current_user, car_id, min_role=ROLE_VIEWER)
     pdf_bytes = build_car_report(db, car)
     filename = f"kapot-tracker-report-{car.id}.pdf"
     return Response(

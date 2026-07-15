@@ -21,17 +21,14 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
 
 
 def hash_password(password: str) -> str:
-    """Hash a plaintext password with bcrypt."""
     return pwd_context.hash(password)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Check a plaintext password against its bcrypt hash."""
     return pwd_context.verify(plain_password, hashed_password)
 
 
 def create_access_token(user_id: int) -> str:
-    """Create a signed JWT with the user id as subject."""
     expire = dt.datetime.now(dt.timezone.utc) + dt.timedelta(
         minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
     )
@@ -43,7 +40,6 @@ def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db),
 ) -> User:
-    """Resolve the Bearer token to a User or raise 401."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",

@@ -1,0 +1,99 @@
+"""Password reset via the linked Telegram bot.
+
+The code is a DB-stored 6-digit secret (bcrypt-hashed, 10-minute TTL) —
+deliberately NOT a JWT, so it can never be mistaken for an access token.
+"""
+
+from __future__ import annotations
+
+import datetime as dt
+import logging
+import secrets
+
+from aiogram import Bot
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.auth import hash_password, verify_password
+from app.config import settings
+from app.models import User
+
+logger = logging.getLogger(__name__)
+
+RESET_CODE_TTL_MINUTES = 10
+
+
+def generate_reset_code() -> str:
+    return f"{secrets.randbelow(1_000_000):06d}"
+
+
+async def send_reset_code(chat_id: str, code: str) -> None:
+    """Send the reset code to the user's linked Telegram chat.
+
+    A missing bot token silently skips delivery: the request endpoint must
+    answer 202 either way (no user enumeration, no Telegram dependency).
+    """
+    if not settings.TELEGRAM_BOT_TOKEN:
+        return
+    bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
+    try:
+        await bot.send_message(
+            chat_id=chat_id,
+            text=(
+                f"Код для скидання пароля Kapot Tracker: {code}\n"
+                f"Діє {RESET_CODE_TTL_MINUTES} хвилин. "
+                "Якщо це були не ви — просто проігноруйте це повідомлення."
+            ),
+        )
+    finally:
+        await bot.session.close()
+
+
+async def initiate_reset(db: Session, email: str) -> None:
+    """Store a hashed reset code and send it when the account has Telegram.
+
+    Silently does nothing for unknown emails or accounts without a linked
+    chat — the caller answers 202 regardless, so responses never reveal
+    whether an account exists.
+    """
+    normalized = email.strip().lower()
+    user = db.execute(select(User).where(User.email == normalized)).scalar_one_or_none()
+    if user is None or not user.telegram_chat_id:
+        return
+    code = generate_reset_code()
+    user.reset_code_hash = hash_password(code)
+    user.reset_code_expires_at = dt.datetime.now(dt.timezone.utc) + dt.timedelta(
+        minutes=RESET_CODE_TTL_MINUTES
+    )
+    db.commit()
+    try:
+        await send_reset_code(user.telegram_chat_id, code)
+    except Exception:  # noqa: BLE001 - delivery failures must not break the 202
+        logger.warning("Failed to send a reset code via Telegram", exc_info=True)
+
+
+def confirm_reset(db: Session, email: str, code: str, new_password: str) -> bool:
+    """Set a new password when the code matches and has not expired.
+
+    Returns False for every failure mode alike (unknown email, no pending
+    code, expired, mismatch) so the endpoint cannot leak which one it was.
+    NOTE: previously issued JWT access tokens stay valid until their own
+    expiry — tokens are stateless and a reset does not revoke sessions.
+    """
+    normalized = email.strip().lower()
+    user = db.execute(select(User).where(User.email == normalized)).scalar_one_or_none()
+    if user is None or user.reset_code_hash is None or user.reset_code_expires_at is None:
+        return False
+    expires_at = user.reset_code_expires_at
+    if expires_at.tzinfo is None:
+        # DateTime columns come back naive from the driver; they store UTC.
+        expires_at = expires_at.replace(tzinfo=dt.timezone.utc)
+    if expires_at < dt.datetime.now(dt.timezone.utc):
+        return False
+    if not verify_password(code, user.reset_code_hash):
+        return False
+    user.hashed_password = hash_password(new_password)
+    user.reset_code_hash = None
+    user.reset_code_expires_at = None
+    db.commit()
+    return True

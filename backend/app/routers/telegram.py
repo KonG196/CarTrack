@@ -24,7 +24,6 @@ class InvalidLinkCodeError(Exception):
 
 
 def create_link_code(user_id: int) -> str:
-    """Create a short-lived JWT that links a Telegram chat to a user."""
     expire = dt.datetime.now(dt.timezone.utc) + dt.timedelta(
         minutes=settings.LINK_CODE_EXPIRE_MINUTES
     )
@@ -33,11 +32,6 @@ def create_link_code(user_id: int) -> str:
 
 
 def decode_link_code(code: str) -> int:
-    """Decode a link code and return the user id.
-
-    Raises InvalidLinkCodeError for garbage or expired tokens, a wrong
-    purpose claim or a broken subject. Reused by the Telegram bot.
-    """
     try:
         payload = jwt.decode(code, settings.SECRET_KEY, algorithms=[ALGORITHM])
     except jwt.InvalidTokenError as exc:
@@ -54,7 +48,6 @@ def decode_link_code(code: str) -> int:
 def create_telegram_link_code(
     current_user: User = Depends(get_current_user),
 ) -> TelegramLinkCodeResponse:
-    """Issue a short-lived code the user sends to the bot via /start."""
     code = create_link_code(current_user.id)
     deep_link = (
         f"https://t.me/{settings.TELEGRAM_BOT_USERNAME}?start={code}"
@@ -70,7 +63,6 @@ def create_telegram_link_code(
 
 @router.get("/status", response_model=TelegramStatus)
 def telegram_status(current_user: User = Depends(get_current_user)) -> TelegramStatus:
-    """Report whether the current user has a linked Telegram chat."""
     return TelegramStatus(linked=current_user.telegram_chat_id is not None)
 
 
@@ -79,7 +71,6 @@ def unlink_telegram(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> None:
-    """Clear the current user's Telegram link."""
     current_user.telegram_chat_id = None
     db.commit()
     return None

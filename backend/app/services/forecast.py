@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models import Car, LogEntry, ServiceInterval
-from app.services.intervals import compute_avg_daily_km, compute_interval_status
+from app.services.intervals import compute_interval_status, effective_avg_daily_km
 
 UPCOMING_HORIZON_DAYS = 90
 SPEND_WINDOW_DAYS = 90
@@ -55,11 +55,6 @@ UKRAINIAN_STOP_WORDS = frozenset(
 
 
 def normalize_keywords(text: str) -> set[str]:
-    """Extract normalized keywords from free text.
-
-    Keywords are lowercased word tokens of at least MIN_KEYWORD_LENGTH
-    characters with Ukrainian stop-words removed.
-    """
     tokens = re.findall(r"\w+", text.lower())
     return {
         token
@@ -69,7 +64,6 @@ def normalize_keywords(text: str) -> set[str]:
 
 
 def _log_service_text(log: LogEntry) -> str:
-    """Concatenate the searchable text of a maintenance/repair log entry."""
     parts: list[str] = []
     if log.maintenance is not None:
         parts.extend(log.maintenance.items or [])
@@ -83,11 +77,6 @@ def _log_service_text(log: LogEntry) -> str:
 
 
 def compute_monthly_km_rate(logs: Sequence[LogEntry]) -> float | None:
-    """Average km driven per 30 days from the first/last log odometer span.
-
-    Returns None with fewer than two logs, a date span under 7 days or a
-    non-positive odometer delta.
-    """
     if len(logs) < 2:
         return None
 
@@ -130,12 +119,6 @@ def compute_avg_monthly_spend(logs: Sequence[LogEntry], today: dt.date | None = 
 def compute_projected_month_total(
     logs: Sequence[LogEntry], today: dt.date | None = None
 ) -> float | None:
-    """Project the current calendar month's total spend.
-
-    Spend so far this month plus the average daily spend rate of the last
-    SPEND_WINDOW_DAYS days applied to the remaining days of the month.
-    Returns None when there is no data in that window.
-    """
     if today is None:
         today = dt.date.today()
 
@@ -161,13 +144,6 @@ def compute_projected_month_total(
 
 
 def estimate_interval_cost(interval_title: str, logs: Sequence[LogEntry]) -> float | None:
-    """Estimate an interval's cost from this car's past service logs.
-
-    A maintenance/repair log matches when its text (maintenance items,
-    repair part_name/category, notes) shares at least one normalized keyword
-    with the interval title. Returns the median total_cost of the matching
-    logs, or None when nothing matches.
-    """
     title_keywords = normalize_keywords(interval_title)
     if not title_keywords:
         return None
@@ -190,11 +166,6 @@ def build_forecast(
     today: dt.date | None = None,
     logs: Sequence[LogEntry] | None = None,
 ) -> dict:
-    """Assemble the forecast payload for a car per the API contract.
-
-    ``logs`` lets callers that already loaded the car's log entries (with
-    detail rows eager-loaded) reuse them instead of re-querying.
-    """
     if today is None:
         today = dt.date.today()
 
@@ -208,6 +179,7 @@ def build_forecast(
                     selectinload(LogEntry.refuel),
                     selectinload(LogEntry.maintenance),
                     selectinload(LogEntry.repair),
+                    selectinload(LogEntry.expense),
                 )
             )
             .scalars()
@@ -223,7 +195,7 @@ def build_forecast(
         .all()
     )
 
-    avg_daily_km = compute_avg_daily_km(logs)
+    avg_daily_km = effective_avg_daily_km(car, logs, today=today)
     horizon = today + dt.timedelta(days=UPCOMING_HORIZON_DAYS)
 
     upcoming: list[dict] = []

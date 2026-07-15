@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.models import Car, LogEntry, ServiceInterval
 from app.services.fuel import compute_fuel_stats
-from app.services.intervals import compute_avg_daily_km, compute_interval_status
+from app.services.intervals import compute_interval_status, effective_avg_daily_km
 from app.services.stats import build_refuel_points
 
 FONTS_DIR = Path(__file__).resolve().parent.parent / "assets" / "fonts"
@@ -44,7 +44,6 @@ _fonts_registered = False
 
 
 def _register_fonts() -> None:
-    """Register the bundled DejaVu fonts once (Cyrillic support)."""
     global _fonts_registered
     if _fonts_registered:
         return
@@ -61,7 +60,6 @@ def _register_fonts() -> None:
 
 
 def _fmt_date(day: dt.date | None) -> str:
-    """Format a date as DD.MM.YYYY, or an em dash when missing."""
     if day is None:
         return "—"
     return day.strftime("%d.%m.%Y")
@@ -75,19 +73,16 @@ def _fmt_number(value: float) -> str:
 
 
 def _fmt_money(value: float) -> str:
-    """Format an amount in hryvnias."""
     return f"{_fmt_number(round(value, 2))} грн"
 
 
 def _fmt_km(value: int | float | None) -> str:
-    """Format a kilometre value, or an em dash when missing."""
     if value is None:
         return "—"
     return f"{_fmt_number(round(float(value)))} км"
 
 
 def _styles() -> dict[str, ParagraphStyle]:
-    """Paragraph styles used by the report (DejaVu-based)."""
     return {
         "title": ParagraphStyle(
             "title", fontName=FONT_NAME_BOLD, fontSize=16, leading=20,
@@ -121,7 +116,6 @@ def _styles() -> dict[str, ParagraphStyle]:
 
 
 def _draw_footer(canvas, doc) -> None:
-    """Draw the 'Kapot Tracker' footer with the page number on every page."""
     canvas.saveState()
     canvas.setFont(FONT_NAME, 8)
     canvas.setFillColor(colors.HexColor("#6b7280"))
@@ -131,7 +125,6 @@ def _draw_footer(canvas, doc) -> None:
 
 
 def _base_table_style() -> TableStyle:
-    """Shared table look: bold header row, hairline grid, top alignment."""
     return TableStyle(
         [
             ("FONTNAME", (0, 0), (-1, 0), FONT_NAME_BOLD),
@@ -150,7 +143,6 @@ def _base_table_style() -> TableStyle:
 
 
 def _service_log_description(log: LogEntry) -> str:
-    """Human-readable description of a maintenance/repair log entry."""
     parts: list[str] = []
     if log.type == "maintenance" and log.maintenance is not None:
         items = ", ".join(log.maintenance.items or [])
@@ -168,11 +160,6 @@ def _service_log_description(log: LogEntry) -> str:
 
 
 def build_car_report(db: Session, car: Car) -> bytes:
-    """Render the full service-history PDF report for a car.
-
-    Returns the PDF as bytes. A car with zero logs still renders a valid
-    document with an explicit "no records yet" summary.
-    """
     _register_fonts()
     styles = _styles()
 
@@ -185,6 +172,7 @@ def build_car_report(db: Session, car: Car) -> bytes:
                 selectinload(LogEntry.refuel),
                 selectinload(LogEntry.maintenance),
                 selectinload(LogEntry.repair),
+                selectinload(LogEntry.expense),
             )
         )
         .scalars()
@@ -218,7 +206,7 @@ def build_car_report(db: Session, car: Car) -> bytes:
     # --- 2. Car summary ---------------------------------------------------
     story.append(Paragraph("Авто", styles["heading"]))
     story.append(Spacer(1, 2 * mm))
-    avg_daily = round(compute_avg_daily_km(logs), 1) if len(logs) >= 2 else None
+    avg_daily = round(effective_avg_daily_km(car, logs), 1) if len(logs) >= 2 else None
     fuel_label = FUEL_TYPE_LABELS.get(car.fuel_type, car.fuel_type)
     summary_lines = [
         f"Поточний пробіг: {_fmt_km(car.current_odometer)}",
@@ -239,7 +227,11 @@ def build_car_report(db: Session, car: Car) -> bytes:
         for log in logs:
             by_type[log.type] += float(log.total_cost or 0)
         all_time = sum(by_type.values())
-        fuel_stats = compute_fuel_stats(build_refuel_points(logs))
+        # The car's own fuel, matching the `fuel.*` block of the analytics
+        # screen: a ГБО car's report is about its gas, not about a blend.
+        fuel_stats = compute_fuel_stats(
+            build_refuel_points(logs, car), fuel_kind=car.fuel_type
+        )
         avg_consumption = (
             f"{fuel_stats.avg_consumption_l_100km} л/100 км"
             if fuel_stats.avg_consumption_l_100km is not None
@@ -323,7 +315,7 @@ def build_car_report(db: Session, car: Car) -> bytes:
     if not intervals:
         story.append(Paragraph("Сервісних інтервалів поки немає.", styles["body"]))
     else:
-        avg_daily_km = compute_avg_daily_km(logs)
+        avg_daily_km = effective_avg_daily_km(car, logs)
         rows = [
             [
                 Paragraph("Назва", styles["cell_bold"]),
