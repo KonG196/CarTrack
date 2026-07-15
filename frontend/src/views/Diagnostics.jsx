@@ -23,9 +23,9 @@ const VERDICT_TONES = {
   crit: 'border-crit/40 bg-crit/10 text-crit',
 };
 
-const GRID = '#1D2A3E'; // edge — сітка має лишатись майже непомітною
-const MUTED = '#93A1B8'; // mist — підписи осей
-const SURFACE = '#121A26'; // panel — фон картки під графіком
+const GRID = '#1D2A3E';
+const MUTED = '#93A1B8';
+const SURFACE = '#121A26';
 const LINE = '#3987e5';
 
 function VerdictCard({ verdict }) {

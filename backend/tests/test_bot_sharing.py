@@ -204,7 +204,6 @@ def test_status_marks_the_shared_car_for_the_member_but_not_for_the_owner(
 
     assert "Renault Megane (спільне)" in member_status
     assert "Skoda Octavia (спільне)" not in member_status
-    # The owner's own car is never «спільне» to the owner.
     assert "(спільне)" not in owner_status
 
 

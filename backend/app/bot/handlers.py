@@ -48,9 +48,6 @@ class PendingRefuel:
     car_id: Optional[int] = None
 
 
-# Actions awaiting confirmation, keyed by chat id. Keeping the payload out of
-# the callback data sidesteps Telegram's 64-byte limit — and nothing reaches
-# the database until the user taps «Зберегти».
 _pending_expenses: dict[int, PendingExpense] = {}
 _pending_refuels: dict[int, PendingRefuel] = {}
 
@@ -328,9 +325,6 @@ async def handle_text(message: Message) -> None:
             await _handle_odometer(message, db, user, odometer)
             return
 
-        # Refuels are checked before expenses: «заправка 45л 2500» also fits
-        # the "<title> <amount>" expense shape and would otherwise be filed
-        # as an expense named «заправка 45л».
         refuel = parse_refuel(text)
         if refuel is not None:
             await _handle_refuel(

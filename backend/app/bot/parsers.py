@@ -14,12 +14,8 @@ _ODOMETER_RE = re.compile(r"\d+")
 # odometer update, not an expense).
 _QUICK_EXPENSE_RE = re.compile(r"(?P<title>.*\S)\s+(?P<amount>\d+(?:[.,]\d{1,2})?)")
 
-# A refuel message opens with «заправка» in any of its forms («заправ»,
-# «заправився»); without that word a number pair is far too ambiguous.
 _REFUEL_PREFIX_RE = re.compile(r"^заправ\w*", re.IGNORECASE)
 _REFUEL_NUMBER = r"\d+(?:[.,]\d+)?"
-# "45л" / "45 л" / "40 L". The lookbehind keeps the match from starting in
-# the middle of a number or right after a slash (as in «грн/л»).
 _REFUEL_LITERS_RE = re.compile(
     rf"(?<![\d.,/])({_REFUEL_NUMBER})[ \t]*(?:л|l)\b", re.IGNORECASE
 )

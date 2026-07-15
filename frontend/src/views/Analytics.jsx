@@ -47,9 +47,9 @@ const FUEL_KIND_COLORS = {
   electric: '#9085e9',
 };
 
-const SURFACE = '#121A26'; // panel — фон картки під графіком
-const GRID = '#1D2A3E'; // edge — сітка має лишатись майже непомітною
-const MUTED = '#93A1B8'; // mist — підписи осей; 6.68:1 на panel (WCAG AA)
+const SURFACE = '#121A26';
+const GRID = '#1D2A3E';
+const MUTED = '#93A1B8';
 
 function ChartTooltip({ active, payload, label, valueFormatter }) {
   if (!active || !payload || payload.length === 0) return null;

@@ -29,8 +29,6 @@ MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 # A document is a scan or a PDF; nothing else is a document.
 ALLOWED_CONTENT_TYPES: tuple[str, ...] = ("application/pdf",)
 
-# The reminder booked for an expiring document renews yearly, which is what
-# both an ОСЦПВ policy and a Ukrainian техогляд do.
 DOCUMENT_INTERVAL_DAYS = 365
 
 

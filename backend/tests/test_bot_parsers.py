@@ -76,9 +76,6 @@ def test_bare_number_routes_to_odometer_not_expense() -> None:
 
 
 def test_number_then_word_is_neither_odometer_nor_expense() -> None:
-    # "300 мийка" (amount before title) is deliberately unsupported: it is
-    # not an odometer value and not a "<title> <amount>" expense, so the bot
-    # answers with the usage hint instead of guessing.
     assert parse_odometer("300 мийка") is None
     assert parse_quick_expense("300 мийка") is None
 
@@ -101,7 +98,6 @@ def test_number_then_word_is_neither_odometer_nor_expense() -> None:
             "заправка 45л 55.99 грн/л",
             {"liters": 45.0, "price_per_liter": 55.99, "total_cost": 2519.55},
         ),
-        # decimal commas, spacing and the "грн" suffix are all tolerated
         (
             "заправка 45,5 л 2500 грн",
             {"liters": 45.5, "price_per_liter": 54.95, "total_cost": 2500.0},
@@ -110,7 +106,6 @@ def test_number_then_word_is_neither_odometer_nor_expense() -> None:
             "  ЗАПРАВКА 40Л 2200  ",
             {"liters": 40.0, "price_per_liter": 55.0, "total_cost": 2200.0},
         ),
-        # any «заправ...» form opens a refuel message
         (
             "заправ 40л 2200",
             {"liters": 40.0, "price_per_liter": 55.0, "total_cost": 2200.0},
@@ -119,7 +114,6 @@ def test_number_then_word_is_neither_odometer_nor_expense() -> None:
             "заправився 40 l 2200",
             {"liters": 40.0, "price_per_liter": 55.0, "total_cost": 2200.0},
         ),
-        # "грн." variant of the per-liter marker
         (
             "заправка 50 л 54 грн./л",
             {"liters": 50.0, "price_per_liter": 54.0, "total_cost": 2700.0},
@@ -138,7 +132,7 @@ def test_parse_refuel_accepts_refuel_messages(text: str, expected: dict) -> None
 @pytest.mark.parametrize(
     "text",
     [
-        "45л 2500",  # no leading «заправка»
+        "45л 2500",
         "мийка 300",
         "300",
         "",
@@ -166,7 +160,6 @@ def test_refuel_message_is_checked_before_quick_expense() -> None:
 
 
 def test_refuel_without_liters_still_falls_back_to_a_quick_expense() -> None:
-    # «заправка 300» carries no liters: it stays a plain expense, as before.
     assert parse_refuel("заправка 300") is None
     assert parse_quick_expense("заправка 300") == ("заправка", 300.0)
 

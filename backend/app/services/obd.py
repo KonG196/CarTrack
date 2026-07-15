@@ -32,9 +32,6 @@ class ObdParseError(ValueError):
 
 # Column mapping
 
-# Patterns are matched as substrings against the normalized header. Ukrainian
-# entries are stems on purpose: the same PID appears as «Маса сажі» and «Сажа»,
-# and declension would defeat whole-word patterns.
 METRIC_PATTERNS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # Specific DPF columns first: «distance since dpf regeneration» also
     # contains «dpf», which the soot patterns must not claim.

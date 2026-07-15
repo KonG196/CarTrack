@@ -40,7 +40,6 @@ def _refuel(
 
 
 def test_range_is_the_tank_divided_by_the_consumption_per_100km() -> None:
-    # 50 л at 6.25 л/100км -> 800 км exactly.
     assert compute_range_km(50.0, 6.25) == 800
     assert compute_range_km(50.0, 8.0) == 630
 
@@ -134,7 +133,7 @@ def test_analytics_range_from_the_tank_and_the_measured_consumption(
 ) -> None:
     car = make_car(current_odometer=10000, tank_liters=50)
     _refuel(client, auth_headers, car["id"], 10000, 45)  # anchor
-    _refuel(client, auth_headers, car["id"], 10500, 40)  # 40 л / 500 км = 8 л/100км
+    _refuel(client, auth_headers, car["id"], 10500, 40)
 
     body = client.get(f"/api/cars/{car['id']}/analytics", headers=auth_headers).json()
     assert body["fuel"]["avg_consumption_l_100km"] == 8.0

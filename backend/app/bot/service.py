@@ -35,17 +35,12 @@ from app.services.stats import build_refuel_points, compute_analytics
 
 NOTIFY_COOLDOWN_DAYS = 7
 
-# What «Нагадати через 7 днів» books: the interval stays quiet through the
-# seventh day and is due again on the eighth.
 SNOOZE_DAYS = 7
 
 # The weekly digest covers the seven days ending on the day it is sent — a
 # Monday..Sunday calendar week, since it only ever goes out on a Sunday.
 DIGEST_DAYS = 7
 
-# How each log type is named in the digest's spend breakdown, keyed by
-# LogEntry.type. «інші» rather than «витрати»: everything in the line is a
-# кошт, so repeating the word would say nothing.
 DIGEST_TYPE_LABELS: dict[str, str] = {
     "refuel": "заправки",
     "maintenance": "ТО",
