@@ -3,7 +3,9 @@ import axios from 'axios';
 export const TOKEN_KEY = 'kapot_tracker_token';
 
 const client = axios.create({
-  baseURL: '/api',
+  // Same-origin '/api' is what the nginx image serves; a split deployment
+  // (frontend on a CDN, API elsewhere) sets VITE_API_URL to the full origin.
+  baseURL: import.meta.env.VITE_API_URL || '/api',
 });
 
 client.interceptors.request.use((config) => {
