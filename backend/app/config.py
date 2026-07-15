@@ -50,6 +50,12 @@ class Settings(BaseSettings):
     # an intermediary is the only lawful route and it is optional by design.
     BAZA_GAI_API_KEY: str = ""
 
+    # OCR.space: the free vision fallback (25k/month, no card). The demo key
+    # works without registration, so the fallback is on by default — Gemini's
+    # free tier is unavailable to any account that has touched billing.
+    OCR_SPACE_API_KEY: str = ""
+    OCR_SPACE_USE_DEMO_KEY: bool = True
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]

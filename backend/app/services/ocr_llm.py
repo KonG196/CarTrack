@@ -18,6 +18,7 @@ import httpx
 import logging
 
 from app.config import settings
+from app.services import ocr_space
 from app.services.ocr import (
     GAS_STATION_BRANDS,
     MAX_LITERS,
@@ -185,12 +186,32 @@ def recognize_receipt(image_bytes: bytes, content_type: str = "image/jpeg") -> P
     because someone else's API is down.
     """
     parsed = parse_receipt_text(extract_text(image_bytes))
-    if parsed.found_in_text >= 2 or not settings.GEMINI_API_KEY:
+    if parsed.found_in_text >= 2:
+        return parsed
+
+    # Rung two: OCR.space reads the pixels tesseract could not, and the same
+    # parser reads its text. Free and cardless, so it is tried first.
+    if ocr_space.enabled():
+        try:
+            remote_text = ocr_space.recognize_text(image_bytes, content_type)
+        except Exception:
+            logger.warning("OCR.space fallback failed", exc_info=True)
+            remote_text = None
+        if remote_text:
+            remote_parsed = parse_receipt_text(remote_text)
+            if remote_parsed.found_in_text > parsed.found_in_text:
+                parsed = remote_parsed
+                if parsed.found_in_text >= 2:
+                    return parsed
+
+    # Rung three: a vision model that understands the receipt rather than
+    # reading it. Costs money, so it goes last and only if configured.
+    if not settings.GEMINI_API_KEY:
         return parsed
     try:
         llm_parsed = recognize_receipt_llm(image_bytes, content_type)
     except Exception:
-        logger.warning("Vision fallback failed, keeping the tesseract result", exc_info=True)
+        logger.warning("Vision fallback failed, keeping the local result", exc_info=True)
         return parsed
     if llm_parsed is not None and llm_parsed.found_in_text > parsed.found_in_text:
         return llm_parsed

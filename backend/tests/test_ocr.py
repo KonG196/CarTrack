@@ -6,6 +6,8 @@ where both the API and the bot now read receipts.
 """
 
 import pytest
+
+from app.config import settings
 from fastapi.testclient import TestClient
 from pytesseract import TesseractNotFoundError
 
@@ -447,3 +449,56 @@ def test_scan_endpoint_requires_auth(client: TestClient) -> None:
         "/api/ocr/scan", files={"file": ("receipt.jpg", b"x", "image/jpeg")}
     )
     assert response.status_code == 401
+
+
+def test_ocr_space_rung_reads_what_tesseract_missed(monkeypatch) -> None:
+    """The free rung runs only when the local pass came up short, and its text
+    goes through the same parser — no second source of truth."""
+    from app.services import ocr_llm, ocr_space
+
+    monkeypatch.setattr(settings, "OCR_SPACE_USE_DEMO_KEY", True)
+    monkeypatch.setattr(ocr_llm, "extract_text", lambda image_bytes: "нерозбірливо")
+    monkeypatch.setattr(
+        ocr_space,
+        "recognize_text",
+        lambda image_bytes, content_type="image/jpeg": (
+            "43,06 л х 15,99\nСУМА, ГРН. 688,53"
+        ),
+    )
+
+    parsed = ocr_llm.recognize_receipt(b"fake")
+    assert parsed.liters == 43.06
+    assert parsed.price_per_liter == 15.99
+    assert parsed.total_cost == 688.53
+
+
+def test_ocr_space_is_skipped_when_tesseract_already_read_the_receipt(monkeypatch) -> None:
+    """25k free calls a month are not spent on receipts we can already read."""
+    from app.services import ocr_llm, ocr_space
+
+    monkeypatch.setattr(settings, "OCR_SPACE_USE_DEMO_KEY", True)
+    monkeypatch.setattr(ocr_llm, "extract_text", lambda image_bytes: OKKO_RECEIPT)
+
+    called = []
+    monkeypatch.setattr(
+        ocr_space,
+        "recognize_text",
+        lambda *a, **k: called.append(1),
+    )
+    parsed = ocr_llm.recognize_receipt(b"fake")
+    assert parsed.found_in_text >= 2
+    assert called == []
+
+
+def test_ocr_space_failure_keeps_the_local_result(monkeypatch) -> None:
+    from app.services import ocr_llm, ocr_space
+
+    monkeypatch.setattr(settings, "OCR_SPACE_USE_DEMO_KEY", True)
+    monkeypatch.setattr(ocr_llm, "extract_text", lambda image_bytes: "45.00 Л")
+
+    def boom(*a, **k):
+        raise RuntimeError("network down")
+
+    monkeypatch.setattr(ocr_space, "recognize_text", boom)
+    parsed = ocr_llm.recognize_receipt(b"fake")
+    assert parsed.liters == 45.0

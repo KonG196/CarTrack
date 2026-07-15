@@ -37,6 +37,8 @@ def _no_outside_calls(monkeypatch: pytest.MonkeyPatch) -> None:
     """
     monkeypatch.setattr(settings, "SMTP_HOST", "")
     monkeypatch.setattr(settings, "GEMINI_API_KEY", "")
+    monkeypatch.setattr(settings, "OCR_SPACE_API_KEY", "")
+    monkeypatch.setattr(settings, "OCR_SPACE_USE_DEMO_KEY", False)
 
 
 @pytest.fixture(autouse=True)
