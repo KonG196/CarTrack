@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import datetime as dt
+import time
 import io
 from dataclasses import dataclass
 from typing import Optional
@@ -22,7 +23,12 @@ from aiogram.types import (
 from sqlalchemy.orm import Session
 
 from app.bot import service
-from app.bot.parsers import parse_odometer, parse_quick_expense, parse_refuel
+from app.bot.parsers import (
+    parse_bare_odometer,
+    parse_odometer,
+    parse_quick_expense,
+    parse_refuel,
+)
 from app.database import SessionLocal
 from app.models import User
 from app.routers.telegram import InvalidLinkCodeError
@@ -49,6 +55,12 @@ class PendingRefuel:
     photo: Optional[service.RefuelPhoto] = None
     car_id: Optional[int] = None
 
+
+# What the bot last asked this chat for. A bare number means nothing on its
+# own, but everything right after «надішліть пробіг» — so the question is
+# remembered, briefly, and only for that.
+_ASK_TTL_SECONDS = 10 * 60
+_awaiting_odometer: dict[int, float] = {}
 
 _pending_expenses: dict[int, PendingExpense] = {}
 _pending_refuels: dict[int, PendingRefuel] = {}
@@ -88,7 +100,7 @@ MORE_KEYBOARD = InlineKeyboardMarkup(
     ]
 )
 
-ASK_ODOMETER = "Надішліть поточний пробіг числом, напр. «пробіг 240054»."
+ASK_ODOMETER = "Надішліть поточний пробіг — просто числом, напр. 240054."
 ASK_REFUEL = "Надішліть заправку: «заправка 45л 2500» або фото чека."
 ASK_EXPENSE = "Надішліть витрату: «мийка 300»."
 
@@ -245,6 +257,7 @@ async def key_refuel(message: Message) -> None:
 
 @router.message(F.text == "🛣 Пробіг")
 async def key_odometer(message: Message) -> None:
+    _awaiting_odometer[message.chat.id] = time.monotonic()
     await message.answer(ASK_ODOMETER)
 
 
@@ -378,6 +391,16 @@ async def _send_report(
     )
     await message.answer_document(document, caption=f"Звіт: {_car_label(car, user)}")
 
+def _was_asked_for_odometer(chat_id: int) -> bool:
+    asked_at = _awaiting_odometer.get(chat_id)
+    if asked_at is None:
+        return False
+    if time.monotonic() - asked_at > _ASK_TTL_SECONDS:
+        _awaiting_odometer.pop(chat_id, None)
+        return False
+    return True
+
+
 @router.message(F.text)
 async def handle_text(message: Message) -> None:
     text = message.text or ""
@@ -388,7 +411,10 @@ async def handle_text(message: Message) -> None:
             return
 
         odometer = parse_odometer(text)
+        if odometer is None and _was_asked_for_odometer(message.chat.id):
+            odometer = parse_bare_odometer(text)
         if odometer is not None:
+            _awaiting_odometer.pop(message.chat.id, None)
             await _handle_odometer(message, db, user, odometer)
             return
 

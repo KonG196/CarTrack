@@ -29,6 +29,21 @@ _REFUEL_PRICE_RE = re.compile(
 _REFUEL_PLAIN_NUMBER_RE = re.compile(rf"(?<![\d.,/])({_REFUEL_NUMBER})")
 
 
+def parse_bare_odometer(text: str) -> Optional[int]:
+    """Parse a plain number as an odometer.
+
+    Only for use right after the bot asked for one: on its own a number is
+    ambiguous, but as an answer to a question it is not.
+    """
+    digits = re.sub(r"[\s\u00a0]", "", text.strip())
+    if not digits.isdigit():
+        return None
+    number = int(digits)
+    if not MIN_ODOMETER <= number <= MAX_ODOMETER:
+        return None
+    return number
+
+
 def parse_odometer(text: str) -> Optional[int]:
     """Parse an odometer message: the word «пробіг» and an integer.
 

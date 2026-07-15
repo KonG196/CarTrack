@@ -196,3 +196,16 @@ def test_fallback_hint_lists_every_shape_the_parsers_understand() -> None:
     # Not parser shapes, but the rest of what the bot accepts.
     for promised in ("фото", "/status", "/report", "/help"):
         assert promised in UNKNOWN_TEXT, promised
+
+
+def test_bare_odometer_parses_only_when_asked_for() -> None:
+    """A number answers a question; on its own it is still nobody's."""
+    from app.bot.parsers import parse_bare_odometer
+
+    assert parse_bare_odometer("240070") == 240070
+    assert parse_bare_odometer("240 070") == 240070
+    assert parse_bare_odometer("0") is None
+    assert parse_bare_odometer("2000001") is None
+    assert parse_bare_odometer("мийка 300") is None
+    # The general parser stays strict: the routing decides which one applies.
+    assert parse_odometer("240070") is None
