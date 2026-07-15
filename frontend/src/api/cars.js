@@ -1,23 +1,27 @@
 import client from './client';
 
+export function withRole(car) {
+  return car?.your_role ? car : { ...car, your_role: 'owner' };
+}
+
 export async function getCars() {
   const { data } = await client.get('/cars');
-  return data;
+  return data.map(withRole);
 }
 
 export async function getCar(carId) {
   const { data } = await client.get(`/cars/${carId}`);
-  return data;
+  return withRole(data);
 }
 
 export async function createCar(payload) {
   const { data } = await client.post('/cars', payload);
-  return data;
+  return withRole(data);
 }
 
 export async function updateCar(carId, payload) {
   const { data } = await client.patch(`/cars/${carId}`, payload);
-  return data;
+  return withRole(data);
 }
 
 export async function deleteCar(carId) {

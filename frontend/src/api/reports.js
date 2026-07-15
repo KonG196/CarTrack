@@ -22,11 +22,6 @@ export function saveBlob(blob, filename) {
   URL.revokeObjectURL(url);
 }
 
-/**
- * Downloads the PDF service-history report for a car through the shared
- * axios client (Bearer token applies) and saves it as
- * kapot-tracker-report-<carId>.pdf.
- */
 export async function downloadCarReport(carId) {
   const { data } = await client.get(`/cars/${carId}/report`, {
     responseType: 'blob',

@@ -19,10 +19,6 @@ function groupThousands(digits) {
   return digits.replace(/\B(?=(\d{3})+(?!\d))/g, THIN_SPACE);
 }
 
-/**
- * formatMoney(1250)   -> '1 250 ₴'
- * formatMoney(1250.5) -> '1 250,50 ₴'
- */
 export function formatMoney(n) {
   if (n === null || n === undefined || Number.isNaN(Number(n))) return '—';
   const value = Number(n);
@@ -34,9 +30,6 @@ export function formatMoney(n) {
   return `${sign}${grouped}${frac}${THIN_SPACE}₴`;
 }
 
-/**
- * formatKm(123456) -> '123 456 км'
- */
 export function formatKm(n) {
   if (n === null || n === undefined || Number.isNaN(Number(n))) return '—';
   const value = Math.round(Number(n));
@@ -44,9 +37,6 @@ export function formatKm(n) {
   return `${sign}${groupThousands(String(Math.abs(value)))}${THIN_SPACE}км`;
 }
 
-/**
- * formatDate('2026-07-14') -> '14.07.2026'
- */
 export function formatDate(iso) {
   if (!iso) return '—';
   const datePart = String(iso).slice(0, 10);
@@ -56,9 +46,6 @@ export function formatDate(iso) {
   return `${day}.${month}.${year}`;
 }
 
-/**
- * monthLabel('2026-07') -> 'лип 2026'
- */
 export function monthLabel(yyyyMm) {
   if (!yyyyMm) return '—';
   const match = String(yyyyMm).match(/^(\d{4})-(\d{2})$/);

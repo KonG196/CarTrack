@@ -1,10 +1,21 @@
 import client from './client';
 
-export async function getLogs(carId, { type, limit = 50, offset = 0 } = {}) {
+export async function getLogs(carId, { type, q, limit = 50, offset = 0 } = {}) {
   const params = { limit, offset };
   if (type) params.type = type;
+  if (q) params.q = q;
   const { data } = await client.get(`/cars/${carId}/logs`, { params });
   return data; // {items, total}
+}
+
+export async function getLog(logId) {
+  const { data } = await client.get(`/logs/${logId}`);
+  return data;
+}
+
+export async function getRefuelContext(carId) {
+  const { data } = await client.get(`/cars/${carId}/refuel-context`);
+  return data;
 }
 
 export async function createLog(carId, payload) {

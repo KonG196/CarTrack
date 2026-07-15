@@ -1,0 +1,284 @@
+/* Рух інтерфейсу — одне місце на весь застосунок.
+   Кожен шар, що з'являється (модалка, меню, попап, тост), має і вхід, і вихід:
+   `data-closing="true"` перемикає keyframes, поки useAnimatedPresence тримає
+   елемент змонтованим.
+
+   Написано звичайним CSS, а не варіантами Tailwind, свідомо: на мобільному
+   діалог перетворюється на нижній аркуш, і data-[closing]-варіант зі своєю
+   вищою специфічністю перебивав би медіа-запит — вихід аркуша програвався б
+   не тим keyframes. Тут порядок каскаду видно очима. */
+
+@keyframes kt-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes kt-backdrop-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@keyframes kt-dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes kt-dialog-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+}
+@keyframes kt-sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes kt-sheet-out {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+@keyframes kt-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes kt-menu-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+}
+@keyframes kt-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes kt-toast-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+}
+@keyframes kt-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes kt-bar-fill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes kt-banner-drop {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+@keyframes kt-sweep {
+  from {
+    top: -14%;
+  }
+  to {
+    top: 104%;
+  }
+}
+
+@layer components {
+  /* --- Модалка -------------------------------------------------------- */
+  .modal-backdrop {
+    @apply fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm;
+    animation: kt-backdrop-in 0.16s ease both;
+  }
+  .modal-backdrop[data-closing='true'] {
+    animation: kt-backdrop-out 0.16s ease both;
+  }
+
+  .modal-dialog {
+    @apply flex max-h-[calc(100vh-3rem)] w-full flex-col overflow-hidden rounded-2xl border
+      border-edge bg-panel shadow-2xl shadow-black/60;
+    animation: kt-dialog-in 0.2s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+  }
+  .modal-backdrop[data-closing='true'] .modal-dialog {
+    animation: kt-dialog-out 0.16s ease both;
+  }
+
+  /* На вузькому екрані діалог стає нижнім аркушем: виїжджає знизу і туди ж
+     ховається. Стартова позиція за межами екрана (fill both) — тому першого
+     кадру «зблиску» на місці не буває. */
+  @media (max-width: 767px) {
+    .modal-backdrop {
+      @apply items-end p-0;
+    }
+    .modal-dialog {
+      @apply max-h-[92vh] rounded-b-none border-x-0 border-b-0;
+      animation: kt-sheet-in 0.3s cubic-bezier(0.32, 0.72, 0, 1) both;
+      will-change: transform;
+    }
+    .modal-backdrop[data-closing='true'] .modal-dialog {
+      animation: kt-sheet-out 0.2s cubic-bezier(0.4, 0, 1, 1) both;
+    }
+  }
+
+  /* --- Меню й попапи -------------------------------------------------- */
+  .menu-pop {
+    animation: kt-menu-in 0.15s ease-out both;
+  }
+  .menu-pop[data-closing='true'] {
+    animation: kt-menu-out 0.15s ease-in both;
+  }
+
+  /* --- Тост ------------------------------------------------------------ */
+  .toast-pop {
+    animation: kt-toast-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .toast-pop[data-closing='true'] {
+    animation: kt-toast-out 0.18s cubic-bezier(0.4, 0, 1, 1) both;
+  }
+
+  /* --- Поява екрана та списків ---------------------------------------- */
+  .rise-in {
+    animation: kt-rise-in 0.32s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+  }
+
+  /* Екран збирається сходинками, а не з'являється одним полотном: блоки
+     заходять один за одним. Крок навмисне дрібний (45 мс) — це має читатись
+     як швидке увімкнення панелі, а не як черга. Затримки задані через
+     :nth-child, тож розмітка лишається чистою, без інлайнових стилів; після
+     шостого блока крок зупиняється, інакше низ довгої сторінки чекав би
+     занадто довго. */
+  .stagger > * {
+    animation: kt-rise-in 0.34s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+  }
+  .stagger > *:nth-child(1) {
+    animation-delay: 0ms;
+  }
+  .stagger > *:nth-child(2) {
+    animation-delay: 45ms;
+  }
+  .stagger > *:nth-child(3) {
+    animation-delay: 90ms;
+  }
+  .stagger > *:nth-child(4) {
+    animation-delay: 135ms;
+  }
+  .stagger > *:nth-child(5) {
+    animation-delay: 180ms;
+  }
+  .stagger > *:nth-child(n + 6) {
+    animation-delay: 225ms;
+  }
+  /* Вкладений список: контейнер лишаємо без власної появи, інакше його рядки
+     анімувалися б усередині ще невидимого блока — і сходинок ніхто б не
+     побачив. Появу несуть самі рядки: `stagger-pass stagger` на контейнері. */
+  .stagger > .stagger-pass {
+    animation: none;
+  }
+
+  /* --- Смуга ресурсу ---------------------------------------------------
+     Заповнюється від нуля до свого значення — той самий жест, що й замір
+     стрілки на панелі приладів, коли вмикаєш запалювання. Ширину лишаємо
+     інлайновим стилем, а анімуємо scaleX: трансформація не викликає
+     перерахунку розкладки і йде на GPU. Затримка — щоб замір починався,
+     коли картка вже приземлилась. */
+  .bar-fill {
+    transform-origin: left center;
+    animation: kt-bar-fill 0.7s cubic-bezier(0.2, 0.8, 0.3, 1) 0.15s both;
+  }
+
+  /* --- Смуга звʼязку --------------------------------------------------
+     Виїжджає з-під шапки, а не блимає на місці: поява має читатись як
+     повідомлення, що приїхало, а не як стрибок розкладки. Шапка стоїть
+     вище в стеку, тож старт за межами екрана з-під неї не видно. */
+  .banner-drop {
+    animation: kt-banner-drop 0.28s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+  }
+
+  /* --- Промінь сканера чека ------------------------------------------- */
+  .scan-beam {
+    @apply pointer-events-none absolute inset-x-0 h-10;
+    background: linear-gradient(
+      180deg,
+      rgba(255, 157, 0, 0) 0%,
+      rgba(255, 157, 0, 0.22) 42%,
+      rgba(232, 115, 0, 0.5) 50%,
+      rgba(255, 157, 0, 0.22) 58%,
+      rgba(255, 157, 0, 0) 100%
+    );
+    animation: kt-sweep 1.5s cubic-bezier(0.45, 0.05, 0.4, 0.95) infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .modal-backdrop,
+    .modal-backdrop[data-closing='true'],
+    .modal-dialog,
+    .modal-backdrop[data-closing='true'] .modal-dialog,
+    .menu-pop,
+    .menu-pop[data-closing='true'],
+    .toast-pop,
+    .toast-pop[data-closing='true'],
+    .rise-in,
+    .stagger > *,
+    .bar-fill,
+    .banner-drop {
+      animation: none;
+    }
+    .scan-beam {
+      @apply top-1/2;
+      animation: none;
+    }
+  }
+}

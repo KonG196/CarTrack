@@ -19,3 +19,22 @@ export async function getMe() {
   const { data } = await client.get('/auth/me');
   return data;
 }
+
+export async function updateMe(displayName) {
+  const { data } = await client.patch('/auth/me', { display_name: displayName });
+  return data;
+}
+
+export async function requestPasswordReset(email) {
+  const { data } = await client.post('/auth/reset/request', { email });
+  return data; // завжди 202 {detail} — без енумерації користувачів
+}
+
+export async function confirmPasswordReset(email, code, newPassword) {
+  const { data } = await client.post('/auth/reset/confirm', {
+    email,
+    code,
+    new_password: newPassword,
+  });
+  return data;
+}

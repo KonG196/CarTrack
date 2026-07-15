@@ -14,18 +14,27 @@ client.interceptors.request.use((config) => {
   return config;
 });
 
+const PUBLIC_PATHS = ['/login', '/register', '/reset', '/join'];
+
+const isPublicPath = (pathname) =>
+  PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+
 client.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response && error.response.status === 401) {
       localStorage.removeItem(TOKEN_KEY);
-      if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
+      if (!isPublicPath(window.location.pathname)) {
         window.location.href = '/login';
       }
     }
     return Promise.reject(error);
   }
 );
+
+export function isNetworkError(error) {
+  return Boolean(error) && !error.response;
+}
 
 export function extractError(error, fallback = 'Сталася помилка. Спробуйте ще раз.') {
   const detail = error?.response?.data?.detail;

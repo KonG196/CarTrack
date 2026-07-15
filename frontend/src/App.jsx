@@ -1,13 +1,19 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from './store/authStore';
+import { safeNext } from './utils/nextPath';
 import Layout from './components/Layout';
 import Login from './views/Login';
 import Register from './views/Register';
+import ResetPassword from './views/ResetPassword';
+import JoinCar from './views/JoinCar';
 import Dashboard from './views/Dashboard';
 import Logbook from './views/Logbook';
+import LogDetail from './views/LogDetail';
 import AddEntry from './views/AddEntry';
 import Analytics from './views/Analytics';
+import Diagnostics from './views/Diagnostics';
 import Garage from './views/Garage';
+import CarSpecs from './views/CarSpecs';
 
 function Protected({ children }) {
   const token = useAuthStore((s) => s.token);
@@ -17,7 +23,8 @@ function Protected({ children }) {
 
 function PublicOnly({ children }) {
   const token = useAuthStore((s) => s.token);
-  if (token) return <Navigate to="/" replace />;
+  const [searchParams] = useSearchParams();
+  if (token) return <Navigate to={safeNext(searchParams.get('next'))} replace />;
   return children;
 }
 
@@ -41,6 +48,15 @@ export default function App() {
         }
       />
       <Route
+        path="/reset"
+        element={
+          <PublicOnly>
+            <ResetPassword />
+          </PublicOnly>
+        }
+      />
+      <Route path="/join/:token" element={<JoinCar />} />
+      <Route
         element={
           <Protected>
             <Layout />
@@ -49,9 +65,12 @@ export default function App() {
       >
         <Route path="/" element={<Dashboard />} />
         <Route path="/logbook" element={<Logbook />} />
+        <Route path="/logbook/:id" element={<LogDetail />} />
         <Route path="/add" element={<AddEntry />} />
         <Route path="/analytics" element={<Analytics />} />
+        <Route path="/diagnostics" element={<Diagnostics />} />
         <Route path="/garage" element={<Garage />} />
+        <Route path="/garage/:carId/specs" element={<CarSpecs />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -3,6 +3,8 @@ import * as carsApi from '../api/cars';
 import * as logsApi from '../api/logs';
 import * as intervalsApi from '../api/intervals';
 import * as analyticsApi from '../api/analytics';
+import * as membersApi from '../api/members';
+import outbox from '../offline/outbox';
 
 const ACTIVE_CAR_KEY = 'kapot_tracker_active_car';
 
@@ -24,6 +26,13 @@ export const useCarStore = create((set, get) => ({
   analytics: null,
   analyticsLoading: false,
   analyticsError: null,
+
+  members: [],
+  membersCarId: null,
+  membersLoading: false,
+  membersError: null,
+
+  pending: [],
 
   activeCar() {
     const { cars, activeCarId } = get();
@@ -58,18 +67,22 @@ export const useCarStore = create((set, get) => ({
       logs: { items: [], total: 0 },
       intervals: [],
       analytics: null,
+      members: [],
+      membersCarId: null,
+      pending: [],
       logsError: null,
       intervalsError: null,
       analyticsError: null,
+      membersError: null,
     });
   },
 
-  async fetchLogs({ type, limit = 50, offset = 0 } = {}) {
+  async fetchLogs({ type, q, limit = 50, offset = 0 } = {}) {
     const { activeCarId } = get();
     if (!activeCarId) return;
     set({ logsLoading: true, logsError: null });
     try {
-      const logs = await logsApi.getLogs(activeCarId, { type, limit, offset });
+      const logs = await logsApi.getLogs(activeCarId, { type, q, limit, offset });
       set({ logs, logsLoading: false });
       return logs;
     } catch (error) {
@@ -106,6 +119,91 @@ export const useCarStore = create((set, get) => ({
     }
   },
 
+
+  async fetchMembers(carId) {
+    const id = carId ?? get().activeCarId;
+    if (!id) {
+      set({ members: [], membersCarId: null });
+      return [];
+    }
+    set({ membersLoading: true, membersError: null });
+    try {
+      const members = await membersApi.getMembers(id);
+      set({ members, membersCarId: String(id), membersLoading: false });
+      return members;
+    } catch (error) {
+      set({
+        members: [],
+        membersCarId: null,
+        membersLoading: false,
+        membersError: 'Не вдалося завантажити учасників',
+      });
+      throw error;
+    }
+  },
+
+  async inviteMember(role) {
+    const { activeCarId } = get();
+    return membersApi.createInvite(activeCarId, role);
+  },
+
+  async removeMember(memberId) {
+    await membersApi.removeMember(memberId);
+    await get().fetchMembers();
+  },
+
+  async changeMemberRole(memberId, role) {
+    await membersApi.updateMemberRole(memberId, role);
+    await get().fetchMembers();
+  },
+
+  async leaveCar(carId, memberId) {
+    await membersApi.removeMember(memberId);
+    if (String(get().activeCarId) === String(carId)) {
+      get().setActiveCar(null);
+    }
+    await get().fetchCars();
+  },
+
+  // --- Offline outbox ---
+
+  async fetchPending() {
+    const { activeCarId } = get();
+    if (!activeCarId) {
+      set({ pending: [] });
+      return [];
+    }
+    try {
+      const pending = await outbox.listPending(activeCarId);
+      set({ pending });
+      return pending;
+    } catch {
+      set({ pending: [] });
+      return [];
+    }
+  },
+
+  /** Queues an entry that could not reach the server. */
+  async enqueueLog(payload) {
+    const { activeCarId } = get();
+    const record = await outbox.enqueue(activeCarId, payload);
+    await get().fetchPending();
+    return record;
+  },
+
+  /**
+   * Replays the queue. The server is authoritative, so after a successful send
+   * the car and the journal are refetched instead of being patched locally.
+   */
+  async flushOutbox() {
+    const report = await outbox.flush((carId, payload) => logsApi.createLog(carId, payload));
+    if (report.sent > 0) {
+      await Promise.all([get().fetchCars(), get().fetchLogs()]);
+    }
+    await get().fetchPending();
+    return report;
+  },
+
   // --- Mutations (refresh related data after each) ---
 
   async addCar(payload) {
@@ -133,13 +231,21 @@ export const useCarStore = create((set, get) => ({
     const { activeCarId } = get();
     const log = await logsApi.createLog(activeCarId, payload);
     // creating a log can bump car.current_odometer
+    //
+    await Promise.all([get().fetchCars(), get().fetchLogs()]).catch(() => {});
+    return log;
+  },
+
+  async editLog(logId, payload) {
+    const log = await logsApi.updateLog(logId, payload);
+    // editing a log can bump car.current_odometer
     await Promise.all([get().fetchCars(), get().fetchLogs()]);
     return log;
   },
 
-  async removeLog(logId, currentType) {
+  async removeLog(logId, params = {}) {
     await logsApi.deleteLog(logId);
-    await get().fetchLogs({ type: currentType });
+    await get().fetchLogs(params);
   },
 
   async addInterval(payload) {
@@ -149,24 +255,38 @@ export const useCarStore = create((set, get) => ({
     return interval;
   },
 
+  async editInterval(intervalId, payload) {
+    const interval = await intervalsApi.updateInterval(intervalId, payload);
+    await get().fetchIntervals();
+    return interval;
+  },
+
   async removeInterval(intervalId) {
     await intervalsApi.deleteInterval(intervalId);
     await get().fetchIntervals();
   },
 
-  async addIntervalPresets(car) {
+  /**
+   * Closes an interval: the backend logs the maintenance entry and rolls the
+   * interval forward, so the odometer, the journal, the intervals and the
+   * analytics can all have moved.
+   */
+  async completeInterval(intervalId, payload) {
+    const result = await intervalsApi.completeInterval(intervalId, payload);
+    await Promise.all([
+      get().fetchCars(),
+      get().fetchLogs(),
+      get().fetchIntervals(),
+      get().fetchAnalytics(),
+    ]);
+    return result;
+  },
+
+  async addIntervalPresets(car, presets) {
     const today = new Date().toISOString().slice(0, 10);
     const base = { last_odometer: car.current_odometer, last_date: today };
-    const presets = [
-      { title: 'Олива двигуна', interval_km: 10000, interval_days: 365, ...base },
-      { title: 'Повітряний фільтр', interval_km: 20000, ...base },
-      { title: 'Паливний фільтр', interval_km: 30000, ...base },
-      { title: 'Салонний фільтр', interval_km: 15000, interval_days: 365, ...base },
-      { title: 'ГРМ', interval_km: 120000, ...base },
-      { title: 'Гальмівна рідина', interval_km: 60000, interval_days: 730, ...base },
-    ];
     for (const preset of presets) {
-      await intervalsApi.createInterval(car.id, preset);
+      await intervalsApi.createInterval(car.id, { ...preset, ...base });
     }
     await get().fetchIntervals();
   },
@@ -179,6 +299,9 @@ export const useCarStore = create((set, get) => ({
       logs: { items: [], total: 0 },
       intervals: [],
       analytics: null,
+      members: [],
+      membersCarId: null,
+      pending: [],
     });
     localStorage.removeItem(ACTIVE_CAR_KEY);
   },

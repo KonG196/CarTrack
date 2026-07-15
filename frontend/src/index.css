@@ -1,3 +1,9 @@
+/* @import мусить передувати всім правилам; Tailwind однаково збере
+   @layer-блоки з імпортованих файлів у відповідні шари нижче. */
+@import './styles/fonts.css';
+@import './styles/field.css';
+@import './styles/motion.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -7,8 +13,12 @@
     -webkit-tap-highlight-color: transparent;
   }
   body {
-    @apply bg-slate-950 text-slate-100 antialiased;
-    font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+    @apply bg-garage text-fg antialiased;
+    font-family: 'IBM Plex Sans', -apple-system, 'Segoe UI', sans-serif;
+  }
+  /* Одна видима рамка фокуса на весь застосунок */
+  :focus-visible {
+    @apply outline-none ring-2 ring-amber ring-offset-2 ring-offset-garage;
   }
   input[type='number']::-webkit-outer-spin-button,
   input[type='number']::-webkit-inner-spin-button {
@@ -17,5 +27,10 @@
   }
   input[type='number'] {
     -moz-appearance: textfield;
+  }
+  /* Іконка календаря у нативному полі дати — світла на темному тлі */
+  input[type='date']::-webkit-calendar-picker-indicator {
+    filter: invert(0.7);
+    cursor: pointer;
   }
 }

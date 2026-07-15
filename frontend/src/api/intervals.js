@@ -18,3 +18,13 @@ export async function updateInterval(intervalId, payload) {
 export async function deleteInterval(intervalId) {
   await client.delete(`/intervals/${intervalId}`);
 }
+
+export async function completeInterval(intervalId, payload) {
+  const { data } = await client.post(`/intervals/${intervalId}/complete`, payload);
+  return data;
+}
+
+export async function getIntervalPresets() {
+  const { data } = await client.get('/interval-presets');
+  return data;
+}

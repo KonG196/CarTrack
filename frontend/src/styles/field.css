@@ -1,0 +1,131 @@
+/* Поля введення: підпис «пливе» над значенням, коли поле у фокусі або вже
+   заповнене. Порт з alpivault.
+
+   Стан визначає CSS, а не React: `placeholder=" "` робить порожнє поле
+   `:placeholder-shown`, і сусідній селектор піднімає підпис. Тому автозаповнення
+   браузера теж коректно піднімає підпис — на відміну від відстеження value у
+   стані. Селектори написані вручну (а не через peer-* Tailwind), щоб порядок
+   каскаду між :focus і :not(:placeholder-shown) був гарантованим. */
+
+@layer components {
+  .field {
+    @apply relative flex flex-col;
+  }
+
+  .field-input {
+    @apply h-14 w-full rounded-xl border-[1.5px] border-edge bg-raised px-3.5 pb-2 pt-6
+      text-[15px] text-fg outline-none transition-colors duration-150;
+  }
+  .field-input:focus {
+    @apply border-amber bg-panel;
+  }
+  .field-input:disabled {
+    @apply cursor-not-allowed opacity-60;
+  }
+
+  /* Автозаповнення. Chrome малює підставлені поля власним світлим тлом і
+     чорним текстом — на темній темі це біла пляма (в alpivault тема світла,
+     тому там це непомітно). Звичайний background-color Chrome ігнорує, тож
+     тло перекриваємо внутрішньою тінню, а колір тексту — text-fill-color.
+     Правила для -webkit- і стандартного :autofill мусять бути окремими: у
+     списку через кому браузер, який не знає одного селектора, викидає все
+     правило цілком. */
+  .field-input:-webkit-autofill,
+  .field-input:-webkit-autofill:hover {
+    -webkit-text-fill-color: theme('colors.fg');
+    -webkit-box-shadow: 0 0 0 1000px theme('colors.raised') inset;
+    caret-color: theme('colors.fg');
+  }
+  .field-input:-webkit-autofill:focus {
+    -webkit-text-fill-color: theme('colors.fg');
+    -webkit-box-shadow: 0 0 0 1000px theme('colors.panel') inset;
+    caret-color: theme('colors.fg');
+  }
+  .field-input:autofill {
+    -webkit-text-fill-color: theme('colors.fg');
+    box-shadow: 0 0 0 1000px theme('colors.raised') inset;
+    caret-color: theme('colors.fg');
+  }
+  /* Значення-число читається як на чеку: моноширинний, цифри в колонку. */
+  .field-input.is-numeric {
+    @apply font-mono tabular-nums;
+  }
+  .field-input.has-trailing {
+    @apply pr-12;
+  }
+  /* Нотатки в кілька рядків: вигляд той самий, змінюється лише висота —
+     фіксована h-14 поступається місцем рядкам, які можна дотягнути. */
+  .field-input.field-textarea {
+    @apply h-auto min-h-[5.5rem] resize-y;
+  }
+
+  /* <select> завжди має значення, тож підпис у нього завжди піднятий; своя
+     стрілка замість системної. */
+  .field-select {
+    @apply cursor-pointer appearance-none pr-11;
+  }
+  .field-select option {
+    @apply bg-panel text-fg;
+  }
+  .field-chevron {
+    @apply pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-mist
+      transition-colors duration-150;
+  }
+  .field-select:focus ~ .field-chevron {
+    @apply text-amber;
+  }
+
+  .field-label {
+    @apply pointer-events-none absolute left-[15px] top-7 -translate-y-1/2 text-[15px]
+      text-mist transition-all duration-150;
+  }
+  .field-input:focus + .field-label,
+  .field-input:not(:placeholder-shown) + .field-label {
+    @apply top-[9px] translate-y-0 text-[11px] uppercase tracking-[0.09em];
+  }
+  /* Поки Chrome лише підставив значення і ще не віддав його сторінці, поле
+     формально лишається порожнім (:placeholder-shown), тож підпис не піднявся
+     б і ліг просто поверх підставленого тексту. Автозаповнення — окремий
+     сигнал «значення є». Знову двома правилами: несумісний селектор у списку
+     вбив би все правило. */
+  .field-input:-webkit-autofill + .field-label {
+    @apply top-[9px] translate-y-0 text-[11px] uppercase tracking-[0.09em];
+  }
+  .field-input:autofill + .field-label {
+    @apply top-[9px] translate-y-0 text-[11px] uppercase tracking-[0.09em];
+  }
+  .field-input:focus + .field-label {
+    @apply text-amber;
+  }
+  /* Поля з власним UI (дата) ніколи не бувають :placeholder-shown —
+     тримаємо підпис піднятим завжди. */
+  .field-label.is-static {
+    @apply top-[9px] translate-y-0 text-[11px] uppercase tracking-[0.09em];
+  }
+
+  .field-error .field-input {
+    @apply border-crit;
+  }
+  .field-error .field-input:focus + .field-label,
+  .field-error .field-input:not(:placeholder-shown) + .field-label {
+    @apply text-crit;
+  }
+
+  .field-trailing {
+    @apply absolute right-2 top-7 inline-flex -translate-y-1/2 items-center;
+  }
+
+  .field-message {
+    @apply mt-1.5 text-xs text-crit;
+  }
+  .field-hint {
+    @apply mt-1.5 text-xs text-mist;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .field-input,
+    .field-label {
+      @apply transition-none;
+    }
+  }
+}
