@@ -39,6 +39,7 @@ import CompleteIntervalModal from '../components/CompleteIntervalModal';
 import DocumentsCard from '../components/DocumentsCard';
 import SharingCard from '../components/SharingCard';
 import TiresCard from '../components/TiresCard';
+import PartsCard from '../components/PartsCard';
 
 const FUEL_TYPES = [
   { value: 'petrol', label: 'Бензин' },
@@ -1235,6 +1236,8 @@ export default function Garage() {
       )}
 
       {activeCar && <SharingCard key={`sharing-${activeCar.id}`} car={activeCar} onToast={setToast} />}
+
+      {activeCar && <PartsCard key={`parts-${activeCar.id}`} car={activeCar} onToast={setToast} />}
 
       {activeCar && (
         <DocumentsCard
