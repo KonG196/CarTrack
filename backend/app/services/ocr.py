@@ -380,6 +380,16 @@ def _parse_total(
     return None
 
 
+def _keyword_total(text: str) -> Optional[float]:
+    """The total as the keyword lines alone claim it, ignoring liters * price."""
+    candidates = list(_iter_total_candidates(text))
+    for tier, _ in enumerate(TOTAL_KEYWORDS):
+        tier_values = [value for t, value in candidates if t == tier]
+        if tier_values:
+            return max(tier_values)
+    return None
+
+
 def _parse_date(text: str) -> Optional[dt.date]:
     for match in _DATE_RE.finditer(text):
         day, month, year = (int(part) for part in match.groups())

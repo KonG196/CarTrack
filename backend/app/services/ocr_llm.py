@@ -198,6 +198,11 @@ def recognize_receipt(image_bytes: bytes, content_type: str = "image/jpeg") -> P
             logger.warning("OCR.space fallback failed", exc_info=True)
             remote_text = None
         if remote_text:
+            # The text is what every wrong answer traces back to, and it is
+            # invisible from the outside: a receipt read as «3.00 л × 13.99»
+            # instead of «43,06 л × 15,99» looks like a parser bug until you
+            # see that the reader never saw a 4.
+            logger.info("OCR.space text:\n%s", remote_text)
             remote_parsed = parse_receipt_text(remote_text)
             if remote_parsed.found_in_text > parsed.found_in_text:
                 parsed = remote_parsed

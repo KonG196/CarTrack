@@ -396,6 +396,15 @@ async def handle_photo(message: Message, bot: Bot) -> None:
                 return
 
             if not parsed.liters or not parsed.total_cost or not parsed.price_per_liter:
+                # Partial beats nothing: a total alone still saves typing, and
+                # the alternative is the user retyping a receipt we half read.
+                if parsed.total_cost:
+                    await progress.finish(
+                        f"Прочитав лише суму: {parsed.total_cost:.2f} грн.\n"
+                        "Надішліть заправку текстом, напр.: "
+                        f"заправка 45л {parsed.total_cost:.0f}"
+                    )
+                    return
                 await progress.finish(OCR_FAILED_TEXT)
                 return
 
