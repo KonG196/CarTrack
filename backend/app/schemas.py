@@ -139,6 +139,25 @@ class Token(BaseModel):
     token_type: str = "bearer"
 
 
+class RegisterOut(BaseModel):
+    id: int
+    email: str
+    created_at: dt.datetime
+    email_verified: bool
+    verification_sent: bool
+
+
+class VerifyRequestIn(BaseModel):
+    email: str = Field(min_length=3, max_length=255)
+
+
+class VerifyConfirmIn(BaseModel):
+    email: str = Field(min_length=3, max_length=255)
+    # Not pinned to six digits: a pasted token must reach the uniform 400,
+    # not a 422 that echoes it back.
+    code: str = Field(min_length=1, max_length=512)
+
+
 class ResetRequestIn(BaseModel):
     email: str = Field(min_length=3, max_length=255)
 

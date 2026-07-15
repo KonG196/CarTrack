@@ -33,6 +33,18 @@ class Settings(BaseSettings):
     # concrete versions for new accounts (2.5-flash already returns 404).
     GEMINI_MODEL: str = "gemini-flash-latest"
 
+    # Plain SMTP so any provider works (Brevo, Gmail app password, Mailgun...).
+    # Empty SMTP_HOST disables sending: registration then auto-verifies, which
+    # is what local development wants and what production must never do.
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM: str = "Kapot Tracker <noreply@localhost>"
+    SMTP_STARTTLS: bool = True
+    PUBLIC_URL: str = "http://localhost:5173"
+    VERIFY_CODE_EXPIRE_HOURS: int = 24
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]

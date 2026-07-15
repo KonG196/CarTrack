@@ -181,3 +181,36 @@ def test_reset_confirm_short_password_422(client: TestClient) -> None:
         json={"email": EMAIL, "code": "123456", "new_password": "short"},
     )
     assert response.status_code == 422
+
+
+def test_reset_without_telegram_goes_by_email(client, monkeypatch) -> None:
+    """No bot linked is no longer a dead end: the letter is the way back."""
+    from app.services import reset as reset_service
+
+    sent: list[tuple[str, str]] = []
+    monkeypatch.setattr(reset_service, "mail_enabled", lambda: True)
+    monkeypatch.setattr(
+        reset_service,
+        "send_reset_code_mail",
+        lambda to, code: sent.append((to, code)) or True,
+    )
+
+    client.post(
+        "/api/auth/register", json={"email": "nobot@example.com", "password": "password123"}
+    )
+    response = client.post("/api/auth/reset/request", json={"email": "nobot@example.com"})
+    assert response.status_code == 202
+    assert len(sent) == 1
+
+    confirmed = client.post(
+        "/api/auth/reset/confirm",
+        json={"email": "nobot@example.com", "code": sent[0][1], "new_password": "brandnew123"},
+    )
+    assert confirmed.status_code == 200
+    assert (
+        client.post(
+            "/api/auth/token",
+            data={"username": "nobot@example.com", "password": "brandnew123"},
+        ).status_code
+        == 200
+    )

@@ -14,7 +14,7 @@ client.interceptors.request.use((config) => {
   return config;
 });
 
-const PUBLIC_PATHS = ['/login', '/register', '/reset', '/join'];
+const PUBLIC_PATHS = ['/login', '/register', '/reset', '/verify', '/join'];
 
 const isPublicPath = (pathname) =>
   PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));

@@ -17,8 +17,12 @@ export const useAuthStore = create((set, get) => ({
   },
 
   async register(email, password) {
-    await authApi.register(email, password);
-    return get().login(email, password);
+    const account = await authApi.register(email, password);
+    // Logging straight in would 403 while the address is unconfirmed; the
+    // caller sends the user to /verify instead.
+    if (account?.verification_sent) return { pendingVerification: true };
+    await get().login(email, password);
+    return { pendingVerification: false };
   },
 
   async fetchMe() {

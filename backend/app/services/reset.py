@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.auth import hash_password, verify_password
 from app.config import settings
 from app.models import User
+from app.services.mailer import mail_enabled, send_reset_code_mail
 
 logger = logging.getLogger(__name__)
 
@@ -50,15 +51,18 @@ async def send_reset_code(chat_id: str, code: str) -> None:
 
 
 async def initiate_reset(db: Session, email: str) -> None:
-    """Store a hashed reset code and send it when the account has Telegram.
+    """Store a hashed reset code and deliver it via Telegram, else by email.
 
-    Silently does nothing for unknown emails or accounts without a linked
-    chat — the caller answers 202 regardless, so responses never reveal
-    whether an account exists.
+    Silently does nothing for unknown emails, or when neither channel can
+    reach the account — a code nobody can receive is only an attack surface.
+    The caller answers 202 regardless, so responses never reveal whether an
+    account exists.
     """
     normalized = email.strip().lower()
     user = db.execute(select(User).where(User.email == normalized)).scalar_one_or_none()
-    if user is None or not user.telegram_chat_id:
+    if user is None:
+        return
+    if not user.telegram_chat_id and not mail_enabled():
         return
     code = generate_reset_code()
     user.reset_code_hash = hash_password(code)
@@ -67,7 +71,11 @@ async def initiate_reset(db: Session, email: str) -> None:
     )
     db.commit()
     try:
-        await send_reset_code(user.telegram_chat_id, code)
+        if user.telegram_chat_id:
+            await send_reset_code(user.telegram_chat_id, code)
+        else:
+            # No bot linked: the letter is the only way back into the account.
+            send_reset_code_mail(user.email, code)
     except Exception:  # noqa: BLE001 - delivery failures must not break the 202
         logger.warning("Failed to send a reset code via Telegram", exc_info=True)
 

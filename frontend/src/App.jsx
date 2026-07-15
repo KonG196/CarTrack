@@ -6,6 +6,7 @@ import Login from './views/Login';
 import Register from './views/Register';
 import ResetPassword from './views/ResetPassword';
 import JoinCar from './views/JoinCar';
+import VerifyEmail from './views/VerifyEmail';
 import Dashboard from './views/Dashboard';
 import Logbook from './views/Logbook';
 import LogDetail from './views/LogDetail';
@@ -56,6 +57,7 @@ export default function App() {
         }
       />
       <Route path="/join/:token" element={<JoinCar />} />
+      <Route path="/verify" element={<VerifyEmail />} />
       <Route
         element={
           <Protected>

@@ -27,7 +27,7 @@ export async function updateMe(displayName) {
 
 export async function requestPasswordReset(email) {
   const { data } = await client.post('/auth/reset/request', { email });
-  return data; // завжди 202 {detail} — без енумерації користувачів
+  return data;
 }
 
 export async function confirmPasswordReset(email, code, newPassword) {
@@ -36,5 +36,15 @@ export async function confirmPasswordReset(email, code, newPassword) {
     code,
     new_password: newPassword,
   });
+  return data;
+}
+
+export async function confirmEmail(email, code) {
+  const { data } = await client.post('/auth/verify/confirm', { email, code });
+  return data;
+}
+
+export async function resendVerification(email) {
+  const { data } = await client.post('/auth/verify/resend', { email });
   return data;
 }

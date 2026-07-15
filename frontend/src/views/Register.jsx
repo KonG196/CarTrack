@@ -30,7 +30,11 @@ export default function Register() {
     }
     setLoading(true);
     try {
-      await register(email.trim(), password);
+      const { pendingVerification } = await register(email.trim(), password);
+      if (pendingVerification) {
+        navigate(`/verify?email=${encodeURIComponent(email.trim())}`, { replace: true });
+        return;
+      }
       navigate(next, { replace: true });
     } catch (err) {
       setError(extractError(err, 'Не вдалося зареєструватися'));

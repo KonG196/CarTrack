@@ -10,14 +10,22 @@ from app.database import get_db
 from app.models import User
 from app.ratelimit import RateLimiter, client_ip
 from app.schemas import (
+    RegisterOut,
     ResetConfirmIn,
     ResetRequestIn,
     Token,
     UserCreate,
     UserOut,
     UserUpdate,
+    VerifyConfirmIn,
+    VerifyRequestIn,
 )
 from app.services.reset import confirm_reset, initiate_reset
+from app.services.verification import (
+    confirm_verification,
+    issue_verification,
+    verification_required,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -27,6 +35,7 @@ login_limiter = RateLimiter(limit=5, window_seconds=5 * 60)
 register_limiter = RateLimiter(limit=3, window_seconds=60 * 60)
 reset_request_limiter = RateLimiter(limit=3, window_seconds=15 * 60)
 reset_confirm_limiter = RateLimiter(limit=5, window_seconds=15 * 60)
+verify_resend_limiter = RateLimiter(limit=3, window_seconds=15 * 60)
 
 
 def _enforce_rate_limit(limiter: RateLimiter, key) -> None:
@@ -38,8 +47,8 @@ def _enforce_rate_limit(limiter: RateLimiter, key) -> None:
         )
 
 
-@router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
-def register(payload: UserCreate, request: Request, db: Session = Depends(get_db)) -> User:
+@router.post("/register", response_model=RegisterOut, status_code=status.HTTP_201_CREATED)
+def register(payload: UserCreate, request: Request, db: Session = Depends(get_db)) -> RegisterOut:
     _enforce_rate_limit(register_limiter, client_ip(request))
     existing = db.execute(select(User).where(User.email == payload.email)).scalar_one_or_none()
     if existing is not None:
@@ -47,11 +56,25 @@ def register(payload: UserCreate, request: Request, db: Session = Depends(get_db
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered",
         )
-    user = User(email=payload.email, hashed_password=hash_password(payload.password))
+    user = User(
+        email=payload.email,
+        hashed_password=hash_password(payload.password),
+        # Without a mail server nobody could ever confirm, so the gate stays open.
+        email_verified=not verification_required(),
+    )
     db.add(user)
+    db.flush()
+    if verification_required():
+        issue_verification(db, user)
     db.commit()
     db.refresh(user)
-    return user
+    return RegisterOut(
+        id=user.id,
+        email=user.email,
+        created_at=user.created_at,
+        email_verified=user.email_verified,
+        verification_sent=not user.email_verified,
+    )
 
 
 @router.post("/token", response_model=Token)
@@ -69,6 +92,11 @@ def login(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
+        )
+    if not user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Підтвердіть пошту — ми надіслали код на вашу адресу.",
         )
     # A legitimate owner should not stay locked out by their earlier typos.
     login_limiter.reset(limit_key)
@@ -124,3 +152,36 @@ def confirm_password_reset(
             detail="Невірний або прострочений код",
         )
     return {"detail": "Пароль змінено"}
+
+
+@router.post("/verify/confirm")
+def confirm_email(
+    payload: VerifyConfirmIn,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
+    _enforce_rate_limit(
+        reset_confirm_limiter, (client_ip(request), payload.email.strip().lower())
+    )
+    if not confirm_verification(db, payload.email, payload.code):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Невірний або прострочений код",
+        )
+    return {"detail": "Пошту підтверджено"}
+
+
+@router.post("/verify/resend", status_code=status.HTTP_202_ACCEPTED)
+def resend_verification(
+    payload: VerifyRequestIn,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
+    """Always 202: whether the address is registered is not ours to reveal."""
+    email = payload.email.strip().lower()
+    _enforce_rate_limit(verify_resend_limiter, (client_ip(request), email))
+    user = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
+    if user is not None and not user.email_verified and verification_required():
+        issue_verification(db, user)
+        db.commit()
+    return {"detail": "Якщо акаунт існує і не підтверджений — код надіслано."}

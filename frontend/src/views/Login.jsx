@@ -24,6 +24,10 @@ export default function Login() {
       await login(email.trim(), password);
       navigate(next, { replace: true });
     } catch (err) {
+      if (err?.response?.status === 403) {
+        navigate(`/verify?email=${encodeURIComponent(email.trim())}`);
+        return;
+      }
       setError(extractError(err, 'Невірний email або пароль'));
     } finally {
       setLoading(false);

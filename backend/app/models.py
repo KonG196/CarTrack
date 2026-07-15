@@ -18,6 +18,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    false,
     true,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -48,6 +49,13 @@ class User(Base):
         Boolean, nullable=False, default=True, server_default=true()
     )
     # Password reset via Telegram: bcrypt hash of the 6-digit code + its expiry.
+    # Pre-0014 accounts are verified by the migration: they existed before the
+    # gate, so locking them out would be a regression, not a security win.
+    email_verified: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
+    verify_code_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    verify_code_expires_at: Mapped[Optional[dt.datetime]] = mapped_column(DateTime, nullable=True)
     reset_code_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     reset_code_expires_at: Mapped[Optional[dt.datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
@@ -118,8 +126,6 @@ class Car(Base):
     # Kept exactly as the owner typed it, only trimmed and upper-cased:
     # Ukrainian, European and transit plates have no one format.
     plate: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
-    # Set to drive ТО forecasts off a known pace instead of the computed
-    # rolling window; NULL means auto (see services/intervals.py).
     avg_daily_km_override: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     # Usable tank volume in liters. Feeds the full-tank range estimate only
     # (services/fuel.py:compute_range_km) — the app never knows how much fuel
@@ -252,10 +258,6 @@ class RefuelDetails(Base):
     price_per_liter: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False)
     is_full_tank: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     gas_station: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    # What was actually poured in: 'petrol' | 'diesel' | 'lpg' | 'electric'.
-    # NULL means «whatever the car runs on» — that is every pre-ГБО row and
-    # every fill on a single-fuel car, which never sends this at all. Resolve
-    # it through services.fuel.effective_fuel_kind, never with a bare `or`.
     fuel_kind: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
 
     log_entry: Mapped[LogEntry] = relationship(back_populates="refuel")
@@ -329,9 +331,6 @@ class ServiceInterval(Base):
     last_odometer: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     last_date: Mapped[Optional[dt.date]] = mapped_column(Date, nullable=True)
     last_notified_at: Mapped[Optional[dt.date]] = mapped_column(Date, nullable=True)
-    # Set by the «Нагадати через 7 днів» button: reminders skip this interval
-    # while the date has not passed. Distinct from last_notified_at, which
-    # only carries the ordinary 7-day cooldown every reminder already has.
     snoozed_until: Mapped[Optional[dt.date]] = mapped_column(Date, nullable=True)
     # Nullable for pre-0003 rows; future offline sync keys on this stamp.
     updated_at: Mapped[Optional[dt.datetime]] = mapped_column(
