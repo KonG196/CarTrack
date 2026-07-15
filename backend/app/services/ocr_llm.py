@@ -153,6 +153,19 @@ def recognize_receipt_llm(
         if response.status_code not in _RETRY_STATUSES or delay is None:
             break
         time.sleep(delay)
+
+    # A rejected key and an overloaded model both end the request, but only one
+    # of them is worth a human's attention — and a warning that says «fallback
+    # failed» sends nobody to look at the key. Retrying it would be pointless
+    # anyway: it will be just as invalid next time.
+    if response.status_code in (401, 403):
+        logger.error(
+            "GEMINI_API_KEY was rejected (HTTP %s). Vision OCR is off until it "
+            "is replaced: keys from aistudio.google.com/apikey look like "
+            "'AIza…'; an OAuth token will not work here.",
+            response.status_code,
+        )
+        return None
     response.raise_for_status()
     try:
         answer = response.json()["candidates"][0]["content"]["parts"][0]["text"]

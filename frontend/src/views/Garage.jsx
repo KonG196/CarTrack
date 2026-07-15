@@ -28,6 +28,7 @@ import { useAuthStore } from '../store/authStore';
 import { extractError } from '../api/client';
 import { downloadCarReport } from '../api/reports';
 import { getIntervalPresets } from '../api/intervals';
+import { lookupPlate } from '../api/cars';
 import * as backupApi from '../api/backup';
 import * as telegramApi from '../api/telegram';
 import { formatKm, formatDate } from '../utils/format';
@@ -68,11 +69,49 @@ function CarForm({ initial, onSubmit, onCancel }) {
     current_odometer: initial?.current_odometer != null ? String(initial.current_odometer) : '',
     tank_liters: initial?.tank_liters != null ? String(initial.tank_liters) : '',
     monthly_budget: initial?.monthly_budget != null ? String(initial.monthly_budget) : '',
+    vin: initial?.vin || '',
+    plate: initial?.plate || '',
   });
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [looking, setLooking] = useState(false);
+  const [lookupNote, setLookupNote] = useState('');
+  const [stolen, setStolen] = useState(null);
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
+
+  const handleLookup = async () => {
+    const query = (form.plate || form.vin).trim();
+    if (!query) return setError('Вкажіть держномер або VIN');
+    setError('');
+    setLookupNote('');
+    setStolen(null);
+    setLooking(true);
+    try {
+      const found = await lookupPlate(query, !form.plate.trim());
+      // Only fills what the register knows; a blank field there must not wipe
+      // what the owner already typed.
+      setForm((f) => ({
+        ...f,
+        brand: found.brand || f.brand,
+        model: found.model || f.model,
+        year: found.year != null ? String(found.year) : f.year,
+        engine: found.engine || f.engine,
+        fuel_type: found.fuel_type || f.fuel_type,
+        vin: found.vin || f.vin,
+        plate: found.plate || f.plate,
+      }));
+      setStolen(found.is_stolen);
+      const bits = [found.color, found.last_registered_at && `реєстрація ${found.last_registered_at}`]
+        .filter(Boolean)
+        .join(' · ');
+      setLookupNote(bits ? `Знайдено: ${bits}` : 'Знайдено в реєстрі');
+    } catch (err) {
+      setError(extractError(err, 'Не вдалося знайти авто'));
+    } finally {
+      setLooking(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -103,6 +142,8 @@ function CarForm({ initial, onSubmit, onCancel }) {
       current_odometer: odometer,
       tank_liters: tank,
       monthly_budget: budget,
+      vin: form.vin.trim().toUpperCase() || null,
+      plate: form.plate.trim().toUpperCase() || null,
     };
 
     setSubmitting(true);
@@ -119,6 +160,29 @@ function CarForm({ initial, onSubmit, onCancel }) {
       <div className="grid grid-cols-2 gap-3">
         <TextField label="Марка" required value={form.brand} onChange={set('brand')} />
         <TextField label="Модель" required value={form.model} onChange={set('model')} />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <TextField label="Держномер" value={form.plate} onChange={set('plate')} />
+        <TextField label="VIN" value={form.vin} onChange={set('vin')} />
+      </div>
+      <div className="flex flex-col gap-2">
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={handleLookup}
+          disabled={looking || (!form.plate.trim() && !form.vin.trim())}
+        >
+          {looking ? 'Шукаю в реєстрі…' : 'Заповнити з реєстру МВС'}
+        </Button>
+        {lookupNote && <p className="text-xs text-mist">{lookupNote}</p>}
+        {stolen === true && (
+          <p className="rounded-xl border border-crit/40 bg-crit/10 px-3 py-2 text-sm text-crit">
+            🚨 Авто числиться в розшуку. Перевірте деталі перед купівлею.
+          </p>
+        )}
+        {stolen === false && (
+          <p className="text-xs text-ok">✓ У розшуку не числиться</p>
+        )}
       </div>
       <div className="grid grid-cols-2 gap-3">
         <TextField label="Покоління" value={form.generation} onChange={set('generation')} />

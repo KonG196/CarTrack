@@ -27,3 +27,8 @@ export async function updateCar(carId, payload) {
 export async function deleteCar(carId) {
   await client.delete(`/cars/${carId}`);
 }
+
+export async function lookupPlate(query, byVin = false) {
+  const { data } = await client.post('/plate/lookup', { query, by_vin: byVin });
+  return data;
+}

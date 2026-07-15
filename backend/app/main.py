@@ -20,6 +20,7 @@ from app.routers import (
     obd,
     ocr,
     photos,
+    plate,
     reports,
     specs,
     telegram,
@@ -60,8 +61,24 @@ app.include_router(specs.router, prefix="/api")
 app.include_router(documents.router, prefix="/api")
 app.include_router(obd.router, prefix="/api")
 app.include_router(tires.router, prefix="/api")
+app.include_router(plate.router, prefix="/api")
 
 
 @app.get("/api/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+def health() -> dict[str, object]:
+    """Liveness, plus which optional integrations are actually configured.
+
+    Not a probe of the remote services — only of what this instance was told.
+    A misconfigured key still shows as enabled here; the point is to make an
+    unset one visible without reading logs.
+    """
+    return {
+        "status": "ok",
+        "features": {
+            "mail": bool(settings.SMTP_HOST),
+            "telegram": bool(settings.TELEGRAM_BOT_TOKEN),
+            "vision_ocr": bool(settings.GEMINI_API_KEY),
+            "plate_lookup": bool(settings.BAZA_GAI_API_KEY),
+            "backup_delivery": bool(settings.BACKUP_TELEGRAM_CHAT_ID),
+        },
+    }

@@ -13,11 +13,13 @@ from sqlalchemy.pool import StaticPool
 from app.config import settings
 from app.database import Base, get_db
 from app.main import app
+from app.routers.plate import lookup_limiter
 from app.routers.auth import (
     login_limiter,
     register_limiter,
     reset_confirm_limiter,
     reset_request_limiter,
+    verify_resend_limiter,
 )
 
 DEFAULT_EMAIL = "user@example.com"
@@ -47,6 +49,8 @@ def _clear_rate_limiters() -> None:
         register_limiter,
         reset_request_limiter,
         reset_confirm_limiter,
+        verify_resend_limiter,
+        lookup_limiter,
     ):
         limiter.clear()
 

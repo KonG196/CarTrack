@@ -45,6 +45,11 @@ class Settings(BaseSettings):
     PUBLIC_URL: str = "http://localhost:5173"
     VERIFY_CODE_EXPIRE_HOURS: int = 24
 
+    # Vehicle lookup by plate/VIN via baza-gai.com.ua. Empty key disables the
+    # feature outright — the state register is closed to private services, so
+    # an intermediary is the only lawful route and it is optional by design.
+    BAZA_GAI_API_KEY: str = ""
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]

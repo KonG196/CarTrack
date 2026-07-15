@@ -147,6 +147,28 @@ class RegisterOut(BaseModel):
     verification_sent: bool
 
 
+class PlateLookupIn(BaseModel):
+    query: str = Field(min_length=3, max_length=32)
+    by_vin: bool = False
+
+
+class PlateLookupOut(BaseModel):
+    plate: Optional[str] = None
+    vin: Optional[str] = None
+    brand: Optional[str] = None
+    model: Optional[str] = None
+    year: Optional[int] = None
+    fuel_type: Optional[str] = None
+    fuel_label: Optional[str] = None
+    engine: Optional[str] = None
+    color: Optional[str] = None
+    photo_url: Optional[str] = None
+    is_stolen: Optional[bool] = None
+    stolen_details: Optional[str] = None
+    registrations: int = 0
+    last_registered_at: Optional[str] = None
+
+
 class VerifyRequestIn(BaseModel):
     email: str = Field(min_length=3, max_length=255)
 
