@@ -11,7 +11,8 @@ import base64
 import datetime as dt
 import json
 import time
-from typing import Any, Optional
+from dataclasses import dataclass
+from typing import Any, Callable, Optional
 
 import httpx
 
@@ -29,6 +30,11 @@ from app.services.ocr import (
     _fill_missing_third,
     extract_text,
     parse_receipt_text,
+)
+from app.services.workorder import (
+    ParsedWorkOrder,
+    looks_like_work_order,
+    parse_work_order,
 )
 
 logger = logging.getLogger(__name__)
@@ -175,8 +181,49 @@ def recognize_receipt_llm(
         return None
 
 
+def read_text(
+    image_bytes: bytes,
+    content_type: str,
+    score: Callable[[str], int],
+    enough: int,
+) -> str:
+    """The best text the OCR rungs can produce, judged by the caller.
+
+    Two rungs: tesseract, then OCR.space for the pixels tesseract could not
+    read. Free and cardless, so nothing here costs money. What counts as a good
+    read depends on the document, which only the caller knows — a receipt needs
+    its numbers, an order needs its table — so the caller passes the judge and
+    the threshold that stops the climb early.
+
+    Separating the climb from the reading is what lets one photo be offered to
+    several parsers without paying for OCR twice.
+    """
+    text = extract_text(image_bytes)
+    if score(text) >= enough or not ocr_space.enabled():
+        return text
+
+    try:
+        remote_text = ocr_space.recognize_text(image_bytes, content_type)
+    except Exception:
+        logger.warning("OCR.space fallback failed", exc_info=True)
+        return text
+    if not remote_text:
+        return text
+
+    # The text is what every wrong answer traces back to, and it is invisible
+    # from the outside: a receipt read as «3.00 л × 13.99» instead of «43,06 л
+    # × 15,99» looks like a parser bug until you see that the reader never saw
+    # a 4.
+    logger.info("OCR.space text:\n%s", remote_text)
+    return remote_text if score(remote_text) > score(text) else text
+
+
+def _receipt_score(text: str) -> int:
+    return parse_receipt_text(text).found_in_text
+
+
 def recognize_receipt(image_bytes: bytes, content_type: str = "image/jpeg") -> ParsedReceipt:
-    """Read a receipt: tesseract first, the vision model when it comes up short.
+    """Read a receipt: the free rungs first, the vision model when they fall short.
 
     The single entry point for every caller. It used to live inline in the API
     router, so the bot — which runs OCR in-process — quietly had no fallback at
@@ -185,32 +232,12 @@ def recognize_receipt(image_bytes: bytes, content_type: str = "image/jpeg") -> P
     A failure of the remote model keeps the local result: nothing may break
     because someone else's API is down.
     """
-    parsed = parse_receipt_text(extract_text(image_bytes))
+    parsed = parse_receipt_text(read_text(image_bytes, content_type, _receipt_score, 2))
     if parsed.found_in_text >= 2:
         return parsed
 
-    # Rung two: OCR.space reads the pixels tesseract could not, and the same
-    # parser reads its text. Free and cardless, so it is tried first.
-    if ocr_space.enabled():
-        try:
-            remote_text = ocr_space.recognize_text(image_bytes, content_type)
-        except Exception:
-            logger.warning("OCR.space fallback failed", exc_info=True)
-            remote_text = None
-        if remote_text:
-            # The text is what every wrong answer traces back to, and it is
-            # invisible from the outside: a receipt read as «3.00 л × 13.99»
-            # instead of «43,06 л × 15,99» looks like a parser bug until you
-            # see that the reader never saw a 4.
-            logger.info("OCR.space text:\n%s", remote_text)
-            remote_parsed = parse_receipt_text(remote_text)
-            if remote_parsed.found_in_text > parsed.found_in_text:
-                parsed = remote_parsed
-                if parsed.found_in_text >= 2:
-                    return parsed
-
-    # Rung three: a vision model that understands the receipt rather than
-    # reading it. Costs money, so it goes last and only if configured.
+    # Last rung: a vision model that understands the receipt rather than reading
+    # it. Costs money, so it goes last and only if configured.
     if not settings.GEMINI_API_KEY:
         return parsed
     try:
@@ -221,3 +248,82 @@ def recognize_receipt(image_bytes: bytes, content_type: str = "image/jpeg") -> P
     if llm_parsed is not None and llm_parsed.found_in_text > parsed.found_in_text:
         return llm_parsed
     return parsed
+
+
+def _work_order_score(text: str) -> int:
+    parsed = parse_work_order(text)
+    money = sum(
+        value is not None
+        for value in (parsed.parts_cost, parsed.labor_cost, parsed.total_cost)
+    )
+    # The bill is the field the card cannot do without, so it outweighs a long
+    # list of half-read item names.
+    return money * 2 + min(len(parsed.items), 10)
+
+
+# What a work order must score before the climb stops: a bill and one item.
+_ORDER_ENOUGH = 3
+
+
+def recognize_work_order(
+    image_bytes: bytes, content_type: str = "image/jpeg"
+) -> ParsedWorkOrder:
+    """Read a service order off a photo.
+
+    Stops before the vision rung: a наряд is printed text on A4, which OCR.space
+    reads well, and there is no paid model configured to fall back to anyway.
+    """
+    return parse_work_order(
+        read_text(image_bytes, content_type, _work_order_score, _ORDER_ENOUGH)
+    )
+
+
+@dataclass
+class PhotoReading:
+    """What a photo turned out to be, and what was read out of it."""
+
+    kind: str  # "refuel" | "work_order" | "unreadable"
+    receipt: ParsedReceipt
+    work_order: ParsedWorkOrder
+
+
+def _classify(text: str) -> PhotoReading:
+    """Decide what a photo is by the evidence that is hardest to produce by accident.
+
+    Neither parser refusing the other's document can be relied on. A fuel
+    receipt is also a table of names and sums ending in «ДО СПЛАТИ», so it
+    parses as a confident work order; and a real наряд reading «Олива моторна
+    5W-30 5л» hands the receipt parser five litres, which it divides into the
+    bill to price diesel at 1644 грн/л and calls two fields found.
+
+    What does not happen by accident is the vocabulary: «наряд», «запчастини»,
+    «н/год» are words no filling station prints. So a page that says them and
+    parses as a complete order is one, whatever the receipt parser made of it.
+    """
+    receipt = parse_receipt_text(text)
+    order = parse_work_order(text)
+    if order.confident and looks_like_work_order(text):
+        return PhotoReading("work_order", receipt, order)
+    if receipt.found_in_text >= 2:
+        return PhotoReading("refuel", receipt, order)
+    return PhotoReading("unreadable", receipt, order)
+
+
+def _photo_score(text: str) -> int:
+    reading = _classify(text)
+    if reading.kind == "refuel":
+        return 10 + reading.receipt.found_in_text
+    if reading.kind == "work_order":
+        return 5 + min(len(reading.work_order.items), 4)
+    # Nothing readable yet, but a partial receipt still beats blank text: it is
+    # what the next rung is compared against.
+    return reading.receipt.found_in_text
+
+
+def recognize_photo(image_bytes: bytes, content_type: str = "image/jpeg") -> PhotoReading:
+    """Read a photo without being told what it is — a receipt or a service order.
+
+    One climb up the rungs, both parsers on the text it returns, so a bot user
+    photographs whatever paper the shop handed them and never picks a mode.
+    """
+    return _classify(read_text(image_bytes, content_type, _photo_score, 5))

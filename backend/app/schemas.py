@@ -885,6 +885,18 @@ class OcrScanResult(BaseModel):
     raw_text: str
 
 
+class OcrWorkOrderResult(BaseModel):
+    items: list[str]
+    parts_cost: Optional[float]
+    labor_cost: Optional[float]
+    total_cost: Optional[float]
+    date: Optional[dt.date]
+    # False when the read is too thin to prefill a card. The client still gets
+    # every field, and decides between offering them and asking the user to type.
+    confident: bool
+    raw_text: str
+
+
 # VIN decoding
 
 
