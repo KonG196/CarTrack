@@ -618,7 +618,7 @@ docker compose --profile bot up    # те саме + Telegram-бот
 | `db` | `postgres:16-alpine` | **не публікується назовні** (лише внутрішня мережа, 5432) | volume `pgdata`, healthcheck `pg_isready` (5s × 10 retries) |
 | `backend` | `./backend` (python:3.12-slim + tesseract-ocr + tesseract-ocr-ukr + tesseract-ocr-eng), uvicorn | `8000:8000` | стартує лише після healthy db |
 | `bot` | той самий образ, що backend, але `command: python -m app.bot.main` | немає | **профіль `["bot"]`** — не стартує при звичайному `up`, лише з `--profile bot`; `restart: unless-stopped` |
-| `frontend` | multi-stage: `node:20-alpine` (npm ci + vite build) → `nginx:alpine` | `3000:80` | статика + reverse proxy |
+| `frontend` | multi-stage: `node:20-alpine` (npm ci + vite build) → `nginx:alpine` | `3000:80` | статика + reverse proxy. **У проді не запускається** (`replicas: 0` у `docker-compose.lite.yml`): застосунок віддає Vercel, а Caddy проксує хост напряму на бекенд. Лишається для локального `docker compose up` і як опис того, чим фронт був — його nginx колись був єдиним виходом API назовні. |
 
 nginx-конфіг фронтенда (`frontend/nginx.conf`):
 - SPA fallback: `try_files $uri $uri/ /index.html`;
