@@ -1,4 +1,5 @@
-"""Bot refuel flows: message parsing, confirm-before-save, receipt photos.
+"""Bot photo and refuel flows: message parsing, confirm-before-save, and
+telling a fuel receipt from a service order.
 
 The OCR binary is never involved: extract_text is monkeypatched in ocr_llm,
 so these tests describe the bot's behaviour, not tesseract's.
@@ -17,7 +18,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.bot import handlers, service
 from app.bot.parsers import parse_refuel
 from app.config import settings
-from app.models import Car, LogEntry, LogPhoto, RefuelDetails, User
+from app.models import Car, LogEntry, LogPhoto, MaintenanceDetails, RefuelDetails, User
 
 CHAT_ID = 42
 TODAY = dt.date.today()
@@ -408,6 +409,124 @@ lambda image: called.append(image))
 
     assert "прив'яза" in replies[0]["text"].lower()
     assert called == []  # no OCR work for strangers
+
+
+# Photo service orders (the same photo handler, a different piece of paper)
+
+
+ALEX_SO_ORDER = """ТОВ "АЛЕКС СО"
+Наряд-замовлення №А000033003 від 03.12.2022
+1  Олива моторна 5W-30 5л      1      2255,00  2255,00
+2  Фільтр масляний ЦБ012317    1       566,00   566,00
+Запчастини та матеріали:            7542,00
+Роботи:                              681,38
+Разом до сплати:                    8223,38
+"""
+
+
+def test_a_photographed_order_becomes_a_service_entry(
+    bot_db: sessionmaker, replies: list[dict], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with bot_db() as db:
+        _user, car = _seed_user_with_car(db)
+        car_id = car.id
+
+    monkeypatch.setattr(
+        "app.services.ocr_llm.extract_text", lambda image_bytes: ALEX_SO_ORDER
+    )
+
+    message = _message(photo=True)
+    asyncio.run(handlers.handle_photo(message, _FakeBot()))
+
+    # Read back for confirmation, written only on «Зберегти» — same promise as
+    # a receipt.
+    assert "8223.38" in replies[0]["text"]
+    assert _button_texts(replies[0]["reply_markup"]) == ["Зберегти", "Скасувати"]
+    with bot_db() as db:
+        assert db.execute(select(func.count(LogEntry.id))).scalar_one() == 0
+
+    asyncio.run(handlers.cb_maintenance_confirm(_callback("mntok", message)))
+
+    with bot_db() as db:
+        log = db.execute(select(LogEntry)).scalar_one()
+        assert log.car_id == car_id
+        assert log.type == "maintenance"
+        assert log.date == dt.date(2022, 12, 3)
+        assert log.odometer == 50000  # the car's current reading
+        detail = db.get(MaintenanceDetails, log.id)
+        assert float(detail.parts_cost) == 7542.00
+        assert float(detail.labor_cost) == 681.38
+        assert "Олива моторна 5W-30 5л" in detail.items
+
+
+def test_an_order_photo_is_never_filed_as_a_refuel(
+    bot_db: sessionmaker, replies: list[dict], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """«Олива моторна 5W-30 5л» hands the receipt parser five litres and the
+    bill to divide by them. Nothing about that is a refuel."""
+    with bot_db() as db:
+        _seed_user_with_car(db)
+
+    monkeypatch.setattr(
+        "app.services.ocr_llm.extract_text", lambda image_bytes: ALEX_SO_ORDER
+    )
+    asyncio.run(handlers.handle_photo(_message(photo=True), _FakeBot()))
+
+    assert _callback_data(replies[0]["reply_markup"]) == ["mntok", "mntno"]
+    assert "заправ" not in replies[0]["text"].lower()
+
+
+def test_a_receipt_is_still_a_receipt(
+    bot_db: sessionmaker, replies: list[dict], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The other half of the same guard: teaching the bot to see orders must
+    not cost it the receipts it already read."""
+    with bot_db() as db:
+        _seed_user_with_car(db)
+
+    monkeypatch.setattr(
+        "app.services.ocr_llm.extract_text",
+        lambda image_bytes: "ОККО\nПАЛЬНЕ А-95\n45.00 Л\nЦІНА 55.99\nДО СПЛАТИ 2519.55",
+    )
+    asyncio.run(handlers.handle_photo(_message(photo=True), _FakeBot()))
+
+    assert _callback_data(replies[0]["reply_markup"]) == ["refok", "refno"]
+
+
+def test_a_cancelled_order_writes_nothing(
+    bot_db: sessionmaker, replies: list[dict], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with bot_db() as db:
+        _seed_user_with_car(db)
+
+    monkeypatch.setattr(
+        "app.services.ocr_llm.extract_text", lambda image_bytes: ALEX_SO_ORDER
+    )
+    message = _message(photo=True)
+    asyncio.run(handlers.handle_photo(message, _FakeBot()))
+    asyncio.run(handlers.cb_maintenance_cancel(_callback("mntno", message)))
+
+    with bot_db() as db:
+        assert db.execute(select(func.count(LogEntry.id))).scalar_one() == 0
+
+
+def test_an_order_confirmed_twice_is_saved_once(
+    bot_db: sessionmaker, replies: list[dict], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A double tap on «Зберегти» is a slow connection, not a second service."""
+    with bot_db() as db:
+        _seed_user_with_car(db)
+
+    monkeypatch.setattr(
+        "app.services.ocr_llm.extract_text", lambda image_bytes: ALEX_SO_ORDER
+    )
+    message = _message(photo=True)
+    asyncio.run(handlers.handle_photo(message, _FakeBot()))
+    asyncio.run(handlers.cb_maintenance_confirm(_callback("mntok", message)))
+    asyncio.run(handlers.cb_maintenance_confirm(_callback("mntok", message)))
+
+    with bot_db() as db:
+        assert db.execute(select(func.count(LogEntry.id))).scalar_one() == 1
 
 
 # Handler wiring

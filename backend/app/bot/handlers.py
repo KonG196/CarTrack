@@ -57,6 +57,17 @@ class PendingRefuel:
     car_id: Optional[int] = None
 
 
+@dataclass
+class PendingMaintenance:
+
+    items: list[str]
+    parts_cost: float
+    labor_cost: float
+    total_cost: float
+    date: dt.date
+    car_id: Optional[int] = None
+
+
 # What the bot last asked this chat for. A bare number means nothing on its
 # own, but everything right after «надішліть пробіг» — so the question is
 # remembered, briefly, and only for that.
@@ -65,6 +76,7 @@ _awaiting_odometer: dict[int, float] = {}
 
 _pending_expenses: dict[int, PendingExpense] = {}
 _pending_refuels: dict[int, PendingRefuel] = {}
+_pending_maintenance: dict[int, PendingMaintenance] = {}
 
 SAVE_BUTTON = "Зберегти"
 CANCEL_BUTTON = "Скасувати"
@@ -386,15 +398,33 @@ async def handle_photo(message: Message, bot: Bot) -> None:
         await bot.download(message.photo[-1], destination=buffer)
         image_bytes = buffer.getvalue()
 
-        async with _Progress(message, "Розпізнаю чек") as progress:
+        async with _Progress(message, "Розпізнаю фото") as progress:
             try:
                 # OCR is CPU-bound and slow: keep the event loop free for other
                 # chats while tesseract works.
-                parsed = await asyncio.to_thread(service.recognize_refuel, image_bytes)
+                reading = await asyncio.to_thread(service.recognize_photo, image_bytes)
             except service.OcrUnavailableError:
                 await progress.finish(OCR_UNAVAILABLE_TEXT)
                 return
 
+            if reading.kind == "work_order":
+                order = reading.work_order
+                await _handle_maintenance(
+                    message,
+                    db,
+                    user,
+                    PendingMaintenance(
+                        items=order.items,
+                        parts_cost=order.parts_cost or 0.0,
+                        labor_cost=order.labor_cost or 0.0,
+                        total_cost=order.total_cost or 0.0,
+                        date=_parsed_date(order.date),
+                    ),
+                    progress,
+                )
+                return
+
+            parsed = reading.receipt
             if not parsed.liters or not parsed.total_cost or not parsed.price_per_liter:
                 # Partial beats nothing: a total alone still saves typing, and
                 # the alternative is the user retyping a receipt we half read.
@@ -747,6 +777,144 @@ async def cb_expense_cancel(callback: CallbackQuery) -> None:
         await callback.answer("Повідомлення застаріло")
         return
     _pending_expenses.pop(message.chat.id, None)
+    await message.answer(CANCELLED_TEXT)
+    await callback.answer()
+
+
+def _parsed_date(value: Optional[str]) -> dt.date:
+    """A shop's date, or today when the reader could not find one."""
+    if not value:
+        return dt.date.today()
+    try:
+        parsed = dt.date.fromisoformat(value)
+    except ValueError:
+        return dt.date.today()
+    # A наряд dated tomorrow is a misread, and it would sort the car's history
+    # wrong forever.
+    return parsed if parsed <= dt.date.today() else dt.date.today()
+
+
+async def _handle_maintenance(
+    message: Message,
+    db: Session,
+    user: User,
+    pending: PendingMaintenance,
+    progress: Optional["_Progress"] = None,
+) -> None:
+    cars = service.list_writable_cars(db, user)
+    if not cars:
+        await _refuse_write(message, db, user)
+        return
+    _pending_maintenance[message.chat.id] = pending
+    if len(cars) == 1:
+        pending.car_id = cars[0].id
+        await _ask_maintenance_confirm(message, cars[0], pending, user, progress)
+        return
+    text = f"До якого авто записати ТО на {pending.total_cost:.2f} грн?"
+    keyboard = _car_choice_keyboard(cars, "mnt", user)
+    if progress is not None:
+        await progress.finish(text, reply_markup=keyboard)
+        return
+    await message.answer(text, reply_markup=keyboard)
+
+
+# Enough for the user to see what was read; the rest is on the web, where the
+# entry can also be edited.
+_MAX_LISTED_ITEMS = 6
+
+
+async def _ask_maintenance_confirm(
+    message: Message,
+    car,
+    pending: PendingMaintenance,
+    user: Optional[User] = None,
+    progress: Optional["_Progress"] = None,
+) -> None:
+    lines = [f"Наряд СТО на {pending.total_cost:.2f} грн"]
+    if pending.parts_cost and pending.labor_cost:
+        lines.append(
+            f"Запчастини: {pending.parts_cost:.2f} грн · "
+            f"Роботи: {pending.labor_cost:.2f} грн"
+        )
+    for item in pending.items[:_MAX_LISTED_ITEMS]:
+        lines.append(f"• {item}")
+    if len(pending.items) > _MAX_LISTED_ITEMS:
+        lines.append(f"…та ще {len(pending.items) - _MAX_LISTED_ITEMS}")
+    lines.append(f"Авто: {_car_label(car, user)} (пробіг {car.current_odometer} км)")
+    lines.append(f"Дата: {pending.date.isoformat()}")
+    lines.append("\nЗберегти?")
+    text = "\n".join(lines)
+    keyboard = _confirm_keyboard("mntok", "mntno")
+    if progress is not None:
+        await progress.finish(text, reply_markup=keyboard)
+        return
+    await message.answer(text, reply_markup=keyboard)
+
+
+@router.callback_query(F.data.startswith("mnt:"))
+async def cb_maintenance_car(callback: CallbackQuery) -> None:
+    message = callback.message
+    if not isinstance(message, Message):
+        await callback.answer("Повідомлення застаріло")
+        return
+    car_id = _callback_car_id(callback.data)
+    pending = _pending_maintenance.get(message.chat.id)
+    if car_id is None or pending is None:
+        _pending_maintenance.pop(message.chat.id, None)
+        await message.answer(EXPIRED_TEXT)
+        await callback.answer()
+        return
+    with SessionLocal() as db:
+        user = service.get_user_by_chat(db, str(message.chat.id))
+        car = await _writable_car(callback, message, db, user, car_id)
+        if car is None:
+            return
+        pending.car_id = car.id
+        await _ask_maintenance_confirm(message, car, pending, user)
+    await callback.answer()
+
+
+@router.callback_query(F.data == "mntok")
+async def cb_maintenance_confirm(callback: CallbackQuery) -> None:
+    """«Зберегти» tapped: this is the only place a scanned order is written."""
+    message = callback.message
+    if not isinstance(message, Message):
+        await callback.answer("Повідомлення застаріло")
+        return
+    pending = _pending_maintenance.pop(message.chat.id, None)
+    if pending is None or pending.car_id is None:
+        await message.answer(EXPIRED_TEXT)
+        await callback.answer()
+        return
+    with SessionLocal() as db:
+        user = service.get_user_by_chat(db, str(message.chat.id))
+        if await _writable_car(callback, message, db, user, pending.car_id) is None:
+            return
+        log = service.create_maintenance(
+            db,
+            pending.car_id,
+            items=pending.items,
+            parts_cost=pending.parts_cost,
+            labor_cost=pending.labor_cost,
+            total_cost=pending.total_cost,
+            date=pending.date,
+            author_id=user.id,
+        )
+        await message.answer(
+            f"ТО збережено: {pending.total_cost:.2f} грн, "
+            f"{len(pending.items)} позицій ({log.date.isoformat()}), "
+            f"пробіг {log.odometer} км."
+        )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "mntno")
+async def cb_maintenance_cancel(callback: CallbackQuery) -> None:
+    message = callback.message
+    if not isinstance(message, Message):
+        await callback.answer("Повідомлення застаріло")
+        return
+    _pending_maintenance.pop(message.chat.id, None)
     await message.answer(CANCELLED_TEXT)
     await callback.answer()
 

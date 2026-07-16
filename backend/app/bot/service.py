@@ -10,7 +10,7 @@ from __future__ import annotations
 import datetime as dt
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Optional
+from typing import Optional, Sequence
 
 import pytesseract
 from sqlalchemy import func, select
@@ -23,13 +23,22 @@ from app.access import (
     role_rank,
     user_role_for_car,
 )
-from app.models import Car, LogEntry, LogPhoto, RefuelDetails, ServiceInterval, User
+from app.models import (
+    Car,
+    LogEntry,
+    LogPhoto,
+    MaintenanceDetails,
+    RefuelDetails,
+    ServiceInterval,
+    User,
+)
 from app.routers.telegram import InvalidLinkCodeError, decode_link_code
 from app.services.fuel import compute_fuel_stats
 from app.services.intervals import compute_interval_status, effective_avg_daily_km
 from app.services.intervals_complete import IntervalCompletion, complete_interval
 from app.services.ocr import ParsedReceipt
-from app.services.ocr_llm import recognize_receipt
+from app.services.ocr_llm import PhotoReading, recognize_receipt
+from app.services.ocr_llm import recognize_photo as ocr_recognize_photo
 from app.services.photos import new_photo_filename, write_photo_file
 from app.services.report import build_car_report
 from app.services.stats import build_refuel_points, compute_analytics
@@ -353,6 +362,49 @@ def create_refuel(
     return log
 
 
+def create_maintenance(
+    db: Session,
+    car_id: int,
+    *,
+    items: Sequence[str],
+    parts_cost: float,
+    labor_cost: float,
+    total_cost: float,
+    date: Optional[dt.date] = None,
+    author_id: Optional[int] = None,
+) -> Optional[LogEntry]:
+    """Write a service entry at the car's current odometer.
+
+    The odometer is not asked for: a наряд is photographed on the way out of
+    the shop, so what the car reads now is what it read on the lift, give or
+    take the drive home. The user can correct it on the web.
+    """
+    car = db.get(Car, car_id)
+    if car is None:
+        return None
+    log = LogEntry(
+        car_id=car.id,
+        author_id=author_id,
+        type="maintenance",
+        odometer=car.current_odometer,
+        date=date or dt.date.today(),
+        total_cost=Decimal(str(round(total_cost, 2))),
+    )
+    db.add(log)
+    db.flush()
+    db.add(
+        MaintenanceDetails(
+            log_entry_id=log.id,
+            parts_cost=Decimal(str(round(parts_cost, 2))),
+            labor_cost=Decimal(str(round(labor_cost, 2))),
+            items=list(items),
+        )
+    )
+    db.commit()
+    db.refresh(log)
+    return log
+
+
 def recognize_refuel(image_bytes: bytes) -> ParsedReceipt:
     """OCR a receipt photo into refuel fields.
 
@@ -362,6 +414,18 @@ def recognize_refuel(image_bytes: bytes) -> ParsedReceipt:
     """
     try:
         return recognize_receipt(image_bytes)
+    except pytesseract.TesseractNotFoundError as exc:
+        raise OcrUnavailableError("tesseract binary is not installed") from exc
+
+
+def recognize_photo(image_bytes: bytes) -> PhotoReading:
+    """OCR a photo the user sent without saying what it is.
+
+    In a chat there is no form to pick a type in: whatever the station or the
+    shop handed over gets photographed and sent, so the reader identifies it.
+    """
+    try:
+        return ocr_recognize_photo(image_bytes)
     except pytesseract.TesseractNotFoundError as exc:
         raise OcrUnavailableError("tesseract binary is not installed") from exc
 
