@@ -5,10 +5,19 @@
 # Drops PostgreSQL for SQLite — the whole test suite runs on SQLite anyway, and
 # for a single-digit number of users the difference is a saved 150 MB, not a
 # compromise. Move back to Postgres by simply omitting this file.
+#
+# Drops the frontend too: the app is served by Vercel, and Caddy proxies this
+# host straight to the backend. Note what that means before reviving it — the
+# frontend's nginx used to be the API's only way out (Caddy -> :3000 -> nginx
+# -> backend:8000), so putting it back means pointing Caddy at :3000 again.
 services:
   db:
     # Compose has no "remove a service" directive, so the container is scaled to
     # zero instead: `replicas: 0` keeps the definition valid and starts nothing.
+    deploy:
+      replicas: 0
+
+  frontend:
     deploy:
       replicas: 0
 
@@ -27,9 +36,6 @@ services:
       - sqlite_data:/app/data
     depends_on: !reset []
     mem_limit: 250m
-
-  frontend:
-    mem_limit: 100m
 
 volumes:
   sqlite_data:
