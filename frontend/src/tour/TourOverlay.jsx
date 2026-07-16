@@ -138,25 +138,23 @@ export default function TourOverlay() {
         setCalloutPos(pickCalloutSide(rr));
         measureTap(el);
       };
-      // Centre the target in the safe area (below the sticky header, above the
-      // bottom nav) so a callout fits on whichever side has room. Instant, and
-      // idempotent — recomputed from the live position, so re-running converges.
+      // Bring the target to the safe-area centre — but ONLY when it is
+      // meaningfully off, so a target already in view is left untouched. This is
+      // what stopped the spotlight from constantly jumping and stuttering on iOS:
+      // no running re-align loop, and no scroll listener re-rendering every frame.
       const align = () => {
         const b = el.getBoundingClientRect();
         const safeCentre = (SAFE_TOP + (window.innerHeight - SAFE_BOTTOM)) / 2;
-        window.scrollBy({ top: b.top + b.height / 2 - safeCentre });
+        const delta = b.top + b.height / 2 - safeCentre;
+        if (Math.abs(delta) > 40) window.scrollBy({ top: delta });
         measure();
       };
       measure();
-      // Re-align across the opening seconds of the step: a frame later (to outlast
-      // the route's scroll-to-top reset, which fires in this same commit), then at
-      // a spread of delays so late-loading content — charts fetch their data and
-      // reflow the page, moving elements without any scroll event — still ends up
-      // centred with the spotlight on it.
+      // Twice only: a frame later (to outlast the route's scroll-to-top reset)
+      // and once as late content (analytics charts) settles.
       raf = requestAnimationFrame(align);
-      const timers = [260, 620, 1100, 1700, 2400].map((d) => setTimeout(align, d));
+      const settle = setTimeout(align, 450);
       window.addEventListener('resize', measure);
-      window.addEventListener('scroll', measure, true);
       // Play the real in-place result while the step is open: dispatch a demo
       // event the control listens for (the copy icon flips to a checkmark, holds,
       // reverts) and loop it so the demonstration keeps repeating.
@@ -169,9 +167,8 @@ export default function TourOverlay() {
         }, 1050);
       }
       cleanup = () => {
-        timers.forEach(clearTimeout);
+        clearTimeout(settle);
         window.removeEventListener('resize', measure);
-        window.removeEventListener('scroll', measure, true);
       };
     };
     attach();

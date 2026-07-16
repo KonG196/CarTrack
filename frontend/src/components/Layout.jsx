@@ -162,11 +162,13 @@ export default function Layout() {
     <TourProvider>
     <div className="min-h-screen bg-garage">
       <header className="sticky top-0 z-40 border-b border-edge bg-garage/90 pt-[env(safe-area-inset-top)] backdrop-blur">
-        <div className="mx-auto flex max-w-md items-center justify-between gap-3 px-4 py-3">
+        <div className="mx-auto flex max-w-md items-center gap-3 px-4 py-3">
           <NavLink to="/" aria-label="На головну" className="shrink-0">
             <Wordmark />
           </NavLink>
-          <span data-tour="car-switcher" className="min-w-0">
+          {/* flex-1 min-w-0 = «take exactly the space left after the wordmark»,
+              so the car button truncates instead of pushing off the screen. */}
+          <span data-tour="car-switcher" className="flex min-w-0 flex-1 justify-end">
             <CarSelector />
           </span>
         </div>

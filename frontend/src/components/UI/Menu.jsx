@@ -45,7 +45,7 @@ export default function Menu({
   }, [mounted, requestClose]);
 
   return (
-    <div ref={wrapRef} className="relative">
+    <div ref={wrapRef} className="relative min-w-0">
       <button
         ref={triggerRef}
         type="button"

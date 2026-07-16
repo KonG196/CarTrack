@@ -135,7 +135,9 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        // 127.0.0.1, not localhost: on IPv6-first hosts «localhost» resolves to
+        // ::1 and the proxy gets ECONNREFUSED while uvicorn listens on IPv4.
+        target: 'http://127.0.0.1:8000',
         changeOrigin: true,
       },
     },
