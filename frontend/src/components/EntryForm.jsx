@@ -186,8 +186,11 @@ export default function EntryForm({
     applyRefuelUpdate(computeRefuelUpdate('totalCost', { liters, pricePerLiter, totalCost: v }));
   };
 
-  // --- receipt scanning ---
-  const handleReceiptFile = async (e) => {
+  // --- scanning ---
+  // One frame for every tab: pick the file, hold the loader, keep whatever the
+  // user typed while it was in flight, report what came back. Only `read`
+  // differs — which endpoint, and which fields it can fill.
+  const runScan = async (e, { read, apply, describe, failure }) => {
     const file = e.target.files && e.target.files[0];
     e.target.value = '';
     if (!file || scanning) return;
@@ -196,97 +199,19 @@ export default function EntryForm({
     scanningRef.current = true;
     setScanning(true);
     try {
-      const data = await scanReceipt(file);
+      const data = await read(file);
       if (onScanFile) onScanFile(file);
-      const edited = editedDuringScanRef.current;
-      const parts = [];
-
-      if (data.liters != null) {
-        if (!edited.has('liters')) setLiters(String(data.liters));
-        parts.push(`${data.liters} л`);
-      }
-      if (data.price_per_liter != null) {
-        if (!edited.has('pricePerLiter')) setPricePerLiter(String(data.price_per_liter));
-        parts.push(`${data.price_per_liter} грн/л`);
-      }
-      if (data.total_cost != null) {
-        if (!edited.has('totalCost')) setTotalCost(Number(data.total_cost).toFixed(2));
-        parts.push(`${Number(data.total_cost).toFixed(2)} грн`);
-      }
-      if (data.date) {
-        if (!edited.has('date')) setDate(data.date);
-        parts.push(formatDate(data.date));
-      }
-      if (data.gas_station) {
-        if (!edited.has('gasStation')) setGasStation(data.gas_station);
-        parts.push(data.gas_station);
-      }
-
-      setToast(
-        parts.length > 0
-          ? { message: `Розпізнано: ${parts.join(', ')}`, variant: 'ok' }
-          : { message: 'Не вдалося розпізнати дані з чека', variant: 'warn' }
-      );
-    } catch (err) {
-      setToast({
-        message:
-          err?.response?.status === 503
-            ? 'Розпізнавання недоступне на сервері'
-            : 'Не вдалося розпізнати чек. Спробуйте інше фото.',
-        variant: 'warn',
-      });
-    } finally {
-      scanningRef.current = false;
-      setScanning(false);
-    }
-  };
-
-  // --- service-order scanning ---
-  const handleWorkOrderFile = async (e) => {
-    const file = e.target.files && e.target.files[0];
-    e.target.value = '';
-    if (!file || scanning) return;
-
-    editedDuringScanRef.current = new Set();
-    scanningRef.current = true;
-    setScanning(true);
-    try {
-      const data = await scanWorkOrder(file);
-      if (onScanFile) onScanFile(file);
-      const scanned = workOrderToFormValues(data);
-      const edited = editedDuringScanRef.current;
-
-      if (scanned.date && !edited.has('date')) setDate(scanned.date);
-      if (scanned.partsCost != null && !edited.has('partsCost')) setPartsCost(scanned.partsCost);
-      if (scanned.laborCost != null && !edited.has('laborCost')) setLaborCost(scanned.laborCost);
-      // The bill the shop printed, not parts + labour: when the two halves
-      // disagreed with it the parser dropped them, and the total is what was
-      // actually paid.
-      if (scanned.totalCost != null && !edited.has('totalCost')) setTotalCost(scanned.totalCost);
-
-      if (scanned.checkedItems.length && !edited.has('checkedItems')) {
-        setCustomItems((current) => [
-          ...current,
-          ...scanned.customItems.filter((item) => !current.includes(item)),
-        ]);
-        setCheckedItems((current) => [
-          ...current,
-          ...scanned.checkedItems.filter((item) => !current.includes(item)),
-        ]);
-      }
-
-      const summary = describeWorkOrder(data);
+      apply(data, editedDuringScanRef.current);
+      const summary = describe(data);
       setToast(
         summary
           ? { message: `Розпізнано: ${summary}`, variant: 'ok' }
-          : { message: 'Не вдалося розпізнати наряд', variant: 'warn' }
+          : { message: failure, variant: 'warn' }
       );
     } catch (err) {
       setToast({
         message:
-          err?.response?.status === 503
-            ? 'Розпізнавання недоступне на сервері'
-            : 'Не вдалося розпізнати наряд. Спробуйте інше фото.',
+          err?.response?.status === 503 ? 'Розпізнавання недоступне на сервері' : failure,
         variant: 'warn',
       });
     } finally {
@@ -294,6 +219,96 @@ export default function EntryForm({
       setScanning(false);
     }
   };
+
+  const handleReceiptFile = (e) =>
+    runScan(e, {
+      read: scanReceipt,
+      failure: 'Не вдалося розпізнати чек. Спробуйте інше фото.',
+      apply: (data, edited) => {
+        if (data.liters != null && !edited.has('liters')) setLiters(String(data.liters));
+        if (data.price_per_liter != null && !edited.has('pricePerLiter'))
+          setPricePerLiter(String(data.price_per_liter));
+        if (data.total_cost != null && !edited.has('totalCost'))
+          setTotalCost(Number(data.total_cost).toFixed(2));
+        if (data.date && !edited.has('date')) setDate(data.date);
+        if (data.gas_station && !edited.has('gasStation')) setGasStation(data.gas_station);
+      },
+      describe: (data) => {
+        const parts = [];
+        if (data.liters != null) parts.push(`${data.liters} л`);
+        if (data.price_per_liter != null) parts.push(`${data.price_per_liter} грн/л`);
+        if (data.total_cost != null) parts.push(`${Number(data.total_cost).toFixed(2)} грн`);
+        if (data.date) parts.push(formatDate(data.date));
+        if (data.gas_station) parts.push(data.gas_station);
+        return parts.join(', ');
+      },
+    });
+
+  const handleWorkOrderFile = (e) =>
+    runScan(e, {
+      read: scanWorkOrder,
+      failure: 'Не вдалося розпізнати наряд. Спробуйте інше фото.',
+      describe: describeWorkOrder,
+      apply: (data, edited) => {
+        const scanned = workOrderToFormValues(data);
+        if (scanned.date && !edited.has('date')) setDate(scanned.date);
+        if (scanned.partsCost != null && !edited.has('partsCost')) setPartsCost(scanned.partsCost);
+        if (scanned.laborCost != null && !edited.has('laborCost')) setLaborCost(scanned.laborCost);
+        // The bill the shop printed, not parts + labour: when the two halves
+        // disagreed with it the parser dropped them, and the total is what was
+        // actually paid.
+        if (scanned.totalCost != null && !edited.has('totalCost')) setTotalCost(scanned.totalCost);
+        if (scanned.checkedItems.length && !edited.has('checkedItems')) {
+          setCustomItems((current) => [
+            ...current,
+            ...scanned.customItems.filter((item) => !current.includes(item)),
+          ]);
+          setCheckedItems((current) => [
+            ...current,
+            ...scanned.checkedItems.filter((item) => !current.includes(item)),
+          ]);
+        }
+      },
+    });
+
+  // A repair is billed on the same наряд as a service — the shop does not know
+  // which tab it will be filed under. What differs is where the work lands: a
+  // repair has no item list, so what was done goes in the notes.
+  const handleRepairOrderFile = (e) =>
+    runScan(e, {
+      read: scanWorkOrder,
+      failure: 'Не вдалося розпізнати наряд. Спробуйте інше фото.',
+      describe: describeWorkOrder,
+      apply: (data, edited) => {
+        if (data.date && !edited.has('date')) setDate(data.date);
+        if (data.total_cost != null && !edited.has('totalCost'))
+          setTotalCost(Number(data.total_cost).toFixed(2));
+        // Never over notes the user already wrote: theirs say why, the shop's
+        // only say what.
+        if (data.items?.length) setNotes((current) => current || data.items.join(', '));
+      },
+    });
+
+  // Any till receipt: a car wash, a parking barrier, a service fee. Only the
+  // sum and the date are worth reading — the category is a judgement the user
+  // makes, and guessing it would file the entry wrong.
+  const handleExpenseReceiptFile = (e) =>
+    runScan(e, {
+      read: scanReceipt,
+      failure: 'Не вдалося розпізнати чек. Спробуйте інше фото.',
+      apply: (data, edited) => {
+        if (data.total_cost != null && !edited.has('totalCost'))
+          setTotalCost(Number(data.total_cost).toFixed(2));
+        if (data.date && !edited.has('date')) setDate(data.date);
+        if (data.gas_station) setNotes((current) => current || data.gas_station);
+      },
+      describe: (data) => {
+        const parts = [];
+        if (data.total_cost != null) parts.push(`${Number(data.total_cost).toFixed(2)} грн`);
+        if (data.date) parts.push(formatDate(data.date));
+        return parts.join(', ');
+      },
+    });
 
   // --- maintenance: total = parts + labor ---
   const onPartsChange = (v) => {
@@ -609,6 +624,15 @@ export default function EntryForm({
 
         {type === 'repair' && (
           <>
+            <ScanButton
+              scanning={scanning}
+              onFile={handleRepairOrderFile}
+              idle="Сканувати наряд СТО"
+              busy="Розпізнаю наряд…"
+            />
+            {mode === 'create' && scannedFile && (
+              <p className="text-xs text-mist">Наряд буде додано як фото запису.</p>
+            )}
             <SelectField
               label="Категорія"
               value={category}
@@ -643,6 +667,20 @@ export default function EntryForm({
                 onChange={(e) => setWarrantyKm(e.target.value)}
               />
             </div>
+          </>
+        )}
+
+        {type === 'expense' && (
+          <>
+            <ScanButton
+              scanning={scanning}
+              onFile={handleExpenseReceiptFile}
+              idle="Сканувати чек"
+              busy="Розпізнаю чек…"
+            />
+            {mode === 'create' && scannedFile && (
+              <p className="text-xs text-mist">Чек буде додано як фото запису.</p>
+            )}
           </>
         )}
 
