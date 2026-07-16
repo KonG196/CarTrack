@@ -382,14 +382,18 @@ function CarForm({ initial, onSubmit, onCancel, focusField }) {
         </div>
       </div>
 
-      <ErrorMessage>{error}</ErrorMessage>
-      <div className="flex gap-2">
-        <Button type="submit" disabled={submitting} className="flex-1">
-          {submitting ? 'Збереження…' : 'Зберегти'}
-        </Button>
-        <Button variant="secondary" onClick={onCancel}>
-          Скасувати
-        </Button>
+      {/* Sticky action bar: always in reach above the bottom nav, so a long
+          form never means scrolling to the very end to save. */}
+      <div className="sticky bottom-0 z-20 -mx-4 border-t border-edge bg-garage px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+4.75rem)]">
+        {error && <ErrorMessage className="mb-3">{error}</ErrorMessage>}
+        <div className="flex gap-2">
+          <Button type="submit" disabled={submitting} className="flex-1">
+            {submitting ? 'Збереження…' : 'Зберегти'}
+          </Button>
+          <Button variant="secondary" onClick={onCancel}>
+            Скасувати
+          </Button>
+        </div>
       </div>
     </form>
   );

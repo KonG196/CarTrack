@@ -733,8 +733,12 @@ export default function EntryForm({
           onChange={(e) => setNotes(e.target.value)}
         />
 
-        <ErrorMessage>{error}</ErrorMessage>
+      </Card>
 
+      {/* Sticky action bar above the bottom nav — save without scrolling to the
+          end of a long entry form. */}
+      <div className="sticky bottom-0 z-20 -mx-4 border-t border-edge bg-garage px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+4.75rem)]">
+        {error && <ErrorMessage className="mb-3">{error}</ErrorMessage>}
         <div className="flex gap-2">
           <Button type="submit" disabled={submitting} className="flex-1">
             {submitting ? 'Збереження…' : mode === 'edit' ? 'Зберегти зміни' : 'Зберегти запис'}
@@ -745,7 +749,7 @@ export default function EntryForm({
             </Button>
           )}
         </div>
-      </Card>
+      </div>
     </form>
   );
 }

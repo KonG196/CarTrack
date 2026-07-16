@@ -80,13 +80,13 @@ function CarSelector() {
           label: [car.brand, car.model, gen].filter(Boolean).join(' '),
         };
       })}
-      buttonClassName="flex max-w-[9rem] items-center gap-1.5 rounded-xl border border-edge bg-panel py-1.5 pl-2.5 pr-3 text-sm text-fg transition-colors hover:border-edge-soft min-[380px]:max-w-[14rem]"
+      buttonClassName="flex min-w-0 max-w-[13rem] items-center gap-1.5 rounded-xl border border-edge bg-panel py-1.5 pl-2.5 pr-3 text-sm text-fg transition-colors hover:border-edge-soft"
       button={
         <>
           <Car className="h-4 w-4 flex-shrink-0 text-amber" />
-          {/* Model + generation always; the muted engine tail truncates off
-              first, so it only shows when the screen has room. */}
-          <span className="truncate">
+          {/* Model + generation, engine tail — the whole line truncates with an
+              ellipsis rather than pushing the wordmark: min-w-0 lets it shrink. */}
+          <span className="min-w-0 truncate">
             {[active.model, activeGen].filter(Boolean).join(' ')}
             {active.engine ? <span className="text-mist"> · {active.engine}</span> : null}
           </span>
@@ -163,10 +163,10 @@ export default function Layout() {
     <div className="min-h-screen bg-garage">
       <header className="sticky top-0 z-40 border-b border-edge bg-garage/90 pt-[env(safe-area-inset-top)] backdrop-blur">
         <div className="mx-auto flex max-w-md items-center justify-between gap-3 px-4 py-3">
-          <NavLink to="/" aria-label="На головну">
+          <NavLink to="/" aria-label="На головну" className="shrink-0">
             <Wordmark />
           </NavLink>
-          <span data-tour="car-switcher">
+          <span data-tour="car-switcher" className="min-w-0">
             <CarSelector />
           </span>
         </div>

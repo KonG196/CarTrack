@@ -33,12 +33,12 @@ function pickCalloutSide(r) {
   return below >= above ? 'bottom' : 'top';
 }
 
-// Four fixed panels frame the spotlight — a single element cannot blur around a
-// cutout, but four around the rectangle can, and they transition their geometry
-// so the spotlight glides from one target to the next.
+// Four fixed panels frame the spotlight — a single element cannot dim around a
+// cutout, but four around the rectangle can. No backdrop-blur and no geometry
+// transition on purpose: animating either is what stuttered on iOS, and an
+// instant reposition also lets the spotlight track scrolling exactly.
 function DimPanels({ hole }) {
-  const cls =
-    'fixed z-[60] bg-black/50 backdrop-blur-[2px] transition-all duration-300 ease-out';
+  const cls = 'fixed z-[60] bg-black/60';
   return (
     <>
       <div className={cls} style={{ top: 0, left: 0, right: 0, height: Math.max(0, hole.top) }} />
@@ -223,12 +223,12 @@ export default function TourOverlay() {
         aria-hidden="true"
       />
       <div
-        className="pointer-events-none fixed z-[62] rounded-xl ring-2 ring-amber transition-all duration-300 ease-out"
+        className="pointer-events-none fixed z-[62] rounded-xl ring-2 ring-amber"
         style={{ top: hole.top, left: hole.left, width: hole.width, height: hole.height }}
       />
       {step.tap && tapPoint && (
         <div
-          className="pointer-events-none fixed z-[62] h-6 w-6 transition-all duration-300 ease-out"
+          className="pointer-events-none fixed z-[62] h-6 w-6"
           style={{ left: tapPoint.x, top: tapPoint.y, transform: 'translate(-50%, -50%)' }}
           aria-hidden="true"
         >
