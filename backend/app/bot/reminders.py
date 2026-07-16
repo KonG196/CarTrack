@@ -108,6 +108,134 @@ async def send_due_reminders(bot: Bot) -> None:
                 logger.exception("Failed to send reminders to user %s", user.id)
 
 
+#: The fuel a spike is about, in the genitive so it reads «стрибок витрати газу».
+_FUEL_WORD = {
+    "petrol": "бензину",
+    "diesel": "дизеля",
+    "lpg": "газу",
+    "electric": "електрики",
+    "hybrid": "пального",
+}
+
+
+def _build_consumption_text(alert: service.ConsumptionAlert) -> str:
+    car = alert.car
+    spike = alert.spike
+    fuel = _FUEL_WORD.get(spike.fuel_kind, "пального")
+    return (
+        f"⛽ {car.brand} {car.model}: помічено стрибок витрати {fuel} на "
+        f"{spike.pct_over}% — {spike.consumption_l_100km:.1f} л/100 км проти "
+        f"звичних ~{spike.baseline_l_100km:.1f}.\n"
+        "Якщо стиль їзди не змінювався, варто перевірити тиск у шинах, а також "
+        "стан сажового фільтра чи свічок."
+    )
+
+
+async def send_consumption_alerts(bot: Bot) -> None:
+    """One watchdog pass: warn each owner about a fresh consumption spike.
+
+    Each owner is isolated in try/except, and the spike is stamped on the car
+    only after a successful send — a blocked chat must not silence the warning
+    for good, and a failed send is retried next pass.
+    """
+    with SessionLocal() as db:
+        for user, alert in service.consumption_alert_targets(db):
+            try:
+                await bot.send_message(
+                    chat_id=user.telegram_chat_id,
+                    text=_build_consumption_text(alert),
+                )
+                service.stamp_consumption_alert(db, alert.car, alert.spike.log_id)
+            except Exception:
+                logger.exception(
+                    "Failed to send consumption alert to user %s", user.id
+                )
+
+
+def _build_seasonal_text(reminder: service.SeasonalReminder) -> str:
+    car = reminder.car
+    if reminder.kind == "tires":
+        return (
+            f"🛞 {car.brand} {car.model}: наближається зима, а на авто досі літня "
+            "гума. Варто записатися на шиномонтаж, поки немає двотижневих черг."
+        )
+    return (
+        "🥶 Наближаються перші нічні заморозки у вашому регіоні. Не забудьте "
+        "вибризкати літню воду й залити зимову рідину (-20 °C), щоб не розірвало "
+        "трубки й моторчик омивача скла."
+    )
+
+
+async def send_seasonal_reminders(bot: Bot) -> None:
+    """One autumn pass: winter-tyre and winter-washer nudges, once per season.
+
+    Each owner is isolated in try/except, and the year is stamped on the car
+    only after a successful send — a blocked chat must not burn the season's
+    single reminder, and a failed send is retried on the next daily pass.
+    """
+    today = dt.date.today()
+    with SessionLocal() as db:
+        for user, reminder in service.seasonal_reminder_targets(db, today=today):
+            try:
+                await bot.send_message(
+                    chat_id=user.telegram_chat_id,
+                    text=_build_seasonal_text(reminder),
+                )
+                service.stamp_seasonal(db, reminder.car, reminder.kind, today.year)
+            except Exception:
+                logger.exception(
+                    "Failed to send seasonal reminder to user %s", user.id
+                )
+
+
+_SEASON_WORD = {"summer": "літній", "winter": "зимовий", "all_season": "всесезонний"}
+
+
+def _build_rotation_text(reminder: service.RotationReminder) -> str:
+    car = reminder.car
+    season = _SEASON_WORD.get(reminder.tire_set.season, "")
+    which = f"{season} комплект шин".strip()
+    return (
+        f"🛞 {car.brand} {car.model}: {which} проїхав уже "
+        f"{reminder.km_since_rotation} км від останньої ротації. Рекомендовано "
+        "переставити колеса місцями (задню вісь наперед), щоб протектор "
+        "зношувався рівномірно. Зробили — тапніть кнопку нижче."
+    )
+
+
+def build_rotation_keyboard(tire_set_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🛞 Зробити ротацію", callback_data=f"rotate:{tire_set_id}"
+                )
+            ]
+        ]
+    )
+
+
+async def send_rotation_reminders(bot: Bot) -> None:
+    """One pass: nudge owners whose tyres are due an axle rotation.
+
+    Isolated per owner; the 10k mark is stamped on the set only after a
+    successful send, so a blocked chat is retried and never double-counts.
+    """
+    with SessionLocal() as db:
+        for user, reminder in service.rotation_reminder_targets(db):
+            try:
+                await bot.send_message(
+                    chat_id=user.telegram_chat_id,
+                    text=_build_rotation_text(reminder),
+                    reply_markup=build_rotation_keyboard(reminder.tire_set.id),
+                )
+                service.stamp_rotation(db, reminder.tire_set, reminder.due_km)
+            except Exception:
+                logger.exception(
+                    "Failed to send rotation reminder to user %s", user.id
+                )
+
+
 async def send_weekly_digests(bot: Bot, today: dt.date | None = None) -> None:
     """Sunday's digest pass: one message per car, to the car's owner.
 
@@ -175,6 +303,18 @@ async def reminder_loop(bot: Bot) -> None:
             await send_due_reminders(bot)
         except Exception:
             logger.exception("Reminder pass failed")
+        try:
+            await send_consumption_alerts(bot)
+        except Exception:
+            logger.exception("Consumption watchdog pass failed")
+        try:
+            await send_seasonal_reminders(bot)
+        except Exception:
+            logger.exception("Seasonal reminder pass failed")
+        try:
+            await send_rotation_reminders(bot)
+        except Exception:
+            logger.exception("Rotation reminder pass failed")
         try:
             await send_weekly_digests(bot)
         except Exception:

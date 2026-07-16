@@ -109,7 +109,7 @@ export default function Logbook() {
         <p className="text-sm text-mist">
           Спершу додайте авто в розділі{' '}
           <Link to="/garage" className="text-amber hover:text-amber-deep">
-            «Гараж»
+            «Налаштування»
           </Link>
           .
         </p>
@@ -129,15 +129,17 @@ export default function Logbook() {
         onCancel={() => setDeletingLog(null)}
       />
 
-      <SearchField
-        label="Пошук у журналі"
-        placeholder="Пошук у журналі…"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        onClear={() => setQuery('')}
-      />
+      <div data-tour="logbook-search">
+        <SearchField
+          label="Пошук у журналі"
+          placeholder="Пошук у журналі…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onClear={() => setQuery('')}
+        />
+      </div>
 
-      <div className="-mx-4 overflow-x-auto px-4">
+      <div data-tour="logbook-filters" className="-mx-4 overflow-x-auto px-4">
         <div className="flex w-max gap-2">
           {FILTERS.map((f) => (
             <button
@@ -208,12 +210,13 @@ export default function Logbook() {
           {visiblePending.map((record) => (
             <PendingTimelineItem key={`pending-${record.id}`} record={record} />
           ))}
-          {logs.items.map((log) => (
+          {logs.items.map((log, i) => (
             <LogTimelineItem
               key={log.id}
               log={log}
               onDelete={canDelete ? handleDelete : undefined}
               showAuthor={showAuthors}
+              tourId={i === 0 && visiblePending.length === 0 ? 'log-row' : undefined}
             />
           ))}
           {logs.total > logs.items.length && (

@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from app.services import ocr_llm
 from app.services.ocr_llm import recognize_photo
 from app.services.workorder import looks_like_work_order, parse_work_order
 
@@ -309,3 +310,92 @@ def test_endpoint_requires_auth(client: TestClient) -> None:
         "/api/ocr/scan-order", files={"file": ("order.jpg", b"x", "image/jpeg")}
     )
     assert response.status_code == 401
+
+
+# The vision rung: last, paid, and never trusted without checking
+
+
+def test_the_model_reads_the_order_when_the_free_rungs_cannot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("app.services.ocr_llm.extract_text", lambda image_bytes: "розмито")
+    monkeypatch.setattr(ocr_llm.settings, "GEMINI_API_KEY", "test-key")
+    monkeypatch.setattr(
+        "app.services.ocr_llm._ask_gemini",
+        lambda prompt, image_bytes, content_type: {
+            "parts_cost": 3200,
+            "labor_cost": 16000,
+            "total_cost": 19200,
+            "date": "2026-07-06",
+            "items": ["Демонтаж-монтаж форсунок", "Діагностика"],
+        },
+    )
+    parsed = ocr_llm.recognize_work_order(b"img")
+    assert parsed.total_cost == 19200
+    assert parsed.labor_cost == 16000
+    assert "Діагностика" in parsed.items
+    # The text the free rungs read is kept: the model returns none, and it is
+    # what a wrong answer is diagnosed from.
+    assert parsed.raw_text == "розмито"
+
+
+def test_the_model_is_not_asked_when_the_free_rungs_succeeded(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """It is the only rung that costs money."""
+    monkeypatch.setattr("app.services.ocr_llm.extract_text", lambda image_bytes: ALEX_SO)
+    monkeypatch.setattr(ocr_llm.settings, "GEMINI_API_KEY", "test-key")
+
+    def must_not_be_called(*args, **kwargs):
+        raise AssertionError("the paid rung ran on an order the free ones read")
+
+    monkeypatch.setattr("app.services.ocr_llm._ask_gemini", must_not_be_called)
+    assert ocr_llm.recognize_work_order(b"img").total_cost == 8223.38
+
+
+def test_the_model_is_not_asked_without_a_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("app.services.ocr_llm.extract_text", lambda image_bytes: "розмито")
+    monkeypatch.setattr(ocr_llm.settings, "GEMINI_API_KEY", "")
+
+    def must_not_be_called(*args, **kwargs):
+        raise AssertionError("the paid rung ran with no key configured")
+
+    monkeypatch.setattr("app.services.ocr_llm._ask_gemini", must_not_be_called)
+    assert not ocr_llm.recognize_work_order(b"img").confident
+
+
+def test_a_model_split_that_does_not_add_up_is_dropped() -> None:
+    """The same arithmetic the text parser is held to. A model cannot know which
+    of the three it misread, so the halves go rather than the user trusting them."""
+    parsed = ocr_llm.parsed_work_order_from_llm(
+        {"parts_cost": 5000, "labor_cost": 2000, "total_cost": 9500, "items": ["Заміна оливи"]}
+    )
+    assert parsed.total_cost == 9500
+    assert parsed.parts_cost is None
+    assert parsed.labor_cost is None
+
+
+def test_the_model_answering_nonsense_breaks_nothing() -> None:
+    assert ocr_llm.parsed_work_order_from_llm("не json") is None
+    assert ocr_llm.parsed_work_order_from_llm(None) is None
+    empty = ocr_llm.parsed_work_order_from_llm({"items": None, "total_cost": "нуль"})
+    assert empty.total_cost is None
+    assert empty.items == []
+
+
+def test_a_model_date_from_the_future_is_refused() -> None:
+    parsed = ocr_llm.parsed_work_order_from_llm({"total_cost": 500, "date": "2099-01-01"})
+    assert parsed.date is None
+
+
+def test_the_model_survives_a_dead_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A depleted balance must not cost the user their local reading."""
+    monkeypatch.setattr("app.services.ocr_llm.extract_text", lambda image_bytes: "розмито")
+    monkeypatch.setattr(ocr_llm.settings, "GEMINI_API_KEY", "dead-key")
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("gemini down")
+
+    monkeypatch.setattr("app.services.ocr_llm._ask_gemini", boom)
+    parsed = ocr_llm.recognize_work_order(b"img")
+    assert parsed.raw_text == "розмито"

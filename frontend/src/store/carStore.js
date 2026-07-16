@@ -282,13 +282,23 @@ export const useCarStore = create((set, get) => ({
     return result;
   },
 
+  // Skips presets whose title the car already carries. Without this, tapping
+  // the button twice — or tapping it on a car that already has these intervals —
+  // silently made a second and third copy of each. Returns how many were
+  // actually created so the caller can say so instead of implying it added a
+  // full set every time.
   async addIntervalPresets(car, presets) {
+    const existing = new Set(
+      (get().intervals || []).map((i) => i.title.trim().toLowerCase())
+    );
+    const fresh = presets.filter((p) => !existing.has(p.title.trim().toLowerCase()));
     const today = new Date().toISOString().slice(0, 10);
     const base = { last_odometer: car.current_odometer, last_date: today };
-    for (const preset of presets) {
+    for (const preset of fresh) {
       await intervalsApi.createInterval(car.id, { ...preset, ...base });
     }
-    await get().fetchIntervals();
+    if (fresh.length) await get().fetchIntervals();
+    return fresh.length;
   },
 
   reset() {

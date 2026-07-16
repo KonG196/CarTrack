@@ -5,7 +5,9 @@ import { buildSpecsMessage, carTitle, hasSomethingToShare } from './partsCard';
 const GOLF = {
   brand: 'Volkswagen',
   model: 'Golf VII Variant',
-  generation: '7 (BA5)',
+  // As the owner actually typed it: a generation and a colour in one free-text
+  // field, with no reliable seam between them.
+  generation: '7 (BA5), Urano Gray',
   year: 2016,
   engine: '1.6 TDI CXXB',
   vin: 'WVWZZZAUZHP541983',
@@ -24,11 +26,28 @@ describe('buildSpecsMessage', () => {
   it('reads as one message a parts shop can answer', () => {
     const message = buildSpecsMessage(GOLF, SPECS);
     expect(message).toContain('Volkswagen Golf VII Variant');
-    expect(message).toContain('двигун 1.6 TDI CXXB');
+    expect(message).toContain('1.6 TDI CXXB');
     expect(message).toContain('VIN: WVWZZZAUZHP541983');
     expect(message).toContain('Олива: VW 507.00');
     expect(message).toContain('Антифриз: G13');
-    expect(message).toContain('Пробіг: 240054 км');
+  });
+
+  it('includes the generation but strips the colour after the comma', () => {
+    // «7 (BA5), Urano Gray» -> «7 (BA5)»: a shop needs the generation to pick a
+    // part, never the paint.
+    const message = buildSpecsMessage(GOLF, SPECS);
+    expect(message).toContain('Volkswagen Golf VII Variant 7 (BA5)');
+    expect(message).not.toContain('Urano Gray');
+  });
+
+  it('does not paste the odometer or the paint', () => {
+    // Neither decides which part fits. The odometer also changes every week, so
+    // pasting it only dates the message; the colour rides along inside the
+    // free-text `generation` («7 (BA5), Urano Gray»), which is why the whole
+    // field stays out.
+    const message = buildSpecsMessage(GOLF, SPECS);
+    expect(message).not.toContain('240054');
+    expect(message).not.toContain('Urano Gray');
   });
 
   it('leaves out what the shop never asks about', () => {
@@ -40,7 +59,7 @@ describe('buildSpecsMessage', () => {
   it('omits what is unknown rather than printing a dash', () => {
     const bare = { brand: 'Volkswagen', model: 'Golf', year: 2016 };
     const message = buildSpecsMessage(bare, []);
-    expect(message).toBe('Volkswagen Golf 2016 р.');
+    expect(message).toBe('Volkswagen Golf');
     expect(message).not.toContain('VIN');
     expect(message).not.toContain('—');
   });
@@ -52,7 +71,7 @@ describe('buildSpecsMessage', () => {
 
 describe('carTitle', () => {
   it('joins what is known', () => {
-    expect(carTitle(GOLF)).toBe('Volkswagen Golf VII Variant 7 (BA5) 2016 р.');
+    expect(carTitle(GOLF)).toBe('Volkswagen Golf VII Variant 7 (BA5)');
   });
 });
 

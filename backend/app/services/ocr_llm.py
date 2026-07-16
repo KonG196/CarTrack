@@ -1,8 +1,13 @@
-"""Gemini vision fallback for receipts that tesseract cannot read.
+"""The OCR ladder: free rungs first, the vision model only when they fall short.
 
-Used only when the local OCR pass recognized fewer than two money fields
-and GEMINI_API_KEY is configured; the endpoint never fails because of this
-fallback — any error here simply keeps the tesseract result.
+Three rungs ordered by price — tesseract (local), OCR.space (free, 25k/month),
+Gemini (paid, and only if GEMINI_API_KEY is set). Reading a photo is separated
+from judging it (`read_text`), so one climb can serve several parsers: the same
+picture is offered to the receipt reader and the work-order reader without
+paying for OCR twice.
+
+Nothing here may break a request. Every rung fails soft — a remote error keeps
+whatever the cheaper rung already read.
 """
 
 from __future__ import annotations
@@ -123,16 +128,19 @@ def parsed_receipt_from_llm(data: Any) -> Optional[ParsedReceipt]:
     return result
 
 
-def recognize_receipt_llm(
-    image_bytes: bytes, content_type: str
-) -> Optional[ParsedReceipt]:
+def _ask_gemini(prompt: str, image_bytes: bytes, content_type: str) -> Optional[Any]:
+    """Show the model one photo and one prompt; return the JSON it answers with.
+
+    None on any failure — a caller keeps whatever the free rungs read. Nothing
+    may break because someone else's API is having a day.
+    """
     if not settings.GEMINI_API_KEY:
         return None
     payload = {
         "contents": [
             {
                 "parts": [
-                    {"text": _PROMPT},
+                    {"text": prompt},
                     {
                         "inlineData": {
                             "mimeType": content_type or "image/jpeg",
@@ -147,9 +155,8 @@ def recognize_receipt_llm(
             "temperature": 0,
         },
     }
-    # The key goes in a header, not a ?key= query param: new-style AI Studio
-    # keys are rejected in the URL, and a header also keeps the key out of
-    # error messages and access logs.
+    # The key goes in a header, not a ?key= query param: keys are rejected in
+    # the URL, and a header also keeps the key out of error messages and logs.
     for delay in (*_RETRY_DELAYS_SECONDS, None):
         response = httpx.post(
             _GEMINI_URL.format(model=settings.GEMINI_MODEL),
@@ -159,26 +166,57 @@ def recognize_receipt_llm(
         )
         if response.status_code not in _RETRY_STATUSES or delay is None:
             break
+        if _is_out_of_credit(response):
+            break
         time.sleep(delay)
 
-    # A rejected key and an overloaded model both end the request, but only one
-    # of them is worth a human's attention — and a warning that says «fallback
-    # failed» sends nobody to look at the key. Retrying it would be pointless
-    # anyway: it will be just as invalid next time.
+    # Three ways this ends badly, and only one of them is the model's fault.
+    # «Fallback failed» in a log sends nobody to look at the billing page, so
+    # the two that a human must fix say so plainly — and neither is worth a
+    # retry, since both will be just as true next time.
     if response.status_code in (401, 403):
         logger.error(
             "GEMINI_API_KEY was rejected (HTTP %s). Vision OCR is off until it "
-            "is replaced: keys from aistudio.google.com/apikey look like "
-            "'AIza…'; an OAuth token will not work here.",
+            "is replaced — get one at aistudio.google.com/apikey.",
             response.status_code,
+        )
+        return None
+    if _is_out_of_credit(response):
+        logger.error(
+            "Gemini is out of credit, so vision OCR is off until the project is "
+            "topped up (ai.studio/projects). The free rungs still read photos; "
+            "this only costs the hardest ones."
         )
         return None
     response.raise_for_status()
     try:
         answer = response.json()["candidates"][0]["content"]["parts"][0]["text"]
-        return parsed_receipt_from_llm(json.loads(answer))
+        return json.loads(answer)
     except (KeyError, IndexError, TypeError, json.JSONDecodeError):
         return None
+
+
+def _is_out_of_credit(response: httpx.Response) -> bool:
+    """A 429 that will still be a 429 tomorrow.
+
+    Rate limiting and a depleted balance share a status code, and only one of
+    them is worth waiting out. A dead key retried three times is 90 seconds a
+    user spends watching a loader for nothing.
+    """
+    if response.status_code != 429:
+        return False
+    try:
+        message = response.json().get("error", {}).get("message", "")
+    except ValueError:
+        return False
+    return "credit" in message.lower() or "billing" in message.lower()
+
+
+def recognize_receipt_llm(
+    image_bytes: bytes, content_type: str
+) -> Optional[ParsedReceipt]:
+    data = _ask_gemini(_PROMPT, image_bytes, content_type)
+    return parsed_receipt_from_llm(data) if data is not None else None
 
 
 def read_text(
@@ -252,16 +290,15 @@ def recognize_receipt(image_bytes: bytes, content_type: str = "image/jpeg") -> P
     return parsed
 
 
-def _work_order_score(text: str) -> int:
-    """How much of a service order this text yields, weighted by what it is for.
+def _score_of(parsed: ParsedWorkOrder) -> int:
+    """How complete a reading of a service order this is, weighted by what for.
 
-    Money only, near enough: the items are a tiebreaker worth less than any one
-    sum. Counting them heavily is what let a tesseract pass on a real invoice —
-    one sum out of three, and twelve «items» that were the shop's phone number
-    and the terminal window behind the paper — look like a complete read and
-    stop the climb.
+    Money, near enough: the items are a tiebreaker worth less than any one sum.
+    Counting them heavily is what let a tesseract pass on a real invoice — one
+    sum out of three, and twelve «items» that were the shop's phone number and
+    the terminal window behind the paper — look like a complete read and stop
+    the climb.
     """
-    parsed = parse_work_order(text)
     return (
         10 * (parsed.total_cost is not None)
         + 20 * (parsed.parts_cost is not None)
@@ -270,25 +307,116 @@ def _work_order_score(text: str) -> int:
     )
 
 
+def _work_order_score(text: str) -> int:
+    return _score_of(parse_work_order(text))
+
+
 # All three sums. Anything less is worth one free call to a better reader — and
 # an order that genuinely prints no split simply costs that call and keeps what
 # it had.
 _ORDER_ENOUGH = 50
 
 
+_ORDER_PROMPT = """\
+Це фото українського наряду-замовлення або рахунку-фактури зі СТО.
+Поверни СУВОРО один JSON-обʼєкт без пояснень:
+{"parts_cost": число або null, "labor_cost": число або null,
+ "total_cost": число або null, "date": "YYYY-MM-DD" або null,
+ "items": ["назва позиції", ...]}
+
+- labor_cost — разом за роботи; parts_cost — разом за запчастини й матеріали;
+  total_cost — сума до сплати.
+- УВАГА: слово «Разом» може стояти двічі й означати різне — під заголовком
+  «Вартість робіт» це роботи, під «Вартість придбаних товарів та матеріалів» —
+  запчастини. Дивись, під яким заголовком стоїть сума.
+- items — лише виконані роботи і встановлені запчастини. НЕ включай реквізити
+  СТО, дані клієнта, авто, шапки таблиць і підсумкові рядки.
+- Числа з десятковою крапкою. Не вигадуй: чого не видно — null.
+"""
+
+
+def parsed_work_order_from_llm(data: Any) -> Optional[ParsedWorkOrder]:
+    """Map the model's JSON, believing none of it without checking.
+
+    A vision model is a reader, not a source of truth: it will hand back a
+    plausible number as readily as a real one, and this record is what the car
+    is sold on.
+    """
+    if not isinstance(data, dict):
+        return None
+
+    def money(value: Any) -> Optional[float]:
+        if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+            return None
+        try:
+            amount = float(str(value).replace(",", ".").strip())
+        except ValueError:
+            return None
+        return amount if amount > 0 else None
+
+    items = [
+        str(item).strip()[:120]
+        for item in (data.get("items") or [])
+        if isinstance(item, (str, int, float)) and str(item).strip()
+    ]
+    result = ParsedWorkOrder(
+        items=items,
+        parts_cost=money(data.get("parts_cost")),
+        labor_cost=money(data.get("labor_cost")),
+        total_cost=money(data.get("total_cost")),
+        date=_as_past_date_str(data.get("date")),
+    )
+    # The same arithmetic the text parser is held to. A model that read one of
+    # the three wrong has no way to know it, so the split goes rather than the
+    # user trusting a number that does not add up.
+    if result.total_cost and result.parts_cost and result.labor_cost:
+        drift = abs(result.parts_cost + result.labor_cost - result.total_cost)
+        if drift > max(1.0, result.total_cost * 0.02):
+            result.parts_cost = None
+            result.labor_cost = None
+    if result.total_cost is None and (result.parts_cost or result.labor_cost):
+        result.total_cost = round((result.parts_cost or 0) + (result.labor_cost or 0), 2)
+    return result
+
+
+def _as_past_date_str(value: Any) -> Optional[str]:
+    parsed = _as_past_date(value)
+    return parsed.isoformat() if parsed else None
+
+
 def recognize_work_order(
     image_bytes: bytes, content_type: str = "image/jpeg"
 ) -> ParsedWorkOrder:
-    """Read a service order off a photo.
+    """Read a service order off a photo: the free rungs, then the model.
 
-    Stops before the vision rung: a наряд is printed text on A4, which OCR.space
-    reads well, and there is no paid model configured to fall back to anyway.
+    The model is genuinely better at this — on a real invoice it read all eight
+    line items to the regex parser's six, and cleanly. It still goes last and
+    only when the free rungs came up short, because it is the only rung that
+    costs money.
     """
-    return parse_work_order(
+    parsed = parse_work_order(
         read_text(
             image_bytes, content_type, _work_order_score, _ORDER_ENOUGH, is_table=True
         )
     )
+    if _work_order_score(parsed.raw_text) >= _ORDER_ENOUGH or not settings.GEMINI_API_KEY:
+        return parsed
+
+    try:
+        data = _ask_gemini(_ORDER_PROMPT, image_bytes, content_type)
+    except Exception:
+        logger.warning("Vision fallback failed, keeping the local result", exc_info=True)
+        return parsed
+    if data is None:
+        return parsed
+    llm_parsed = parsed_work_order_from_llm(data)
+    if llm_parsed is None:
+        return parsed
+    # Keep the text the free rungs read either way: it is what a wrong answer is
+    # diagnosed from, and the model returns none.
+    llm_parsed.raw_text = parsed.raw_text
+    return llm_parsed if _score_of(llm_parsed) > _score_of(parsed) else parsed
+
 
 
 @dataclass

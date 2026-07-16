@@ -1,13 +1,15 @@
 """Service interval endpoints with computed status/prediction fields."""
 
+from collections.abc import Sequence
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.access import ROLE_EDITOR, ROLE_OWNER, ROLE_VIEWER, get_accessible_car
 from app.auth import get_current_user
 from app.database import get_db
-from app.models import Car, ServiceInterval, User
+from app.models import Car, LogEntry, ServiceInterval, User
 from app.routers.cars import car_avg_daily_km, get_owned_car
 from app.schemas import (
     IntervalCompleteIn,
@@ -19,6 +21,7 @@ from app.schemas import (
     ServiceIntervalCreate,
     ServiceIntervalUpdate,
 )
+from app.services.forecast import estimate_interval_cost
 from app.services.intervals import compute_interval_status
 from app.services.intervals_complete import complete_interval
 from app.services.presets import COMPLIANCE_PRESETS, MAINTENANCE_PRESETS
@@ -52,12 +55,40 @@ def get_owned_interval(
     return interval
 
 
-def serialize_interval(db: Session, interval: ServiceInterval, car: Car) -> IntervalStatusOut:
+def _car_logs(db: Session, car: Car) -> list[LogEntry]:
+    return list(
+        db.execute(
+            select(LogEntry)
+            .where(LogEntry.car_id == car.id)
+            .options(
+                selectinload(LogEntry.maintenance),
+                selectinload(LogEntry.repair),
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+
+def serialize_interval(
+    db: Session,
+    interval: ServiceInterval,
+    car: Car,
+    logs: Sequence[LogEntry] | None = None,
+) -> IntervalStatusOut:
+    """One interval with its status and what the next one will likely cost.
+
+    ``logs`` is passed in by the list route, which reads them once for the whole
+    garage; a single-interval caller lets this fetch its own.
+    """
     computed = compute_interval_status(
         interval=interval,
         current_odometer=car.current_odometer,
         avg_daily_km=car_avg_daily_km(db, car),
     )
+    if logs is None:
+        logs = _car_logs(db, car)
+    estimate = estimate_interval_cost(interval.title, logs, car)
     return IntervalStatusOut(
         id=interval.id,
         car_id=interval.car_id,
@@ -67,6 +98,8 @@ def serialize_interval(db: Session, interval: ServiceInterval, car: Car) -> Inte
         last_odometer=interval.last_odometer,
         last_date=interval.last_date,
         updated_at=interval.updated_at,
+        estimated_cost=estimate.amount if estimate else None,
+        estimated_cost_source=estimate.source if estimate else None,
         **computed,
     )
 
@@ -97,7 +130,10 @@ def list_intervals(
         .scalars()
         .all()
     )
-    return [serialize_interval(db, interval, car) for interval in intervals]
+    # Read once for the whole list: the estimate needs the car's history, and
+    # fetching it per interval is the same query N times.
+    logs = _car_logs(db, car)
+    return [serialize_interval(db, interval, car, logs) for interval in intervals]
 
 
 @router.post(

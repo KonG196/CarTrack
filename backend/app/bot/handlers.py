@@ -380,6 +380,52 @@ async def cmd_digest(message: Message, command: CommandObject) -> None:
         await message.answer(DIGEST_STATE_TEMPLATE.format(state=state))
 
 
+@router.message(Command("note"))
+async def cmd_note(message: Message, command: CommandObject) -> None:
+    text = (command.args or "").strip()
+    with SessionLocal() as db:
+        user = service.get_user_by_chat(db, str(message.chat.id))
+        if user is None:
+            await message.answer(NOT_LINKED_TEXT)
+            return
+
+        if text:
+            car = service.set_scratchpad(db, user, text)
+            if car is None:
+                owned = service.list_owned_cars(db, user)
+                if not owned:
+                    await message.answer("Спочатку додайте авто у застосунку.")
+                else:
+                    await message.answer(
+                        "У вас кілька авто — відредагуйте нотатку в застосунку "
+                        "(Налаштування → авто → Редагувати)."
+                    )
+                return
+            await message.answer(
+                f"📝 Нотатку до {service.car_label(car, user)} збережено."
+            )
+            return
+
+        pads = [
+            (car, note)
+            for car, note in service.get_scratchpads(db, user)
+            if note and note.strip()
+        ]
+        if not pads:
+            await message.answer(
+                "Нотаток ще немає. Напишіть, наприклад:\n"
+                "/note ворота у дворі — код 1234, СТО 067 000 00 00"
+            )
+            return
+        if len(pads) == 1:
+            await message.answer(f"📝 {pads[0][1]}")
+        else:
+            blocks = [
+                f"📝 {service.car_label(car, user)}:\n{note}" for car, note in pads
+            ]
+            await message.answer("\n\n".join(blocks))
+
+
 @router.message(F.photo)
 async def handle_photo(message: Message, bot: Bot) -> None:
     with SessionLocal() as db:
@@ -1047,6 +1093,29 @@ async def handle_unknown(message: Message) -> None:
     silence, which reads as a broken bot rather than a misunderstood one.
     """
     await message.answer(UNKNOWN_TEXT, reply_markup=MAIN_KEYBOARD)
+
+
+@router.callback_query(F.data.startswith("rotate:"))
+async def cb_tire_rotate(callback: CallbackQuery) -> None:
+    message = callback.message
+    if not isinstance(message, Message):
+        await callback.answer("Повідомлення застаріло")
+        return
+    try:
+        tire_set_id = int((callback.data or "").split(":")[1])
+    except (IndexError, ValueError):
+        await callback.answer("Некоректні дані")
+        return
+    with SessionLocal() as db:
+        user = service.get_user_by_chat(db, str(message.chat.id))
+        tire_set = None if user is None else service.rotate_tire_set(db, user, tire_set_id)
+        if tire_set is None:
+            await callback.answer("Не вдалося записати ротацію")
+            return
+        await message.answer(
+            "🛞 Записав ротацію вісей. Наступне нагадування — через 10 000 км."
+        )
+    await callback.answer()
 
 
 @router.callback_query(F.data.startswith("snooze:"))

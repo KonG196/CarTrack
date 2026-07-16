@@ -242,7 +242,7 @@ export default function LogDetail() {
         </>
       ) : (
         <>
-          <Card>
+          <Card data-tour="log-detail">
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-3">
                 <span

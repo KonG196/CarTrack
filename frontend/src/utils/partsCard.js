@@ -15,10 +15,15 @@ const SHOP_RELEVANT = [
   { match: ['код фарби', 'фарба'], label: 'Фарба' },
 ];
 
+// Brand, model, and the generation — «Golf 7 (BA5)», which a parts shop does
+// need. The colour is not: `generation` is free text and often holds both
+// («7 (BA5), Urano Gray»), so everything after the first comma is dropped. That
+// is where the register puts the colour, and a shop selling a filter has no use
+// for the paint.
 export function carTitle(car) {
   if (!car) return '';
-  const parts = [car.brand, car.model, car.generation, car.year && `${car.year} р.`];
-  return parts.filter(Boolean).join(' ');
+  const generation = car.generation ? car.generation.split(',')[0].trim() : '';
+  return [car.brand, car.model, generation].filter(Boolean).join(' ');
 }
 
 function pickShopSpecs(specs) {
@@ -35,17 +40,16 @@ function pickShopSpecs(specs) {
 // A single message a shop can read: what the car is, what identifies it, and
 // the numbers that decide which part fits. Anything unknown is simply absent —
 // a line saying «Двигун: —» would waste the reader's attention.
+//
+// Short on purpose. The odometer is not here: it tells a parts shop nothing and
+// changes every week, so pasting it only dates the message.
 export function buildSpecsMessage(car, specs) {
   if (!car) return '';
   const lines = [carTitle(car)];
-  if (car.engine) lines[0] += `, двигун ${car.engine}`;
+  if (car.engine) lines[0] += `, ${car.engine}`;
   if (car.vin) lines.push(`VIN: ${car.vin}`);
-  if (car.plate) lines.push(`Номер: ${car.plate}`);
   const shopSpecs = pickShopSpecs(specs);
   if (shopSpecs.length) lines.push(...shopSpecs);
-  if (car.current_odometer != null) {
-    lines.push(`Пробіг: ${Math.round(car.current_odometer)} км`);
-  }
   return lines.join('\n');
 }
 

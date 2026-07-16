@@ -98,6 +98,28 @@ class UserCreate(BaseModel):
         return value
 
 
+class PasswordChangeIn(BaseModel):
+    # The current password is not ceremony: a session left open on a borrowed
+    # laptop must not be enough to take the account.
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=6, max_length=128)
+
+
+class EmailChangeIn(BaseModel):
+    new_email: str = Field(min_length=3, max_length=255)
+    password: str = Field(min_length=1, max_length=128)
+
+
+class EmailChangeOut(BaseModel):
+    # Where the code went, so the UI can say it plainly instead of «check your
+    # email» when there are now two of them in play.
+    pending_email: str
+
+
+class EmailChangeConfirmIn(BaseModel):
+    code: str = Field(min_length=1, max_length=16)
+
+
 class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -106,6 +128,17 @@ class UserOut(BaseModel):
     # How the user is signed on a shared car; None means «use the email
     # handle» (models.User.label decides that, not the client).
     display_name: Optional[str] = None
+    # An address awaiting its code. Shown so the user knows a change is in
+    # flight and where to look for it.
+    pending_email: Optional[str] = None
+    # Notification switches, surfaced so the web can toggle them too — the bot
+    # was the only place before. reminders_enabled is the ТО reminders; the rest
+    # are the per-type smart pushes.
+    digest_enabled: bool = True
+    reminders_enabled: bool = True
+    notify_fuel: bool = True
+    notify_seasonal: bool = True
+    notify_rotation: bool = True
     created_at: dt.datetime
 
 
@@ -127,6 +160,11 @@ def _clean_display_name(value: Optional[str]) -> Optional[str]:
 
 class UserUpdate(BaseModel):
     display_name: Optional[str] = None
+    digest_enabled: Optional[bool] = None
+    reminders_enabled: Optional[bool] = None
+    notify_fuel: Optional[bool] = None
+    notify_seasonal: Optional[bool] = None
+    notify_rotation: Optional[bool] = None
 
     @field_validator("display_name")
     @classmethod
@@ -247,6 +285,12 @@ class CarCreate(CarBase):
     avg_daily_km_override: Optional[float] = Field(default=None, gt=0)
     tank_liters: Optional[float] = Field(default=None, gt=0)
     monthly_budget: Optional[float] = Field(default=None, gt=0)
+    scratchpad: Optional[str] = Field(default=None, max_length=2000)
+    contact_phone: Optional[str] = Field(default=None, max_length=30)
+    insurance_number: Optional[str] = Field(default=None, max_length=50)
+    insurance_until: Optional[dt.date] = None
+    tire_pressure: Optional[str] = Field(default=None, max_length=50)
+    fuel_approval: Optional[str] = Field(default=None, max_length=120)
 
 
 class CarUpdate(CarBase):
@@ -262,6 +306,12 @@ class CarUpdate(CarBase):
     avg_daily_km_override: Optional[float] = Field(default=None, gt=0)
     tank_liters: Optional[float] = Field(default=None, gt=0)
     monthly_budget: Optional[float] = Field(default=None, gt=0)
+    scratchpad: Optional[str] = Field(default=None, max_length=2000)
+    contact_phone: Optional[str] = Field(default=None, max_length=30)
+    insurance_number: Optional[str] = Field(default=None, max_length=50)
+    insurance_until: Optional[dt.date] = None
+    tire_pressure: Optional[str] = Field(default=None, max_length=50)
+    fuel_approval: Optional[str] = Field(default=None, max_length=120)
 
 
 class CarOut(BaseModel):
@@ -287,6 +337,17 @@ class CarOut(BaseModel):
     tank_liters: Optional[float]
     # The owner's monthly spending limit, ₴. NULL = no budget at all.
     monthly_budget: Optional[float]
+    # The driver's free-text cheat sheet (gate codes, service phones). NULL/empty
+    # until written; editable from the web and via the bot's /note.
+    scratchpad: Optional[str] = None
+    # QR-passport fields. public_token is present once a passport link is minted
+    # (NULL after revoke); the rest are the owner-entered facts the passport shows.
+    public_token: Optional[str] = None
+    contact_phone: Optional[str] = None
+    insurance_number: Optional[str] = None
+    insurance_until: Optional[dt.date] = None
+    tire_pressure: Optional[str] = None
+    fuel_approval: Optional[str] = None
     # The effective fuel kinds this car's refuels actually used, resolved, so
     # legacy NULL rows read as the car's own type. Empty without refuels, one
     # entry for a single-fuel car. The refuel form shows its fuel selector
@@ -299,6 +360,35 @@ class CarOut(BaseModel):
     your_role: str
     created_at: dt.datetime
     updated_at: Optional[dt.datetime]
+
+
+class PassportTokenOut(BaseModel):
+    """The minted passport link and a ready-to-print QR of it."""
+
+    token: str
+    url: str
+    # An inline SVG of the QR — the web renders it directly, no image request
+    # and no client-side QR library.
+    qr_svg: str
+
+
+class PublicCarPassport(BaseModel):
+    """The tokenless public view of a car — only what a service or a stranger
+    who finds it parked needs. No owner identity, no journal, no analytics."""
+
+    brand: str
+    model: str
+    generation: Optional[str] = None
+    engine: Optional[str] = None
+    year: int
+    plate: Optional[str] = None
+    vin: Optional[str] = None
+    fuel_type: FuelType
+    contact_phone: Optional[str] = None
+    insurance_number: Optional[str] = None
+    insurance_until: Optional[dt.date] = None
+    tire_pressure: Optional[str] = None
+    fuel_approval: Optional[str] = None
 
 
 # Sharing: members and invites
@@ -602,6 +692,11 @@ class IntervalStatusOut(BaseModel):
     health_pct: float
     status: IntervalHealth
     updated_at: Optional[dt.datetime]
+    # What the next one will likely cost, so «Виконано» opens on a number
+    # instead of a zero. Same contract as the forecast: source says whose
+    # number it is.
+    estimated_cost: Optional[float] = None
+    estimated_cost_source: Optional[str] = None
 
 
 class IntervalCompleteIn(BaseModel):
@@ -726,6 +821,9 @@ class TireSetOut(BaseModel):
     # Computed, not stored: models.TireSet.km_on_set reads it off the car's
     # current odometer, so it is right without anything writing it.
     km_on_set: Optional[int] = None
+    # Kilometres since the last axle rotation (or install) — drives the «rotate»
+    # nudge and the button's subtitle. None for a shelf set.
+    km_since_rotation: Optional[int] = None
 
 
 # Analytics
@@ -802,6 +900,10 @@ class ForecastUpcomingItem(BaseModel):
     km_left: Optional[int]
     days_left: Optional[int]
     estimated_cost: Optional[float]
+    # "history" | "baseline" — where the number came from. The client must say
+    # which: a market ballpark shown as if it were the user's own record is a
+    # number nobody has a reason to double-check.
+    estimated_cost_source: Optional[str] = None
 
 
 class Forecast(BaseModel):
@@ -839,14 +941,44 @@ class BudgetOut(BaseModel):
     status: BudgetStatus
 
 
+class Tco(BaseModel):
+    """Honest cost of ownership: all logged spend over the car's real usage.
+
+    ``cost_per_km`` divides every hryvnia (fuel, service, repairs, expenses) by
+    the odometer span; ``cost_per_day`` divides it by the days between the first
+    and last log. Each is None until two logs span a distance / a day.
+    """
+
+    distance_km: Optional[int] = None
+    days: Optional[int] = None
+    cost_per_km: Optional[float] = None
+    cost_per_day: Optional[float] = None
+
+
+class LpgSavings(BaseModel):
+    """Money the gas tank saved over petrol, from the car's own measured rates.
+
+    Present only on a dual-fuel car with measured segments of both fuels where
+    gas actually came out cheaper.
+    """
+
+    gas_distance_km: int
+    saved_per_km: float
+    saved_total: float
+
+
 class AnalyticsOut(BaseModel):
     totals: Totals
+    tco: Tco = Field(default_factory=Tco)
     monthly: list[MonthlyBucket]
     # All-time expense spend per category; only categories with entries appear
     # (pre-0004 expenses count under DEFAULT_EXPENSE_CATEGORY).
     expense_by_category: dict[str, float] = Field(default_factory=dict)
     # Per-station refuel breakdown, most expensive station first.
     stations: list[StationStat] = Field(default_factory=list)
+    # What the gas tank saved over petrol; None unless a dual-fuel car with
+    # measured segments of both fuels where gas was the cheaper.
+    lpg_savings: Optional[LpgSavings] = None
     fuel: FuelStatsOut
     # Every refuel's price per litre, oldest first, capped at the most recent
     # PRICE_HISTORY_LIMIT. Kept flat and kind-tagged rather than pre-split

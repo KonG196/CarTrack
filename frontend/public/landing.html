@@ -149,8 +149,10 @@ h2{font-size:clamp(1.4rem,3vw,2rem)}
 /* ---------- шапка ---------- */
 .top{padding-block:22px}
 .top .wrap{display:flex; align-items:center; justify-content:space-between; gap:16px}
-.mark{font-family:var(--disp); font-weight:600; font-size:.95rem; letter-spacing:.02em; text-decoration:none}
+.mark{display:inline-flex; align-items:center; gap:9px; font-family:var(--disp); font-weight:600; font-size:.95rem; letter-spacing:.02em; text-decoration:none; color:var(--fg)}
+.mark img{height:30px; width:auto}
 .mark b{color:var(--amber); font-weight:600}
+.mark .tk{margin-left:.35em; font-size:.62em; letter-spacing:.13em; color:var(--mist)}
 .top .btn{padding:10px 18px; font-size:.9rem}
 
 /* ---------- hero ---------- */
@@ -323,7 +325,7 @@ footer .wrap span:last-child{font-family:var(--mono); font-size:.75rem}
 
 <header class="top">
   <div class="wrap">
-    <a class="mark" href="/">KAPOT <b>TRACKER</b></a>
+    <a class="mark" href="/"><img src="/logo-mark-white.png" alt="" aria-hidden="true"><b>KAPOT</b><span class="tk">TRACKER</span></a>
     <a class="btn btn-ghost" href="/">Відкрити застосунок</a>
   </div>
 </header>

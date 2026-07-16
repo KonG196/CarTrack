@@ -158,6 +158,34 @@ def install_tire_set(
 
     tire_set.is_installed = True
     tire_set.odometer_at_install = car.current_odometer
+    # A freshly mounted set starts its rotation clock now.
+    tire_set.odometer_at_rotation = car.current_odometer
+    tire_set.rotation_reminded_km = None
+    db.commit()
+    db.refresh(tire_set)
+    return tire_set
+
+
+@router.post("/tires/{tire_set_id}/rotate", response_model=TireSetOut)
+def rotate_tire_set(
+    tire_set_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> TireSet:
+    """Record an axle rotation: reset this set's rotation clock to now.
+
+    Only the set on the car can be rotated — a shelf set is not turning any
+    wheels. The next nudge is then 10 000 km of driving away.
+    """
+    tire_set = get_owned_tire_set(db, current_user, tire_set_id)
+    if not tire_set.is_installed:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Rotate the set that is on the car",
+        )
+    car = db.execute(select(Car).where(Car.id == tire_set.car_id)).scalar_one()
+    tire_set.odometer_at_rotation = car.current_odometer
+    tire_set.rotation_reminded_km = None
     db.commit()
     db.refresh(tire_set)
     return tire_set

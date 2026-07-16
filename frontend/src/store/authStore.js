@@ -44,6 +44,12 @@ export const useAuthStore = create((set, get) => ({
     return user;
   },
 
+  async updateSettings(payload) {
+    const user = await authApi.updateProfile(payload);
+    set({ user });
+    return user;
+  },
+
   logout() {
     localStorage.removeItem(TOKEN_KEY);
     set({ token: null, user: null });

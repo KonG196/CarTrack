@@ -13,7 +13,7 @@ import {
 } from '../api/documents';
 import { formatDate } from '../utils/format';
 import { canDo } from '../utils/permissions';
-import { Button, TextField, SelectField, Card, Spinner, ErrorMessage, ConfirmDialog } from './UI';
+import { Button, DateField, TextField, SelectField, Card, Spinner, ErrorMessage, ConfirmDialog } from './UI';
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 const ACCEPT = 'image/*,application/pdf';
@@ -61,11 +61,11 @@ function DocumentForm({ onSubmit, onCancel }) {
     <form onSubmit={handleSubmit} className="space-y-3">
       <SelectField label="Вид" value={form.kind} onChange={set('kind')} options={DOCUMENT_KINDS} />
       <TextField label="Назва" required value={form.title} onChange={set('title')} />
-      <TextField
+      <DateField
         label="Діє до"
-        type="date"
+        clearable
         value={form.expires_at}
-        onChange={set('expires_at')}
+        onChange={(v) => setForm((f) => ({ ...f, expires_at: v }))}
         hint={
           linksReminder
             ? 'Нагадаємо за 14 днів до кінця дії'

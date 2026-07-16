@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import datetime as dt
 import math
+import statistics
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Optional, Protocol
@@ -248,3 +249,69 @@ def compute_stats_per_kind(refuels: Sequence[RefuelPoint]) -> dict[str, FuelStat
         kind: compute_fuel_stats(refuels, fuel_kind=kind)
         for kind in fuel_kinds_present(refuels)
     }
+
+
+# --- Consumption watchdog ---------------------------------------------------
+# A car's normal consumption is whatever it has been showing lately, so the
+# baseline is the car compared with itself — the median of its own recent
+# segments. That adapts to any car (a hybrid, a diesel, a heavy SUV) with no
+# reference table to keep, and only flags a jump the driver has not seen before.
+
+#: A new segment must run this far above the baseline to be worth a warning.
+CONSUMPTION_SPIKE_RATIO = 1.15  # +15%
+#: How many prior segments the baseline median is taken over, at most.
+CONSUMPTION_BASELINE_WINDOW = 5
+#: And at least this many, so a single odd fill cannot set a shaky baseline.
+CONSUMPTION_MIN_BASELINE = 3
+
+
+@dataclass(frozen=True)
+class ConsumptionSpike:
+    """The latest full-to-full segment running over a car's own recent norm."""
+
+    fuel_kind: str
+    log_id: int  # the closing refuel — the dedup key, so a spike alerts once
+    date: dt.date
+    consumption_l_100km: float
+    baseline_l_100km: float
+    pct_over: int
+
+
+def detect_consumption_spike(
+    stats_per_kind: dict[str, FuelStats],
+) -> ConsumptionSpike | None:
+    """The newest segment that beats its fuel's recent median by the threshold.
+
+    Each fuel is judged on its own history (petrol and gas never share a
+    baseline). Only the LATEST segment of a kind is a candidate — an old spike
+    was either already alerted or is water under the bridge. Returns the spike
+    with the newest closing refuel across kinds, or None when nothing qualifies
+    or there is not yet enough history for a baseline.
+    """
+    best: ConsumptionSpike | None = None
+    for kind, stats in stats_per_kind.items():
+        history = stats.history
+        if len(history) < CONSUMPTION_MIN_BASELINE + 1:
+            continue
+        latest = history[-1]
+        if latest.log_id is None:
+            continue
+        prior = history[-1 - CONSUMPTION_BASELINE_WINDOW : -1]
+        if len(prior) < CONSUMPTION_MIN_BASELINE:
+            continue
+        baseline = statistics.median(segment.consumption_l_100km for segment in prior)
+        if baseline <= 0:
+            continue
+        if latest.consumption_l_100km <= baseline * CONSUMPTION_SPIKE_RATIO:
+            continue
+        spike = ConsumptionSpike(
+            fuel_kind=kind,
+            log_id=latest.log_id,
+            date=latest.date,
+            consumption_l_100km=latest.consumption_l_100km,
+            baseline_l_100km=round(baseline, 2),
+            pct_over=round((latest.consumption_l_100km / baseline - 1) * 100),
+        )
+        if best is None or spike.log_id > best.log_id:
+            best = spike
+    return best

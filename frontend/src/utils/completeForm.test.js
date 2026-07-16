@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  costEstimateSource,
   emptyCompleteValues,
   sumCostTotal,
   validateCompleteValues,
@@ -144,5 +145,44 @@ describe('completeValuesToPayload', () => {
     expect(payload.total_cost).toBe(11.75);
     expect(payload.parts_cost).toBe(10.5);
     expect(payload.labor_cost).toBe(1.25);
+  });
+});
+
+describe('the prefilled cost', () => {
+  it('opens on what this car actually paid', () => {
+    const values = emptyCompleteValues({
+      car,
+      interval: { ...interval, estimated_cost: 5600, estimated_cost_source: 'history' },
+    });
+    expect(values.totalCost).toBe('5600');
+    expect(costEstimateSource({ ...interval, estimated_cost: 5600, estimated_cost_source: 'history' })).toBe(
+      'history',
+    );
+  });
+
+  it('opens on the market ballpark when the car has no history', () => {
+    const values = emptyCompleteValues({
+      car,
+      interval: { ...interval, estimated_cost: 3500, estimated_cost_source: 'baseline' },
+    });
+    expect(values.totalCost).toBe('3500');
+  });
+
+  it('says which of the two it is, because they are not the same claim', () => {
+    // The green «your price» mark carries the weight of the user's own records.
+    // A market guess must never borrow it, or nothing prompts them to check.
+    expect(costEstimateSource({ estimated_cost: 3500, estimated_cost_source: 'baseline' })).toBe(
+      'baseline',
+    );
+    expect(costEstimateSource({ estimated_cost: 5600, estimated_cost_source: 'history' })).toBe(
+      'history',
+    );
+  });
+
+  it('falls back to zero only when there is no estimate at all', () => {
+    // A policy or a tax has no honest ballpark, so the field stays as it was.
+    expect(emptyCompleteValues({ car, interval }).totalCost).toBe('0');
+    expect(costEstimateSource(interval)).toBeNull();
+    expect(costEstimateSource(undefined)).toBeNull();
   });
 });

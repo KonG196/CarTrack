@@ -6,12 +6,20 @@ import calendar
 import datetime as dt
 import re
 from collections.abc import Sequence
+from dataclasses import dataclass
 from statistics import median
+from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models import Car, LogEntry, ServiceInterval
+from app.services.baseline_costs import (
+    CarProfile,
+    baseline_cost,
+    parse_displacement,
+    parse_spec_litres,
+)
 from app.services.intervals import compute_interval_status, effective_avg_daily_km
 
 UPCOMING_HORIZON_DAYS = 90
@@ -143,21 +151,65 @@ def compute_projected_month_total(
     return round(spent_this_month + daily_rate * remaining_days, 2)
 
 
-def estimate_interval_cost(interval_title: str, logs: Sequence[LogEntry]) -> float | None:
+@dataclass(frozen=True)
+class CostEstimate:
+    amount: float
+    # "history" — what this car was actually charged; "baseline" — a market
+    # ballpark that knows nothing about this car. The two must never look alike
+    # on screen: a guess wearing the authority of the user's own records is a
+    # number they have no reason to check.
+    source: str
+
+
+def car_profile(car: Optional[Car]) -> CarProfile:
+    """What the ballpark is allowed to know about this car.
+
+    The oil volume comes off the owner's own spec sheet when they filled it —
+    «Олива двигуна: ~4.6 л» is a fact transcribed from a service passport, and
+    nothing derived can beat it. Otherwise the engine field is read for a
+    displacement to derive one from.
+    """
+    if car is None:
+        return CarProfile()
+    oil_litres: Optional[float] = None
+    for spec in car.specs or []:
+        if "олив" in spec.name.lower() or "масл" in spec.name.lower():
+            oil_litres = parse_spec_litres(spec.value)
+            if oil_litres:
+                break
+    return CarProfile(
+        fuel_type=car.fuel_type,
+        displacement_l=parse_displacement(car.engine),
+        oil_litres=oil_litres,
+    )
+
+
+def estimate_interval_cost(
+    interval_title: str,
+    logs: Sequence[LogEntry],
+    car: Optional[Car] = None,
+) -> Optional[CostEstimate]:
+    """What the next one will cost: this car's own history, else the market.
+
+    History wins whenever there is any — it knows the car, the shop and the city,
+    and none of those are things a table can know.
+    """
     title_keywords = normalize_keywords(interval_title)
-    if not title_keywords:
-        return None
-
     matched_costs: list[float] = []
-    for log in logs:
-        if log.type not in ("maintenance", "repair"):
-            continue
-        if title_keywords & normalize_keywords(_log_service_text(log)):
-            matched_costs.append(float(log.total_cost or 0))
+    if title_keywords:
+        for log in logs:
+            if log.type not in ("maintenance", "repair"):
+                continue
+            if title_keywords & normalize_keywords(_log_service_text(log)):
+                matched_costs.append(float(log.total_cost or 0))
 
-    if not matched_costs:
+    if matched_costs:
+        return CostEstimate(round(median(matched_costs), 2), "history")
+
+    ballpark = baseline_cost(interval_title, car_profile(car))
+    if ballpark is None:
         return None
-    return round(median(matched_costs), 2)
+    return CostEstimate(ballpark, "baseline")
 
 
 def build_forecast(
@@ -212,6 +264,7 @@ def build_forecast(
         )
         if not include:
             continue
+        estimate = estimate_interval_cost(interval.title, logs, car)
         upcoming.append(
             {
                 "interval_id": interval.id,
@@ -219,7 +272,8 @@ def build_forecast(
                 "predicted_due_date": predicted,
                 "km_left": computed["km_left"],
                 "days_left": computed["days_left"],
-                "estimated_cost": estimate_interval_cost(interval.title, logs),
+                "estimated_cost": estimate.amount if estimate else None,
+                "estimated_cost_source": estimate.source if estimate else None,
             }
         )
 

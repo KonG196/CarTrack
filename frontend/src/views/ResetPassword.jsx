@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { requestPasswordReset, confirmPasswordReset } from '../api/auth';
 import { extractError } from '../api/client';
 import { Button, TextField, Card, ErrorMessage } from '../components/UI';
@@ -8,6 +8,7 @@ import Wordmark from '../components/Wordmark';
 
 export default function ResetPassword() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [step, setStep] = useState(1);
   const [email, setEmail] = useState('');
   const [channel, setChannel] = useState('email');
@@ -18,6 +19,20 @@ export default function ResetPassword() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState('');
+
+  // Magic link from the letter (/reset?email=&code=): prefill and jump to the
+  // new-password step, so the person only has to type the new password. Reset
+  // can't finish itself — a new password is still required.
+  useEffect(() => {
+    const mail = searchParams.get('email');
+    const value = searchParams.get('code');
+    if (mail && value) {
+      setEmail(mail);
+      setCode(value);
+      setStep(2);
+      setInfo('Залишилось задати новий пароль.');
+    }
+  }, [searchParams]);
 
   const handleRequest = async (e) => {
     e.preventDefault();

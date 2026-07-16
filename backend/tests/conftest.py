@@ -39,6 +39,10 @@ def _no_outside_calls(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "GEMINI_API_KEY", "")
     monkeypatch.setattr(settings, "OCR_SPACE_API_KEY", "")
     monkeypatch.setattr(settings, "OCR_SPACE_USE_DEMO_KEY", False)
+    # Cleared like the rest: a real key in .env (added for local plate-lookup
+    # testing) must not leak into the suite as live calls, and the
+    # «disabled without a key» test depends on it being empty.
+    monkeypatch.setattr(settings, "BAZA_GAI_API_KEY", "")
 
 
 @pytest.fixture(autouse=True)

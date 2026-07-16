@@ -225,6 +225,89 @@
     animation: kt-sweep 1.5s cubic-bezier(0.45, 0.05, 0.4, 0.95) infinite;
   }
 
+  /* A field the register filled in. It pulses green three times because the
+     user did not type it — something has to say so at the moment it happens,
+     and a static colour is missed by anyone already looking at another field. */
+  @keyframes kt-autofill-pulse {
+    0%,
+    100% {
+      border-color: #1d2a3e; /* edge */
+      box-shadow: 0 0 0 0 rgb(53 199 123 / 0);
+    }
+    50% {
+      border-color: rgb(53 199 123 / 0.9); /* ok */
+      box-shadow: 0 0 0 3px rgb(53 199 123 / 0.18);
+    }
+  }
+
+  /* The value itself arrives rather than blinking into place: without it a
+     seven-field form changes all at once and reads as a glitch. */
+  @keyframes kt-autofill-value {
+    from {
+      opacity: 0;
+      transform: translateY(-0.25rem);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Both on the control itself, because that is where the border lives. They
+     touch different properties, so they run together: the value drops in once,
+     the border keeps pulsing after it. */
+  .autofilled .field-input {
+    animation:
+      kt-autofill-value 0.28s ease-out both,
+      kt-autofill-pulse 0.6s ease-in-out 3;
+  }
+
+  /* Each tour step re-mounts the callout (keyed on step), so it slides up and
+     fades in — the movement that signals «new step» when the box itself stays
+     put at the foot of the screen. */
+  @keyframes kt-tour-callout {
+    from {
+      opacity: 0;
+      transform: translateY(0.5rem);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  .tour-callout {
+    animation: kt-tour-callout 0.22s ease-out both;
+  }
+
+  /* A looping «tap here» gesture on the spotlighted control: a soft ripple
+     emanating from a dot that presses in and out, like a finger tapping. It
+     tells the user this element is meant to be touched. */
+  @keyframes kt-tap-ripple {
+    0% {
+      transform: scale(0.5);
+      opacity: 0.55;
+    }
+    100% {
+      transform: scale(1.9);
+      opacity: 0;
+    }
+  }
+  @keyframes kt-tap-press {
+    0%,
+    100% {
+      transform: scale(1);
+    }
+    40% {
+      transform: scale(0.68);
+    }
+  }
+  .tour-tap-ripple {
+    animation: kt-tap-ripple 1.3s ease-out infinite;
+  }
+  .tour-tap-dot {
+    animation: kt-tap-press 1.3s ease-in-out infinite;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .modal-backdrop,
     .modal-backdrop[data-closing='true'],
@@ -237,12 +320,118 @@
     .rise-in,
     .stagger > *,
     .bar-fill,
-    .banner-drop {
+    .banner-drop,
+    .tour-callout,
+    .tour-tap-ripple,
+    .tour-tap-dot {
       animation: none;
+    }
+    /* No pulsing, but the mark itself stays: it is information, not decoration. */
+    .autofilled .field-input {
+      animation: none;
+      border-color: rgb(53 199 123 / 0.9);
     }
     .scan-beam {
       @apply top-1/2;
       animation: none;
     }
+  }
+}
+
+/* ── Переходи між сторінками (View Transitions API) ──────────────────────
+   Слайдиться лише контент (main = view-transition-name: page); хедер і нижня
+   навігація (root) лишаються на місці. Напрямок задається data-vt на <html>,
+   який ставиться перед навігацією. Де API немає (Firefox) — миттєвий перехід,
+   без анімації, застосунок працює як завжди. */
+main {
+  view-transition-name: page;
+}
+/* root = хедер + нав: без крос-фейду, просто стоять */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+}
+::view-transition-old(page),
+::view-transition-new(page) {
+  animation-duration: 0.32s;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  animation-fill-mode: both;
+}
+
+/* вправо (таба праворуч): стара їде вліво, нова заходить справа */
+html[data-vt='forward']::view-transition-old(page) {
+  animation-name: kt-vt-out-left;
+}
+html[data-vt='forward']::view-transition-new(page) {
+  animation-name: kt-vt-in-right;
+}
+/* вліво (таба ліворуч): дзеркально */
+html[data-vt='back']::view-transition-old(page) {
+  animation-name: kt-vt-out-right;
+}
+html[data-vt='back']::view-transition-new(page) {
+  animation-name: kt-vt-in-left;
+}
+/* «Додати» вилазить знизу вгору поверх сторінки, що стоїть */
+html[data-vt='up']::view-transition-old(page) {
+  animation-name: kt-vt-hold;
+}
+html[data-vt='up']::view-transition-new(page) {
+  animation-name: kt-vt-in-up;
+  z-index: 2;
+}
+/* закриття «Додати»: воно ховається вниз, сторінка під ним стоїть */
+html[data-vt='down']::view-transition-old(page) {
+  animation-name: kt-vt-out-down;
+  z-index: 2;
+}
+html[data-vt='down']::view-transition-new(page) {
+  animation-name: kt-vt-hold;
+  z-index: 1;
+}
+
+@keyframes kt-vt-in-right {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+@keyframes kt-vt-out-left {
+  from { transform: translateX(0); }
+  to { transform: translateX(-100%); }
+}
+@keyframes kt-vt-in-left {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+@keyframes kt-vt-out-right {
+  from { transform: translateX(0); }
+  to { transform: translateX(100%); }
+}
+@keyframes kt-vt-in-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+@keyframes kt-vt-out-down {
+  from { transform: translateY(0); }
+  to { transform: translateY(100%); }
+}
+@keyframes kt-vt-hold {
+  from { transform: none; }
+  to { transform: none; }
+}
+
+/* поки триває перехід — не програвати внутрішню появу сторінки, інакше знімок
+   ловить контент у нульовому кадрі (невидимий). Смуги ресурсу лишаємо — вони
+   доповнюють слайд. */
+html.vt .stagger > *,
+html.vt .rise-in {
+  animation: none;
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(page),
+  ::view-transition-new(page) {
+    animation: none;
   }
 }

@@ -10,16 +10,26 @@
 import { num } from './refuelMath';
 import { todayIso } from './entryForm';
 
+// A zero is a claim: it says this service was free. Nobody means that, so it
+// gets typed over every time — which makes it the worst possible default. The
+// estimate the interval carries is a better opening bid: right often enough to
+// keep, wrong in a way that is obvious.
 export function emptyCompleteValues({ car, interval } = {}) {
   return {
     odometer: car?.current_odometer != null ? String(car.current_odometer) : '',
     date: todayIso(),
-    totalCost: '0',
+    totalCost: interval?.estimated_cost != null ? String(interval.estimated_cost) : '0',
     partsCost: '',
     laborCost: '',
     items: interval?.title ? [interval.title] : [],
     notes: '',
   };
+}
+
+/** Where the prefilled cost came from: 'history' | 'baseline' | null. */
+export function costEstimateSource(interval) {
+  if (interval?.estimated_cost == null) return null;
+  return interval.estimated_cost_source ?? null;
 }
 
 export function sumCostTotal(partsCost, laborCost) {

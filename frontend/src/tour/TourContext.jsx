@@ -1,0 +1,99 @@
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+
+import { useAuthStore } from '../store/authStore';
+import { TOURS } from './tourSteps';
+
+// Which tours a user has already been shown, kept per account so a second
+// account on the same browser gets its own onboarding. Shape: { [userId]: [names] }.
+const SEEN_KEY = 'kapot_tours_seen';
+
+function readSeen() {
+  try {
+    return JSON.parse(localStorage.getItem(SEEN_KEY)) || {};
+  } catch {
+    return {};
+  }
+}
+
+function writeSeen(map) {
+  try {
+    localStorage.setItem(SEEN_KEY, JSON.stringify(map));
+  } catch {
+    /* private mode — tours simply auto-show again next time */
+  }
+}
+
+const TourContext = createContext(null);
+
+export function TourProvider({ children }) {
+  const userId = useAuthStore((s) => s.user?.id);
+  const seenKey = userId != null ? String(userId) : 'anon';
+
+  const [tour, setTour] = useState(null); // active tour name, or null
+  const [index, setIndex] = useState(0);
+  const [seen, setSeen] = useState(() => new Set(readSeen()[seenKey] || []));
+
+  // Reload the seen set when the account changes (login / switch).
+  useEffect(() => {
+    setSeen(new Set(readSeen()[seenKey] || []));
+  }, [seenKey]);
+
+  const markSeen = useCallback(
+    (name) => {
+      setSeen((prev) => {
+        if (prev.has(name)) return prev;
+        const nextSeen = new Set(prev);
+        nextSeen.add(name);
+        const map = readSeen();
+        map[seenKey] = [...nextSeen];
+        writeSeen(map);
+        return nextSeen;
+      });
+    },
+    [seenKey],
+  );
+
+  const wasSeen = useCallback((name) => seen.has(name), [seen]);
+
+  const start = useCallback(
+    (name) => {
+      if (!TOURS[name]) return;
+      setTour(name);
+      setIndex(0);
+      // Starting a tour (manually or automatically) means it never auto-shows
+      // again for this account.
+      markSeen(name);
+    },
+    [markSeen],
+  );
+
+  const stop = useCallback(() => setTour(null), []);
+
+  const steps = tour ? TOURS[tour].steps : [];
+
+  const next = useCallback(() => {
+    setIndex((i) => {
+      if (i >= steps.length - 1) {
+        stop();
+        return 0;
+      }
+      return i + 1;
+    });
+  }, [steps.length, stop]);
+
+  const prev = useCallback(() => setIndex((i) => Math.max(0, i - 1)), []);
+  const goTo = useCallback((i) => setIndex(i), []);
+
+  const value = useMemo(
+    () => ({ tour, steps, index, active: tour !== null, start, stop, next, prev, goTo, wasSeen }),
+    [tour, steps, index, start, stop, next, prev, goTo, wasSeen],
+  );
+
+  return <TourContext.Provider value={value}>{children}</TourContext.Provider>;
+}
+
+export function useTour() {
+  const ctx = useContext(TourContext);
+  if (!ctx) throw new Error('useTour must be used within TourProvider');
+  return ctx;
+}

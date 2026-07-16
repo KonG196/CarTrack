@@ -14,7 +14,8 @@ from app.access import (
 from app.auth import get_current_user
 from app.database import get_db
 from app.models import Car, LogEntry, RefuelDetails, User
-from app.schemas import CarCreate, CarOut, CarUpdate
+from app.schemas import CarCreate, CarOut, CarUpdate, PassportTokenOut
+from app.services import passport
 from app.services.fuel import resolve_fuel_kind
 from app.services.intervals import compute_avg_daily_km, effective_avg_daily_km
 
@@ -78,6 +79,13 @@ def serialize_car(db: Session, car: Car, user: User) -> CarOut:
         monthly_budget=(
             float(car.monthly_budget) if car.monthly_budget is not None else None
         ),
+        scratchpad=car.scratchpad,
+        public_token=car.public_token,
+        contact_phone=car.contact_phone,
+        insurance_number=car.insurance_number,
+        insurance_until=car.insurance_until,
+        tire_pressure=car.tire_pressure,
+        fuel_approval=car.fuel_approval,
         fuel_kinds_used=car_fuel_kinds_used(db, car),
         your_role=user_role_for_car(db, user, car) or ROLE_OWNER,
         created_at=car.created_at,
@@ -136,6 +144,40 @@ def update_car(
     db.commit()
     db.refresh(car)
     return serialize_car(db, car, current_user)
+
+
+@router.post("/{car_id}/passport-token", response_model=PassportTokenOut)
+def mint_passport_token(
+    car_id: int,
+    regenerate: bool = False,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> PassportTokenOut:
+    """Ensure a public passport link and return it with a printable QR.
+
+    Idempotent by default — pressing «generate» again shows the same link, so a
+    QR already in the glovebox keeps working. ``regenerate=true`` mints a fresh
+    token, revoking the old link.
+    """
+    car = get_owned_car(db, current_user, car_id)
+    if car.public_token is None or regenerate:
+        car.public_token = passport.new_token()
+        db.commit()
+    url = passport.passport_url(car.public_token)
+    return PassportTokenOut(token=car.public_token, url=url, qr_svg=passport.qr_svg(url))
+
+
+@router.delete("/{car_id}/passport-token", status_code=status.HTTP_204_NO_CONTENT)
+def revoke_passport_token(
+    car_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> None:
+    """Revoke the public passport link — the old URL 404s from then on."""
+    car = get_owned_car(db, current_user, car_id)
+    car.public_token = None
+    db.commit()
+    return None
 
 
 @router.delete("/{car_id}", status_code=status.HTTP_204_NO_CONTENT)

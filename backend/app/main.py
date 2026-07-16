@@ -21,6 +21,7 @@ from app.routers import (
     ocr,
     photos,
     plate,
+    public,
     reports,
     specs,
     telegram,
@@ -61,6 +62,7 @@ app.include_router(specs.router, prefix="/api")
 app.include_router(documents.router, prefix="/api")
 app.include_router(obd.router, prefix="/api")
 app.include_router(tires.router, prefix="/api")
+app.include_router(public.router, prefix="/api")
 app.include_router(plate.router, prefix="/api")
 
 

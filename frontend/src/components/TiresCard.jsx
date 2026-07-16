@@ -1,17 +1,21 @@
 import { useEffect, useState } from 'react';
-import { CircleDot, Plus, Trash2, Check, Gauge, CalendarDays } from 'lucide-react';
+import { CircleDot, Plus, Trash2, Check, Gauge, CalendarDays, RotateCw } from 'lucide-react';
 import { extractError } from '../api/client';
 import {
   getTireSets,
   createTireSet,
   deleteTireSet,
   installTireSet,
+  rotateTireSet,
   tireSeasonLabel,
   TIRE_SEASONS,
 } from '../api/tires';
+
+// Makers advise swapping the axles every ~10 000 km; past that the card nudges.
+const ROTATION_INTERVAL_KM = 10000;
 import { formatKm, formatDate } from '../utils/format';
 import { canDo } from '../utils/permissions';
-import { Button, TextField, SelectField, Card, Spinner, ErrorMessage, ConfirmDialog } from './UI';
+import { Button, DateField, TextField, SelectField, Card, Spinner, ErrorMessage, ConfirmDialog } from './UI';
 
 function TireForm({ onSubmit, onCancel }) {
   const [form, setForm] = useState({
@@ -70,11 +74,11 @@ function TireForm({ onSubmit, onCancel }) {
           onChange={set('dot_year')}
         />
       </div>
-      <TextField
+      <DateField
         label="Куплені"
-        type="date"
+        clearable
         value={form.purchased_at}
-        onChange={set('purchased_at')}
+        onChange={(v) => setForm((f) => ({ ...f, purchased_at: v }))}
       />
       <ErrorMessage>{error}</ErrorMessage>
       <div className="flex gap-2">
@@ -97,6 +101,7 @@ export default function TiresCard({ car, onToast }) {
   const [showForm, setShowForm] = useState(false);
   const [deletingSet, setDeletingSet] = useState(null);
   const [installingId, setInstallingId] = useState(null);
+  const [rotatingId, setRotatingId] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -140,6 +145,21 @@ export default function TiresCard({ car, onToast }) {
       setError(extractError(err, 'Не вдалося встановити комплект'));
     } finally {
       setInstallingId(null);
+    }
+  };
+
+  const handleRotate = async (tireSet) => {
+    if (rotatingId != null) return;
+    setError('');
+    setRotatingId(tireSet.id);
+    try {
+      await rotateTireSet(tireSet.id);
+      await reload();
+      onToast('Ротацію вісей записано');
+    } catch (err) {
+      setError(extractError(err, 'Не вдалося записати ротацію'));
+    } finally {
+      setRotatingId(null);
     }
   };
 
@@ -227,6 +247,32 @@ export default function TiresCard({ car, onToast }) {
                     </span>
                   )}
                 </p>
+                {tireSet.is_installed && tireSet.km_since_rotation != null && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <span
+                      className={`text-xs ${
+                        tireSet.km_since_rotation >= ROTATION_INTERVAL_KM
+                          ? 'font-medium text-amber'
+                          : 'text-mist'
+                      }`}
+                    >
+                      {tireSet.km_since_rotation >= ROTATION_INTERVAL_KM
+                        ? `Час на ротацію: ${formatKm(tireSet.km_since_rotation)} від останньої`
+                        : `${formatKm(tireSet.km_since_rotation)} від ротації вісей`}
+                    </span>
+                    {canManage && (
+                      <Button
+                        variant="secondary"
+                        onClick={() => handleRotate(tireSet)}
+                        disabled={rotatingId != null}
+                        className="px-2.5 py-1 text-xs"
+                      >
+                        <RotateCw className="h-3.5 w-3.5" />
+                        {rotatingId === tireSet.id ? 'Записую…' : 'Зробити ротацію вісей'}
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
               {canManage && (
                 <div className="flex flex-shrink-0 items-center gap-1">

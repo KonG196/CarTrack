@@ -25,6 +25,14 @@ export async function updateMe(displayName) {
   return data;
 }
 
+// Any subset of the mutable profile fields (display_name, digest_enabled,
+// reminders_enabled). PATCH only sends what is passed, so an omitted field is
+// left untouched.
+export async function updateProfile(payload) {
+  const { data } = await client.patch('/auth/me', payload);
+  return data;
+}
+
 export async function requestPasswordReset(email, channel) {
   const { data } = await client.post('/auth/reset/request', { email, channel });
   return data;
@@ -47,4 +55,26 @@ export async function confirmEmail(email, code) {
 export async function resendVerification(email) {
   const { data } = await client.post('/auth/verify/resend', { email });
   return data;
+}
+
+export async function changePassword(currentPassword, newPassword) {
+  await client.post('/auth/password', {
+    current_password: currentPassword,
+    new_password: newPassword,
+  });
+}
+
+// Starts a move; nothing changes until the code sent to the new address comes
+// back through confirmEmailChange. The old address keeps working meanwhile.
+export async function requestEmailChange(newEmail, password) {
+  const { data } = await client.post('/auth/email', {
+    new_email: newEmail,
+    password,
+  });
+  return data; // {pending_email}
+}
+
+export async function confirmEmailChange(code) {
+  const { data } = await client.post('/auth/email/confirm', { code });
+  return data; // UserOut
 }

@@ -71,6 +71,18 @@ def test_unlinked_user_is_not_targeted(db_session_factory: sessionmaker) -> None
         assert service.reminder_targets(db, today=TODAY) == []
 
 
+def test_reminders_switched_off_excludes_the_user(db_session_factory: sessionmaker) -> None:
+    """A linked user with an overdue interval still gets nothing once they turn
+    reminders off — the master switch the notification settings expose."""
+    with db_session_factory() as db:
+        user, _car, _interval = _setup_overdue_interval(db)
+        assert service.reminder_targets(db, today=TODAY)  # on by default → targeted
+        user.reminders_enabled = False
+        db.commit()
+
+        assert service.reminder_targets(db, today=TODAY) == []
+
+
 def test_stale_notification_is_renotified(db_session_factory: sessionmaker) -> None:
     with db_session_factory() as db:
         _user, _car, interval = _setup_overdue_interval(db)

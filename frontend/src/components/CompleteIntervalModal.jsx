@@ -1,24 +1,33 @@
 import { useEffect, useState } from 'react';
+import { Info, Sparkles } from 'lucide-react';
 import { extractError } from '../api/client';
 import {
+  costEstimateSource,
   emptyCompleteValues,
   sumCostTotal,
   validateCompleteValues,
   completeValuesToPayload,
 } from '../utils/completeForm';
-import { Modal, Button, TextField, ErrorMessage } from './UI';
+import { Modal, Button, TextField, DateField, ErrorMessage } from './UI';
 
 export default function CompleteIntervalModal({ interval, car, onComplete, onClose, onToast }) {
   const open = interval != null;
   const [values, setValues] = useState(() => emptyCompleteValues({ car, interval }));
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  // The note under the field promises where the number came from; the moment
+  // the user types their own, it stops being true.
+  const [costEdited, setCostEdited] = useState(false);
+
+  const estimateSource = costEstimateSource(interval);
+  const estimateClass = estimateSource === 'history' ? 'border-ok/60 text-ok' : '';
 
   useEffect(() => {
     if (!open) return;
     setValues(emptyCompleteValues({ car, interval }));
     setError('');
     setSubmitting(false);
+    setCostEdited(false);
   }, [open, interval?.id, car?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const set = (key) => (e) => setValues((v) => ({ ...v, [key]: e.target.value }));
@@ -64,7 +73,12 @@ export default function CompleteIntervalModal({ interval, car, onComplete, onClo
             value={values.odometer}
             onChange={set('odometer')}
           />
-          <TextField label="Дата" type="date" required value={values.date} onChange={set('date')} />
+          <DateField
+          label="Дата"
+          required
+          value={values.date}
+          onChange={(v) => setValues((prev) => ({ ...prev, date: v }))}
+        />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <TextField
@@ -92,9 +106,36 @@ export default function CompleteIntervalModal({ interval, car, onComplete, onClo
           inputMode="decimal"
           enterKeyHint="next"
           numeric
+          className={estimateSource && !costEdited ? estimateClass : ''}
           value={values.totalCost}
-          onChange={set('totalCost')}
+          onChange={(e) => {
+            setCostEdited(true);
+            set('totalCost')(e);
+          }}
         />
+        {estimateSource && !costEdited && (
+          // Two different claims, so two different looks. Green means «this is
+          // what you paid» and carries the weight of the user's own records; the
+          // market ballpark must never borrow that weight, or there is no reason
+          // left to check it.
+          <p
+            className={`-mt-1 flex items-center gap-1.5 text-xs ${
+              estimateSource === 'history' ? 'text-ok' : 'text-mist'
+            }`}
+          >
+            {estimateSource === 'history' ? (
+              <>
+                <Sparkles className="h-3.5 w-3.5 flex-shrink-0" />
+                Стільки ви платили минулого разу — можна змінити
+              </>
+            ) : (
+              <>
+                <Info className="h-3.5 w-3.5 flex-shrink-0" />
+                Орієнтовно по ринку — впишіть свою суму
+              </>
+            )}
+          </p>
+        )}
         <TextField
           label="Нотатка"
           enterKeyHint="done"

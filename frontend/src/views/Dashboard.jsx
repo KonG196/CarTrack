@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Car,
   Fuel,
+  ArrowUpRight,
   Wallet,
   Droplets,
   Route,
@@ -10,19 +11,25 @@ import {
   ChevronRight,
   CalendarClock,
   Pencil,
-  Check,
   CheckCircle2,
-  X,
-  Loader2,
 } from 'lucide-react';
 import { useCarStore } from '../store/carStore';
-import { extractError } from '../api/client';
 import { getRefuelContext } from '../api/logs';
 import { canDo } from '../utils/permissions';
 import { formatMoney, formatKm, formatDate } from '../utils/format';
-import { Card, Spinner, ErrorMessage, ConfirmDialog } from '../components/UI';
+import { Card, Spinner, ErrorMessage } from '../components/UI';
 import Toast from '../components/Toast';
 import CompleteIntervalModal from '../components/CompleteIntervalModal';
+import CopyCarName from '../components/CopyCarName';
+
+const FUEL_LABELS = {
+  petrol: 'Бензин',
+  diesel: 'Дизель',
+  lpg: 'ГБО',
+  electric: 'Електро',
+  hybrid: 'Гібрид',
+};
+const fuelLabel = (v) => FUEL_LABELS[v] || v;
 
 const STATUS_STYLES = {
   ok: { bar: 'bg-ok', text: 'text-ok', label: 'В нормі' },
@@ -89,7 +96,7 @@ function RangeCard({ rangeKm }) {
   );
 }
 
-function IntervalRow({ interval, onComplete, canComplete }) {
+function IntervalRow({ interval, onComplete, canComplete, tourId }) {
   const style = STATUS_STYLES[interval.status] || STATUS_STYLES.ok;
   const pct = Math.max(0, Math.min(100, interval.health_pct ?? 0));
 
@@ -101,8 +108,8 @@ function IntervalRow({ interval, onComplete, canComplete }) {
     parts.push(interval.days_left >= 0 ? `${interval.days_left} дн.` : `${Math.abs(interval.days_left)} дн. тому`);
   }
 
-  return (
-    <div className="py-3 first:pt-0 last:pb-0">
+  const body = (
+    <>
       <div className="flex items-baseline justify-between gap-2">
         <p className="text-sm font-medium text-fg">{interval.title}</p>
         <span className={`text-xs font-medium ${style.text}`}>{style.label}</span>
@@ -121,18 +128,26 @@ function IntervalRow({ interval, onComplete, canComplete }) {
           </span>
         )}
         {canComplete && (
-          <button
-            type="button"
-            onClick={() => onComplete(interval)}
-            aria-label={`Виконано: ${interval.title}`}
-            className="ml-auto flex flex-shrink-0 items-center gap-1 rounded-lg px-1.5 py-0.5 font-medium text-mist/70 transition-colors hover:bg-ok/10 hover:text-ok"
-          >
-            <CheckCircle2 className="h-3 w-3" />
-            Виконано
-          </button>
+          <CheckCircle2 className="ml-auto h-4 w-4 flex-shrink-0 text-mist/40 transition-colors group-hover:text-ok" />
         )}
       </div>
-    </div>
+    </>
+  );
+
+  // Tapping the interval is the action: it opens the «Виконано» form for this
+  // one. A separate button read as a status badge — «already done» — which is
+  // the opposite of what it did. The whole row is the target now.
+  if (!canComplete) return <div data-tour={tourId} className="py-3 first:pt-0 last:pb-0">{body}</div>;
+  return (
+    <button
+      type="button"
+      data-tour={tourId}
+      onClick={() => onComplete(interval)}
+      aria-label={`Відмітити виконаним: ${interval.title}`}
+      className="group block w-full py-3 text-left transition first:pt-0 last:pb-0 hover:bg-raised/40 active:bg-raised motion-reduce:active:bg-transparent"
+    >
+      {body}
+    </button>
   );
 }
 
@@ -149,67 +164,20 @@ export default function Dashboard() {
   const intervalsError = useCarStore((s) => s.intervalsError);
   const fetchAnalytics = useCarStore((s) => s.fetchAnalytics);
   const fetchIntervals = useCarStore((s) => s.fetchIntervals);
-  const editCar = useCarStore((s) => s.editCar);
   const completeInterval = useCarStore((s) => s.completeInterval);
 
+  const navigate = useNavigate();
   const activeCar = cars.find((c) => String(c.id) === String(activeCarId)) || null;
 
   const canEditCar = canDo(activeCar?.your_role, 'car:edit');
   const canAddEntries = canDo(activeCar?.your_role, 'log:create');
   const canCompleteIntervals = canDo(activeCar?.your_role, 'interval:complete');
 
-  // quick odometer edit
-  const [editingOdo, setEditingOdo] = useState(false);
-  const [odoValue, setOdoValue] = useState('');
-  const [odoSaving, setOdoSaving] = useState(false);
-  const [odoError, setOdoError] = useState('');
-  const [confirmLower, setConfirmLower] = useState(false);
-
   const [completingInterval, setCompletingInterval] = useState(null);
   const [toast, setToast] = useState('');
 
   const [refuelContext, setRefuelContext] = useState(null);
   const noRefuelsYet = refuelContext != null && refuelContext.last_refuel_odometer == null;
-
-  const startOdoEdit = () => {
-    setOdoValue(String(activeCar.current_odometer));
-    setOdoError('');
-    setEditingOdo(true);
-  };
-
-  const cancelOdoEdit = () => {
-    setEditingOdo(false);
-    setOdoError('');
-  };
-
-  const saveOdometer = async () => {
-    setConfirmLower(false);
-    setOdoSaving(true);
-    setOdoError('');
-    try {
-      await editCar(activeCar.id, { current_odometer: parseInt(odoValue, 10) });
-      fetchIntervals().catch(() => {});
-      fetchAnalytics().catch(() => {});
-      setEditingOdo(false);
-    } catch (err) {
-      setOdoError(extractError(err, 'Не вдалося оновити пробіг'));
-    } finally {
-      setOdoSaving(false);
-    }
-  };
-
-  const submitOdometer = () => {
-    const odo = parseInt(odoValue, 10);
-    if (!Number.isFinite(odo) || odo < 0) {
-      setOdoError('Вкажіть коректний пробіг');
-      return;
-    }
-    if (odo < activeCar.current_odometer) {
-      setConfirmLower(true);
-      return;
-    }
-    saveOdometer();
-  };
 
   useEffect(() => {
     if (activeCarId) {
@@ -271,78 +239,38 @@ export default function Dashboard() {
 
       {activeCar && (
         <>
-          <ConfirmDialog
-            open={confirmLower}
-            title="Зменшити пробіг?"
-            message={`Нове значення менше за поточне (${formatKm(activeCar.current_odometer)}). Точно зменшити?`}
-            confirmLabel="Зменшити"
-            onConfirm={saveOdometer}
-            onCancel={() => setConfirmLower(false)}
-          />
+          {/* Odometer vertically centred against the (possibly three-line)
+              name, not pinned to the top. */}
           <div className="flex items-center justify-between gap-2 px-1">
-            <h1 className="font-display text-lg font-semibold text-fg">
-              {activeCar.brand} {activeCar.model}
-            </h1>
-            {editingOdo ? (
-              <span className="flex items-center gap-1">
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  min="0"
-                  autoFocus
-                  value={odoValue}
-                  disabled={odoSaving}
-                  onChange={(e) => setOdoValue(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      submitOdometer();
-                    }
-                    if (e.key === 'Escape') cancelOdoEdit();
-                  }}
-                  aria-label="Поточний пробіг, км"
-                  className="w-28 rounded-lg border border-edge-soft bg-raised px-2 py-1 text-right font-mono text-sm tabular-nums text-fg outline-none focus:border-amber"
-                />
+            <div className="min-w-0" data-tour="car-name">
+              {/* The colour lives in `generation` after a comma («7 (BA5),
+                  Urano Gray»); the dashboard shows the generation but not the
+                  colour, so it is trimmed off here. */}
+              <h1 className="font-display text-lg font-semibold leading-tight text-fg">
+                <CopyCarName car={activeCar} onCopied={setToast}>
+                  {activeCar.brand} {activeCar.model}
+                  {activeCar.generation ? ` ${activeCar.generation.split(',')[0].trim()}` : ''}
+                </CopyCarName>
+              </h1>
+              <p className="mt-0.5 text-xs text-mist">
+                {activeCar.year}
+                {activeCar.engine ? ` · ${activeCar.engine}` : ''} · {fuelLabel(activeCar.fuel_type)}
+              </p>
+            </div>
+            <span className="flex flex-shrink-0 items-center gap-0.5 text-sm text-mist" data-tour="odometer">
+              {formatKm(activeCar.current_odometer)}
+              {canEditCar && (
                 <button
                   type="button"
-                  onClick={submitOdometer}
-                  disabled={odoSaving}
-                  aria-label="Зберегти пробіг"
-                  className="rounded-lg p-1.5 text-ok transition-colors hover:bg-raised"
+                  onClick={() => navigate(`/garage/${activeCar.id}/edit?focus=odometer`)}
+                  aria-label="Змінити пробіг"
+                  className="rounded-lg p-1.5 text-mist/70 transition-colors hover:bg-panel hover:text-fg"
                 >
-                  {odoSaving ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Check className="h-4 w-4" />
-                  )}
+                  <Pencil className="h-3.5 w-3.5" />
                 </button>
-                <button
-                  type="button"
-                  onClick={cancelOdoEdit}
-                  disabled={odoSaving}
-                  aria-label="Скасувати зміну пробігу"
-                  className="rounded-lg p-1.5 text-mist transition-colors hover:bg-raised hover:text-fg"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </span>
-            ) : (
-              <span className="flex items-center gap-0.5 text-sm text-mist">
-                {formatKm(activeCar.current_odometer)}
-                {canEditCar && (
-                  <button
-                    type="button"
-                    onClick={startOdoEdit}
-                    aria-label="Змінити пробіг"
-                    className="rounded-lg p-1.5 text-mist/70 transition-colors hover:bg-panel hover:text-fg"
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </span>
-            )}
+              )}
+            </span>
           </div>
-          {odoError && <ErrorMessage>{odoError}</ErrorMessage>}
         </>
       )}
 
@@ -352,7 +280,7 @@ export default function Dashboard() {
         <Spinner />
       ) : (
         analytics && (
-          <div className="grid grid-cols-3 gap-2.5">
+          <div className="grid grid-cols-3 gap-2.5" data-tour="stats">
             <StatCard
               icon={Wallet}
               label="Цей місяць"
@@ -370,7 +298,11 @@ export default function Dashboard() {
             <StatCard
               icon={Route}
               label="₴/км"
-              value={fuel?.avg_cost_per_km != null ? fuel.avg_cost_per_km.toFixed(2) : '—'}
+              value={
+                analytics.tco?.cost_per_km != null
+                  ? analytics.tco.cost_per_km.toFixed(2)
+                  : '—'
+              }
             />
           </div>
         )
@@ -394,11 +326,15 @@ export default function Dashboard() {
         </Link>
       )}
 
-      <Card>
+      <Card data-tour="intervals">
         <div className="mb-1 flex items-center justify-between">
           <h2 className="font-display text-sm font-semibold text-fg">Інтервали ТО</h2>
-          <Link to="/garage" className="text-xs text-amber hover:text-amber-deep">
-            Керувати
+          <Link
+            to="/intervals"
+            aria-label="Керувати інтервалами ТО"
+            className="rounded-lg p-1.5 text-mist transition-colors hover:bg-raised hover:text-amber"
+          >
+            <ArrowUpRight className="h-4 w-4" />
           </Link>
         </div>
         {intervalsError && <ErrorMessage className="my-2">{intervalsError}</ErrorMessage>}
@@ -407,17 +343,18 @@ export default function Dashboard() {
         ) : intervals.length === 0 ? (
           <p className="py-3 text-sm text-mist">
             {canDo(activeCar?.your_role, 'interval:manage')
-              ? 'Немає інтервалів обслуговування. Додайте їх у розділі «Гараж».'
+              ? 'Немає інтервалів обслуговування. Додайте їх на сторінці інтервалів.'
               : 'Власник ще не додав інтервалів обслуговування.'}
           </p>
         ) : (
           <div className="divide-y divide-edge">
-            {intervals.map((interval) => (
+            {intervals.map((interval, i) => (
               <IntervalRow
                 key={interval.id}
                 interval={interval}
                 onComplete={setCompletingInterval}
                 canComplete={canCompleteIntervals}
+                tourId={i === 0 ? 'interval-row' : undefined}
               />
             ))}
           </div>

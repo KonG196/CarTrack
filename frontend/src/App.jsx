@@ -14,7 +14,14 @@ import AddEntry from './views/AddEntry';
 import Analytics from './views/Analytics';
 import Diagnostics from './views/Diagnostics';
 import Garage from './views/Garage';
+import Intervals from './views/Intervals';
+import Profile from './views/Profile';
+import CarEditor from './views/CarEditor';
+import Tires from './views/Tires';
+import Documents from './views/Documents';
+import Notifications from './views/Notifications';
 import CarSpecs from './views/CarSpecs';
+import CarPassport from './views/CarPassport';
 
 function Protected({ children }) {
   const token = useAuthStore((s) => s.token);
@@ -58,6 +65,7 @@ export default function App() {
       />
       <Route path="/join/:token" element={<JoinCar />} />
       <Route path="/verify" element={<VerifyEmail />} />
+      <Route path="/p/:token" element={<CarPassport />} />
       <Route
         element={
           <Protected>
@@ -72,6 +80,13 @@ export default function App() {
         <Route path="/analytics" element={<Analytics />} />
         <Route path="/diagnostics" element={<Diagnostics />} />
         <Route path="/garage" element={<Garage />} />
+        <Route path="/garage/new" element={<CarEditor />} />
+        <Route path="/garage/:carId/edit" element={<CarEditor />} />
+        <Route path="/intervals" element={<Intervals />} />
+        <Route path="/profile" element={<Profile />} />
+        <Route path="/tires" element={<Tires />} />
+        <Route path="/documents" element={<Documents />} />
+        <Route path="/notifications" element={<Notifications />} />
         <Route path="/garage/:carId/specs" element={<CarSpecs />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

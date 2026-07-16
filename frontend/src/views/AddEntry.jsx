@@ -117,7 +117,7 @@ export default function AddEntry() {
         <p className="text-sm text-mist">
           Щоб додати запис, спершу створіть авто в розділі{' '}
           <Link to="/garage" className="text-amber hover:text-amber-deep">
-            «Гараж»
+            «Налаштування»
           </Link>
           .
         </p>

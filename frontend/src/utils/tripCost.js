@@ -23,6 +23,27 @@ export function computeTripCost({ distanceKm, consumption, pricePerLiter, people
   };
 }
 
+function tidy(value) {
+  const n = Number(String(value).replace(',', '.'));
+  if (!Number.isFinite(n)) return String(value ?? '');
+  return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
+}
+
+// A one-line summary for navigator.share / clipboard — the number the driver
+// wants to send to the group chat, in plain words.
+export function buildTripShareText({ carName, distanceKm, consumption, pricePerLiter, result }) {
+  if (!result) return '';
+  const on = carName ? ` на ${carName}` : '';
+  const parts = [
+    `🚐 Поїздка${on}: відстань ${tidy(distanceKm)} км, розхід ${tidy(consumption)} л/100 км, ціна пального ${tidy(pricePerLiter)} ₴.`,
+    `Всього: ${tidy(Math.round(result.cost))} ₴.`,
+  ];
+  if (result.people > 1) {
+    parts.push(`З кожного (${result.people} ос.) — по ${tidy(Math.round(result.perPerson))} ₴.`);
+  }
+  return parts.join(' ');
+}
+
 // Both numbers are prefills, not requirements: the card works on typed values
 // alone, and history only saves the typing when it has something to say.
 // Consumption exists once two full tanks are logged; the price is simply the

@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.auth import create_access_token, get_current_user, hash_password, verify_password
@@ -10,6 +10,10 @@ from app.database import get_db
 from app.models import User
 from app.ratelimit import RateLimiter, client_ip
 from app.schemas import (
+    EmailChangeConfirmIn,
+    EmailChangeIn,
+    EmailChangeOut,
+    PasswordChangeIn,
     RegisterOut,
     ResetConfirmIn,
     ResetRequestIn,
@@ -21,8 +25,11 @@ from app.schemas import (
     VerifyRequestIn,
 )
 from app.services.reset import confirm_reset, initiate_reset
+from app.services.mailer import mail_enabled
 from app.services.verification import (
+    confirm_email_change,
     confirm_verification,
+    issue_email_change,
     issue_verification,
     verification_required,
 )
@@ -117,7 +124,88 @@ def update_me(
     updates = payload.model_dump(exclude_unset=True)
     if "display_name" in updates:
         current_user.display_name = updates["display_name"]
+    for flag in (
+        "digest_enabled",
+        "reminders_enabled",
+        "notify_fuel",
+        "notify_seasonal",
+        "notify_rotation",
+    ):
+        if flag in updates:
+            setattr(current_user, flag, updates[flag])
     db.commit()
+    db.refresh(current_user)
+    return current_user
+
+
+@router.post("/password", status_code=status.HTTP_204_NO_CONTENT)
+def change_password(
+    payload: PasswordChangeIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> None:
+    """Change the password, proving the current one first.
+
+    Being logged in is not proof of being the owner — a session left open on a
+    borrowed laptop is enough to be logged in. Knowing the current password is.
+    """
+    if not verify_password(payload.current_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Поточний пароль невірний"
+        )
+    current_user.hashed_password = hash_password(payload.new_password)
+    db.commit()
+
+
+@router.post("/email", response_model=EmailChangeOut)
+def request_email_change(
+    payload: EmailChangeIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> EmailChangeOut:
+    """Ask to move the account to another address.
+
+    Nothing changes yet. The address is parked and a code goes to it — only
+    someone who can read that inbox can finish the move, and a typo costs a
+    retry instead of the account.
+    """
+    new_email = payload.new_email.strip().lower()
+    if not verify_password(payload.password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Пароль невірний"
+        )
+    if new_email == current_user.email.lower():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Це вже ваша адреса"
+        )
+    taken = db.execute(
+        select(User).where(func.lower(User.email) == new_email, User.id != current_user.id)
+    ).scalar_one_or_none()
+    if taken is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Ця адреса вже зайнята"
+        )
+    if not mail_enabled():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Пошта не налаштована на сервері — зміна адреси недоступна",
+        )
+    issue_email_change(db, current_user, new_email)
+    db.commit()
+    return EmailChangeOut(pending_email=new_email)
+
+
+@router.post("/email/confirm", response_model=UserOut)
+def confirm_email(
+    payload: EmailChangeConfirmIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> User:
+    if not confirm_email_change(db, current_user, payload.code):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Код невірний або протермінований",
+        )
     db.refresh(current_user)
     return current_user
 

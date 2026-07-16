@@ -37,12 +37,18 @@ export default function Login() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-garage px-4">
       <div className="rise-in w-full max-w-md">
-        <div className="mb-6 flex flex-col items-center gap-2">
+        {/* Логотип веде на лендінг (/welcome) — звичайне <a>, бо це статична
+            сторінка поза React-роутером. Повне перезавантаження тут доречне:
+            людина йде на маркетингову сторінку, а не в застосунок. */}
+        <a
+          href="/welcome"
+          className="mb-6 flex flex-col items-center gap-2 rounded-xl transition-opacity hover:opacity-90"
+        >
           <Wordmark size="lg" />
           <p className="font-mono text-xs uppercase tracking-[0.14em] text-mist">
             Бортовий журнал авто
           </p>
-        </div>
+        </a>
         <Card>
           <h1 className="mb-4 font-display text-lg font-semibold text-fg">Вхід</h1>
           <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">

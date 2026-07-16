@@ -14,7 +14,7 @@ from typing import Optional, Sequence
 
 import pytesseract
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.access import (
     ROLE_EDITOR,
@@ -30,13 +30,21 @@ from app.models import (
     MaintenanceDetails,
     RefuelDetails,
     ServiceInterval,
+    TireSet,
     User,
 )
 from app.routers.telegram import InvalidLinkCodeError, decode_link_code
-from app.services.fuel import compute_fuel_stats
+from app.services import climate
+from app.services.fuel import (
+    ConsumptionSpike,
+    compute_fuel_stats,
+    compute_stats_per_kind,
+    detect_consumption_spike,
+)
 from app.services.intervals import compute_interval_status, effective_avg_daily_km
 from app.services.intervals_complete import IntervalCompletion, complete_interval
 from app.services.ocr import ParsedReceipt
+from app.services.tires import due_rotation_km
 from app.services.ocr_llm import PhotoReading, recognize_receipt
 from app.services.ocr_llm import recognize_photo as ocr_recognize_photo
 from app.services.photos import new_photo_filename, write_photo_file
@@ -511,7 +519,12 @@ def reminder_targets(
     cutoff = today - dt.timedelta(days=NOTIFY_COOLDOWN_DAYS)
     users = (
         db.execute(
-            select(User).where(User.telegram_chat_id.is_not(None)).order_by(User.id)
+            select(User)
+            .where(
+                User.telegram_chat_id.is_not(None),
+                User.reminders_enabled.is_(True),
+            )
+            .order_by(User.id)
         )
         .scalars()
         .all()
@@ -614,6 +627,246 @@ def stamp_notified(
     for interval in intervals:
         interval.last_notified_at = today
     db.commit()
+
+
+# Consumption watchdog
+
+
+#: A spike whose closing refuel is older than this is stale — the loop runs
+#: daily, so a fresh jump is caught within a day; anything older is history
+#: (and stops the feature spamming about old data the day it first ships).
+CONSUMPTION_RECENT_DAYS = 21
+
+
+@dataclass
+class ConsumptionAlert:
+    car: Car
+    spike: ConsumptionSpike
+
+
+def car_consumption_spike(db: Session, car: Car) -> Optional[ConsumptionSpike]:
+    """This car's latest consumption spike against its own recent norm, if any."""
+    logs = (
+        db.execute(
+            select(LogEntry)
+            .where(LogEntry.car_id == car.id, LogEntry.type == "refuel")
+            .options(selectinload(LogEntry.refuel))
+        )
+        .scalars()
+        .all()
+    )
+    points = build_refuel_points(logs, car)
+    return detect_consumption_spike(compute_stats_per_kind(points))
+
+
+def consumption_alert_targets(
+    db: Session, today: dt.date | None = None
+) -> list[tuple[User, ConsumptionAlert]]:
+    """Owners whose car just showed a fresh, not-yet-reported consumption spike.
+
+    Owner-only and reminders-gated, exactly like ``reminder_targets`` — same
+    reasoning (one car, one owner). A spike is skipped once its closing refuel
+    has been stamped on the car, and once it is older than CONSUMPTION_RECENT_DAYS.
+    """
+    if today is None:
+        today = dt.date.today()
+    users = (
+        db.execute(
+            select(User)
+            .where(
+                User.telegram_chat_id.is_not(None),
+                User.notify_fuel.is_(True),
+            )
+            .order_by(User.id)
+        )
+        .scalars()
+        .all()
+    )
+    targets: list[tuple[User, ConsumptionAlert]] = []
+    for user in users:
+        for car in list_owned_cars(db, user):
+            spike = car_consumption_spike(db, car)
+            if spike is None:
+                continue
+            if car.consumption_alert_log_id == spike.log_id:
+                continue
+            if (today - spike.date).days > CONSUMPTION_RECENT_DAYS:
+                continue
+            targets.append((user, ConsumptionAlert(car=car, spike=spike)))
+    return targets
+
+
+def stamp_consumption_alert(db: Session, car: Car, log_id: int) -> None:
+    car.consumption_alert_log_id = log_id
+    db.commit()
+
+
+# Seasonal (autumn) reminders
+
+
+@dataclass
+class SeasonalReminder:
+    car: Car
+    kind: str  # "tires" | "washer"
+
+
+def installed_tire_set(db: Session, car: Car) -> Optional[TireSet]:
+    return db.execute(
+        select(TireSet).where(
+            TireSet.car_id == car.id, TireSet.is_installed.is_(True)
+        )
+    ).scalar_one_or_none()
+
+
+def seasonal_reminder_targets(
+    db: Session, today: dt.date | None = None
+) -> list[tuple[User, SeasonalReminder]]:
+    """Owners due an autumn nudge — winter tyres and/or winter washer fluid.
+
+    Owner-only and reminders-gated like the rest. Each nudge is once per autumn
+    (guarded by the year stamped on the car), fires only inside its regional
+    window, and the tyre nudge only when the car is actually still on summer
+    tyres. The region comes from the plate; a car with no plate falls to the
+    central-Ukraine calendar.
+    """
+    if today is None:
+        today = dt.date.today()
+    users = (
+        db.execute(
+            select(User)
+            .where(
+                User.telegram_chat_id.is_not(None),
+                User.notify_seasonal.is_(True),
+            )
+            .order_by(User.id)
+        )
+        .scalars()
+        .all()
+    )
+    targets: list[tuple[User, SeasonalReminder]] = []
+    for user in users:
+        for car in list_owned_cars(db, user):
+            if car.tire_reminder_year != today.year and climate.tire_changeover_due(
+                car.plate, today
+            ):
+                mounted = installed_tire_set(db, car)
+                if mounted is not None and mounted.season == "summer":
+                    targets.append((user, SeasonalReminder(car=car, kind="tires")))
+            if car.washer_reminder_year != today.year and climate.washer_changeover_due(
+                car.plate, today
+            ):
+                targets.append((user, SeasonalReminder(car=car, kind="washer")))
+    return targets
+
+
+def stamp_seasonal(db: Session, car: Car, kind: str, year: int) -> None:
+    if kind == "tires":
+        car.tire_reminder_year = year
+    elif kind == "washer":
+        car.washer_reminder_year = year
+    db.commit()
+
+
+# Tire rotation nudge
+
+
+@dataclass
+class RotationReminder:
+    car: Car
+    tire_set: TireSet
+    km_since_rotation: int
+    due_km: int
+
+
+def rotation_reminder_targets(
+    db: Session,
+) -> list[tuple[User, RotationReminder]]:
+    """Owners whose mounted set has crossed a fresh 10k-since-rotation mark.
+
+    Owner-only and reminders-gated. Once per 10k mark (dedup via the km stamped
+    on the set), so an owner who never rotates is nudged again at 20k, 30k…
+    """
+    users = (
+        db.execute(
+            select(User)
+            .where(
+                User.telegram_chat_id.is_not(None),
+                User.notify_rotation.is_(True),
+            )
+            .order_by(User.id)
+        )
+        .scalars()
+        .all()
+    )
+    targets: list[tuple[User, RotationReminder]] = []
+    for user in users:
+        for car in list_owned_cars(db, user):
+            mounted = installed_tire_set(db, car)
+            if mounted is None:
+                continue
+            km = mounted.km_since_rotation
+            due = due_rotation_km(km, mounted.rotation_reminded_km)
+            if due is None:
+                continue
+            targets.append(
+                (
+                    user,
+                    RotationReminder(
+                        car=car, tire_set=mounted, km_since_rotation=km, due_km=due
+                    ),
+                )
+            )
+    return targets
+
+
+def stamp_rotation(db: Session, tire_set: TireSet, due_km: int) -> None:
+    tire_set.rotation_reminded_km = due_km
+    db.commit()
+
+
+def rotate_tire_set(db: Session, user: User, tire_set_id: int) -> Optional[TireSet]:
+    """Record an axle rotation from the bot's «Зробити ротацію» button.
+
+    Owner-only and mounted-set-only, the same rules as the web endpoint: resets
+    the rotation clock to the car's current odometer so the next nudge is 10 000
+    km away. Returns None when the set is missing, on the shelf, or not the
+    user's to rotate.
+    """
+    tire_set = db.get(TireSet, tire_set_id)
+    if tire_set is None or not tire_set.is_installed:
+        return None
+    car = db.get(Car, tire_set.car_id)
+    if car is None or car.user_id != user.id:
+        return None
+    tire_set.odometer_at_rotation = car.current_odometer
+    tire_set.rotation_reminded_km = None
+    db.commit()
+    return tire_set
+
+
+# Driver scratchpad (/note)
+
+
+def get_scratchpads(db: Session, user: User) -> list[tuple[Car, Optional[str]]]:
+    """Each accessible car with its note — a member may read the gate codes too."""
+    return [(car, car.scratchpad) for car in list_cars(db, user)]
+
+
+def set_scratchpad(db: Session, user: User, text: str) -> Optional[Car]:
+    """Write the note on the user's single owned car, or None to defer.
+
+    None means the user owns zero cars or more than one: with several, the bot
+    cannot know which to write without asking, and a wrong-car note is worse
+    than sending them to the web. Editing a note is owner-only, like the rest of
+    a car's configuration.
+    """
+    owned = list_owned_cars(db, user)
+    if len(owned) != 1:
+        return None
+    car = owned[0]
+    car.scratchpad = text
+    db.commit()
+    return car
 
 
 def latest_log_date(db: Session, user: User) -> Optional[dt.date]:

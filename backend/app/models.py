@@ -40,12 +40,31 @@ class User(Base):
     # label falls back to the part of the email before the «@».
     display_name: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
     # Unique per app logic: linking re-assigns a chat id instead of duplicating it.
+    # An address the user asked to move to, parked until a code sent to it
+    # comes back. Login is gated on a verified address, so writing an
+    # unconfirmed one into `email` would lock them out over a typo.
+    pending_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     telegram_chat_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     # Whether the Sunday digest is wanted, toggled by «/digest on|off» in the
     # bot. On by default: a weekly summary of a week you actually used the
     # tracker is the point of keeping one, and the empty-week rule (see
     # bot/service.build_weekly_digest) already keeps it from being noise.
     digest_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=true()
+    )
+    # Per-type notification switches, all on by default. reminders_enabled keeps
+    # its original meaning — the due/overdue ТО reminders — while each smarter
+    # push gets its own toggle, so a driver can silence one kind without the rest.
+    reminders_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=true()
+    )
+    notify_fuel: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=true()
+    )
+    notify_seasonal: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=true()
+    )
+    notify_rotation: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default=true()
     )
     # Password reset via Telegram: bcrypt hash of the 6-digit code + its expiry.
@@ -134,6 +153,27 @@ class Car(Base):
     # The owner's self-set spending limit for a calendar month, in ₴.
     # NULL = no budget, which is not the same as a budget of zero.
     monthly_budget: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True)
+    # The closing refuel log id of the last consumption spike the watchdog warned
+    # about, so the same spike is not reported twice. NULL = never warned.
+    consumption_alert_log_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # The year each seasonal nudge last fired, so it goes out once per autumn.
+    tire_reminder_year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    washer_reminder_year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # The driver's free-text cheat sheet: gate codes, service phones, radio PIN.
+    # NULL until the owner writes one. Read/written from the web and via /note.
+    scratchpad: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Unguessable token for the public QR passport; NULL until the owner mints
+    # one, cleared to revoke the link. The only key the public route accepts.
+    public_token: Mapped[Optional[str]] = mapped_column(
+        String(32), unique=True, index=True, nullable=True
+    )
+    # Passport fields the owner fills for the QR page — contact and the few facts
+    # a service or a stranger needs. All optional; a blank one is simply omitted.
+    contact_phone: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    insurance_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    insurance_until: Mapped[Optional[dt.date]] = mapped_column(Date, nullable=True)
+    tire_pressure: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    fuel_approval: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
     # Nullable for pre-0003 rows; future offline sync keys on this stamp.
     updated_at: Mapped[Optional[dt.datetime]] = mapped_column(
@@ -438,6 +478,13 @@ class TireSet(Base):
     purchased_at: Mapped[Optional[dt.date]] = mapped_column(Date, nullable=True)
     odometer_at_install: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     is_installed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Odometer at the last axle rotation (stamped on install, reset by the
+    # «rotate» action). The rotation nudge counts from here, not from install,
+    # so km_on_set — the set's whole life — is left untouched.
+    odometer_at_rotation: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # The km-since-rotation multiple last nudged about, so the 10k reminder is
+    # not repeated every day. Reset when the set is rotated or re-installed.
+    rotation_reminded_km: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
 
     car: Mapped[Car] = relationship(back_populates="tire_sets")
@@ -457,6 +504,17 @@ class TireSet(Base):
         if not self.is_installed or self.odometer_at_install is None:
             return None
         return max(0, self.car.current_odometer - self.odometer_at_install)
+
+    @property
+    def km_since_rotation(self) -> Optional[int]:
+        """Kilometres since the last axle rotation (or install), or None.
+
+        Only the mounted set with a rotation stamp can answer — the same rule
+        as km_on_set, and for the same reason.
+        """
+        if not self.is_installed or self.odometer_at_rotation is None:
+            return None
+        return max(0, self.car.current_odometer - self.odometer_at_rotation)
 
 
 class CarDocument(Base):

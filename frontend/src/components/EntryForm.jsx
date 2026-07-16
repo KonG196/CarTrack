@@ -5,6 +5,7 @@ import { scanReceipt, scanWorkOrder } from '../api/ocr';
 import { getRefuelContext } from '../api/logs';
 import { num, computeRefuelUpdate } from '../utils/refuelMath';
 import { formatDate } from '../utils/format';
+import { expenseCategoryFrom } from '../utils/expenseCategory';
 import { describeWorkOrder, workOrderToFormValues } from '../utils/workOrder';
 import {
   COMMON_MAINTENANCE_ITEMS,
@@ -15,7 +16,7 @@ import {
 } from '../utils/entryForm';
 import { entryWarnings, lastEntryHint } from '../utils/entryWarnings';
 import { FUEL_KIND_OPTIONS, fuelKindLabel, shouldShowFuelKind } from '../utils/fuelKind';
-import { Button, TextField, SelectField, Card, Toggle, ErrorMessage } from './UI';
+import { Button, TextField, DateField, SelectField, Card, Toggle, ErrorMessage } from './UI';
 import Toast from './Toast';
 
 export const ENTRY_TYPES = [
@@ -30,6 +31,7 @@ const NO_TOAST = { message: '', variant: 'ok' };
 function ScanButton({ scanning, onFile, idle, busy }) {
   return (
     <label
+      data-tour="add-scan"
       className={`relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-xl border border-dashed px-3.5 py-3.5 text-sm font-semibold transition-colors ${
         scanning
           ? 'pointer-events-none border-amber/50 text-amber'
@@ -289,9 +291,11 @@ export default function EntryForm({
       },
     });
 
-  // Any till receipt: a car wash, a parking barrier, a service fee. Only the
-  // sum and the date are worth reading — the category is a judgement the user
-  // makes, and guessing it would file the entry wrong.
+  // Any till receipt: a car wash, a parking barrier, a service fee. The sum and
+  // the date are read; the category only when the paper names it. «АВТОМИЙКА»
+  // on a slip is not a guess, it is the receipt saying what it is for — but a
+  // slip that says nothing gets nothing, because a wrong category is silent: it
+  // files the money where the user will never look for it.
   const handleExpenseReceiptFile = (e) =>
     runScan(e, {
       read: scanReceipt,
@@ -301,11 +305,15 @@ export default function EntryForm({
           setTotalCost(Number(data.total_cost).toFixed(2));
         if (data.date && !edited.has('date')) setDate(data.date);
         if (data.gas_station) setNotes((current) => current || data.gas_station);
+        const category = expenseCategoryFrom(data.raw_text);
+        if (category && !edited.has('expenseCategory')) setExpenseCategory(category);
       },
       describe: (data) => {
         const parts = [];
         if (data.total_cost != null) parts.push(`${Number(data.total_cost).toFixed(2)} грн`);
         if (data.date) parts.push(formatDate(data.date));
+        const category = expenseCategoryFrom(data.raw_text);
+        if (category) parts.push(category.toLowerCase());
         return parts.join(', ');
       },
     });
@@ -416,7 +424,10 @@ export default function EntryForm({
       <Toast message={toast.message} variant={toast.variant} onDone={() => setToast(NO_TOAST)} />
 
       {!lockedType && (
-        <div className="grid grid-cols-4 gap-1 rounded-2xl border border-edge bg-panel p-1">
+        <div
+          data-tour="add-type"
+          className="grid grid-cols-4 gap-1 rounded-2xl border border-edge bg-panel p-1"
+        >
           {ENTRY_TYPES.map(({ value, label, icon: Icon }) => (
             <button
               key={value}
@@ -434,16 +445,15 @@ export default function EntryForm({
         </div>
       )}
 
-      <Card className="flex flex-col gap-3.5">
+      <Card data-tour="add-form" className="flex flex-col gap-3.5">
         <div className="grid grid-cols-2 gap-3">
-          <TextField
+          <DateField
             label="Дата"
-            type="date"
             required
             value={date}
-            onChange={(e) => {
+            onChange={(v) => {
               markEdited('date');
-              setDate(e.target.value);
+              setDate(v);
             }}
           />
           <TextField
@@ -692,7 +702,10 @@ export default function EntryForm({
                 <Chip
                   key={c}
                   active={expenseCategory === c}
-                  onClick={() => setExpenseCategory(c)}
+                  onClick={() => {
+                    setExpenseCategory(c);
+                    markEdited('expenseCategory');
+                  }}
                 >
                   {c}
                 </Chip>

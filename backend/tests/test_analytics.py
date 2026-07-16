@@ -34,9 +34,11 @@ def test_analytics_shape_for_empty_car(
 
     assert set(body.keys()) == {
         "totals",
+        "tco",
         "monthly",
         "expense_by_category",
         "stations",
+        "lpg_savings",
         "fuel",
         "price_history",
         "forecast",
@@ -44,6 +46,14 @@ def test_analytics_shape_for_empty_car(
         "budget",
     }
     assert body["stations"] == []
+    assert body["lpg_savings"] is None
+    # No logs span any distance or time, so cost of ownership is unknown, not 0.
+    assert body["tco"] == {
+        "distance_km": None,
+        "days": None,
+        "cost_per_km": None,
+        "cost_per_day": None,
+    }
     # An empty car has neither a tank volume nor a budget set: both cards are
     # absent rather than zeroed. See test_range.py / test_budget.py.
     assert body["range_km"] is None
@@ -141,6 +151,14 @@ def test_analytics_totals_and_monthly_buckets(
         "repair": 75.0,
         "expense": 50.0,
     }
+
+    # Cost of ownership: 425 over an odometer span of 10200 - 5000 = 5200 km.
+    tco = body["tco"]
+    assert tco["distance_km"] == 5200
+    assert tco["cost_per_km"] == round(425 / 5200, 2)  # 0.08
+    span_days = (TODAY - months_ago(TODAY, 14)).days
+    assert tco["days"] == span_days
+    assert tco["cost_per_day"] == round(425 / span_days, 2)
 
     monthly = body["monthly"]
     assert len(monthly) == 12

@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Minus, Plus, Route, Sparkles } from 'lucide-react';
+import { Check, Minus, Plus, Route, Share2, Sparkles } from 'lucide-react';
 
-import { computeTripCost, tripInputsFrom } from '../utils/tripCost';
+import { buildTripShareText, computeTripCost, tripInputsFrom } from '../utils/tripCost';
 import { formatMoney } from '../utils/format';
 import { Card, TextField } from './UI';
 
-export default function TripCostCard({ analytics, refuelContext }) {
+export default function TripCostCard({ analytics, refuelContext, carName }) {
   const [distance, setDistance] = useState('');
   const [people, setPeople] = useState(1);
   const [consumption, setConsumption] = useState('');
@@ -40,6 +40,29 @@ export default function TripCostCard({ analytics, refuelContext }) {
     pricePerLiter: Number(String(price).replace(',', '.')) || null,
     people,
   });
+
+  const [shared, setShared] = useState(false);
+  const handleShare = async () => {
+    const text = buildTripShareText({
+      carName,
+      distanceKm: distance,
+      consumption,
+      pricePerLiter: price,
+      result,
+    });
+    if (!text) return;
+    try {
+      if (navigator.share) {
+        await navigator.share({ text });
+      } else {
+        await navigator.clipboard.writeText(text);
+        setShared(true);
+        setTimeout(() => setShared(false), 1800);
+      }
+    } catch {
+      /* the user dismissed the share sheet — nothing to do */
+    }
+  };
 
   const autoClass = 'border-ok/60 text-ok';
 
@@ -133,6 +156,23 @@ export default function TripCostCard({ analytics, refuelContext }) {
               </span>
             </div>
           )}
+          <button
+            type="button"
+            onClick={handleShare}
+            className="mt-1 flex w-full items-center justify-center gap-2 rounded-xl border border-edge bg-panel py-2.5 text-sm font-semibold text-fg transition active:scale-[0.98] hover:border-edge-soft motion-reduce:active:scale-100"
+          >
+            {shared ? (
+              <>
+                <Check className="h-4 w-4 text-ok" />
+                Скопійовано
+              </>
+            ) : (
+              <>
+                <Share2 className="h-4 w-4 text-amber" />
+                Поділитися
+              </>
+            )}
+          </button>
         </div>
       ) : (
         <p className="mt-3 text-xs text-mist">

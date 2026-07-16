@@ -33,3 +33,8 @@ export async function installTireSet(tireSetId) {
   const { data } = await client.post(`/tires/${tireSetId}/install`);
   return data;
 }
+
+export async function rotateTireSet(tireSetId) {
+  const { data } = await client.post(`/tires/${tireSetId}/rotate`);
+  return data;
+}

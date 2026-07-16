@@ -174,10 +174,15 @@ def test_estimate_interval_cost_median_of_matches() -> None:
         # Refuels are never counted even with matching notes.
         make_log(type_="refuel", total_cost=2000, notes="після заміни оливи двигуна"),
     ]
-    assert estimate_interval_cost("Заміна оливи двигуна", logs) == 1800.0
+    estimate = estimate_interval_cost("Заміна оливи двигуна", logs)
+    assert estimate.amount == 1800.0
+    assert estimate.source == "history"
 
 
-def test_estimate_interval_cost_none_without_keyword_overlap() -> None:
+def test_unrelated_history_is_not_borrowed_for_a_different_service() -> None:
+    """An oil bill says nothing about brake pads. Without a matching record the
+    answer falls back to the market — and says so, so the number is never
+    mistaken for this car's own."""
     logs = [
         make_log(
             type_="maintenance",
@@ -185,8 +190,12 @@ def test_estimate_interval_cost_none_without_keyword_overlap() -> None:
             items=["Олива двигуна", "Масляний фільтр"],
         ),
     ]
-    assert estimate_interval_cost("Гальмівні колодки", logs) is None
-    assert estimate_interval_cost("Заміна оливи двигуна", []) is None
+    pads = estimate_interval_cost("Гальмівні колодки", logs)
+    assert pads.source == "baseline"
+    assert pads.amount != 1500
+
+    first_ever = estimate_interval_cost("Заміна оливи двигуна", [])
+    assert first_ever.source == "baseline"
 
 
 def test_estimate_interval_cost_stop_words_prevent_generic_match() -> None:
@@ -201,7 +210,9 @@ def test_estimate_interval_cost_stop_words_prevent_generic_match() -> None:
             notes="заміна передніх гальмівних колодок",
         ),
     ]
-    assert estimate_interval_cost("Заміна оливи", logs) is None
+    estimate = estimate_interval_cost("Заміна оливи", logs)
+    assert estimate.source == "baseline"
+    assert estimate.amount != 4000  # never the brake-pads bill
 
 
 def test_estimate_interval_cost_title_of_only_stop_words_returns_none() -> None:
@@ -214,12 +225,12 @@ def test_estimate_interval_cost_median_of_even_matches() -> None:
         make_log(type_="maintenance", total_cost=1000, items=["Олива двигуна"]),
         make_log(type_="maintenance", total_cost=2000, items=["Олива двигуна"]),
     ]
-    assert estimate_interval_cost("Олива двигуна", logs) == 1500.0
+    assert estimate_interval_cost("Олива двигуна", logs).amount == 1500.0
 
 
 def test_estimate_interval_cost_normalizes_case_and_punctuation() -> None:
     logs = [make_log(type_="maintenance", total_cost=1200, items=["олива, двигуна!"])]
-    assert estimate_interval_cost("ОЛИВА ДВИГУНА", logs) == 1200.0
+    assert estimate_interval_cost("ОЛИВА ДВИГУНА", logs).amount == 1200.0
 
 
 # /analytics endpoint: forecast key
@@ -302,6 +313,7 @@ def test_forecast_upcoming_includes_due_and_soon_sorted(
             "km_left",
             "days_left",
             "estimated_cost",
+            "estimated_cost_source",
         }
 
     assert upcoming[0]["km_left"] == -3000
@@ -383,7 +395,10 @@ def test_forecast_estimated_cost_scoped_to_one_car(
     assert response.status_code == 200
     upcoming = response.json()["forecast"]["upcoming"]
     match = next(item for item in upcoming if item["interval_id"] == interval["id"])
-    assert match["estimated_cost"] is None
+    # Car A has no history of its own, so it gets the market ballpark — and
+    # never car B's 1750, which is the whole point of the test.
+    assert match["estimated_cost"] != 1750
+    assert match["estimated_cost_source"] == "baseline"
 
 
 # /analytics endpoint: query efficiency (no per-log lazy loading)

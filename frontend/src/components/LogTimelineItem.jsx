@@ -44,7 +44,7 @@ export function AuthorChip({ label, className = '' }) {
   );
 }
 
-export default function LogTimelineItem({ log, onDelete, showAuthor = false }) {
+export default function LogTimelineItem({ log, onDelete, showAuthor = false, tourId }) {
   const navigate = useNavigate();
   const meta = LOG_TYPE_META[log.type] || LOG_TYPE_META.expense;
   const Icon = meta.icon;
@@ -52,6 +52,7 @@ export default function LogTimelineItem({ log, onDelete, showAuthor = false }) {
 
   return (
     <div
+      data-tour={tourId}
       role="link"
       tabIndex={0}
       onClick={() => navigate(`/logbook/${log.id}`)}

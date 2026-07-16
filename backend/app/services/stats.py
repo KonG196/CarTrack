@@ -213,6 +213,34 @@ def compute_station_stats(logs: Sequence[LogEntry], car: Car | None = None) -> l
     return stations
 
 
+def compute_lpg_savings(per_kind: dict[str, FuelStats]) -> dict | None:
+    """What running on gas saved versus petrol, from the car's own numbers.
+
+    Needs measured segments of BOTH fuels: each fuel's ``avg_cost_per_km`` is
+    its litres-per-km times its price, so the saving is simply the gap between
+    them over the kilometres actually driven on gas. Returns None unless the car
+    truly runs both and gas came out cheaper — a negative or zero gap is not a
+    saving worth a plaque.
+    """
+    lpg = per_kind.get("lpg")
+    petrol = per_kind.get("petrol")
+    if lpg is None or petrol is None:
+        return None
+    if lpg.avg_cost_per_km is None or petrol.avg_cost_per_km is None:
+        return None
+    per_km = petrol.avg_cost_per_km - lpg.avg_cost_per_km
+    if per_km <= 0:
+        return None
+    gas_km = sum(segment.distance_km for segment in lpg.history)
+    if gas_km <= 0:
+        return None
+    return {
+        "gas_distance_km": gas_km,
+        "saved_per_km": round(per_km, 2),
+        "saved_total": round(gas_km * per_km, 2),
+    }
+
+
 def compute_analytics(
     logs: Sequence[LogEntry], car: Car, today: dt.date | None = None
 ) -> dict:
@@ -265,6 +293,17 @@ def compute_analytics(
             for segment in segments
         ]
 
+    # Honest cost of ownership: every hryvnia logged, spread over the distance
+    # actually driven and the days actually owned — not just fuel. Needs two
+    # points to span anything; a car with one log, or all logs at one odometer
+    # or one day, reports None rather than a division by zero.
+    tco_odometers = [log.odometer for log in logs if log.odometer is not None]
+    tco_distance = (
+        max(tco_odometers) - min(tco_odometers) if len(tco_odometers) >= 2 else 0
+    )
+    tco_dates = [log.date for log in logs]
+    tco_days = (max(tco_dates) - min(tco_dates)).days if len(tco_dates) >= 2 else 0
+
     points = build_refuel_points(logs, car)
     # The legacy `fuel.*` block is the car's OWN fuel, not a blend of both
     # tanks: an average over petrol and gas together is a number with no
@@ -280,8 +319,17 @@ def compute_analytics(
             "this_month": round(this_month, 2),
             "by_type": {log_type: round(by_type[log_type], 2) for log_type in LOG_TYPES},
         },
+        "tco": {
+            "distance_km": tco_distance or None,
+            "days": tco_days or None,
+            "cost_per_km": (
+                round(all_time / tco_distance, 2) if tco_distance > 0 else None
+            ),
+            "cost_per_day": round(all_time / tco_days, 2) if tco_days > 0 else None,
+        },
         "monthly": monthly,
         "expense_by_category": compute_expense_by_category(logs),
+        "lpg_savings": compute_lpg_savings(per_kind),
         "stations": compute_station_stats(logs, car),
         "fuel": {
             "avg_consumption_l_100km": fuel_stats.avg_consumption_l_100km,
