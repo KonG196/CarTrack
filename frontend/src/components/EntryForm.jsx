@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Fuel, Wrench, Hammer, Receipt, Plus, Camera, Loader2, AlertTriangle } from 'lucide-react';
 import { extractError } from '../api/client';
-import { scanReceipt } from '../api/ocr';
+import { scanReceipt, scanWorkOrder } from '../api/ocr';
 import { getRefuelContext } from '../api/logs';
 import { num, computeRefuelUpdate } from '../utils/refuelMath';
 import { formatDate } from '../utils/format';
+import { describeWorkOrder, workOrderToFormValues } from '../utils/workOrder';
 import {
   COMMON_MAINTENANCE_ITEMS,
   REPAIR_CATEGORIES,
@@ -25,6 +26,39 @@ export const ENTRY_TYPES = [
 ];
 
 const NO_TOAST = { message: '', variant: 'ok' };
+
+function ScanButton({ scanning, onFile, idle, busy }) {
+  return (
+    <label
+      className={`relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-xl border border-dashed px-3.5 py-3.5 text-sm font-semibold transition-colors ${
+        scanning
+          ? 'pointer-events-none border-amber/50 text-amber'
+          : 'cursor-pointer border-edge-soft text-mist hover:border-amber hover:text-amber'
+      }`}
+    >
+      <input
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        disabled={scanning}
+        onChange={onFile}
+      />
+      {scanning ? (
+        <>
+          <Loader2 className="h-4 w-4 animate-spin" />
+          {busy}
+          <span className="scan-beam" aria-hidden="true" />
+        </>
+      ) : (
+        <>
+          <Camera className="h-4 w-4" />
+          {idle}
+        </>
+      )}
+    </label>
+  );
+}
 
 function Chip({ active, onClick, children }) {
   return (
@@ -207,6 +241,60 @@ export default function EntryForm({
     }
   };
 
+  // --- service-order scanning ---
+  const handleWorkOrderFile = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!file || scanning) return;
+
+    editedDuringScanRef.current = new Set();
+    scanningRef.current = true;
+    setScanning(true);
+    try {
+      const data = await scanWorkOrder(file);
+      if (onScanFile) onScanFile(file);
+      const scanned = workOrderToFormValues(data);
+      const edited = editedDuringScanRef.current;
+
+      if (scanned.date && !edited.has('date')) setDate(scanned.date);
+      if (scanned.partsCost != null && !edited.has('partsCost')) setPartsCost(scanned.partsCost);
+      if (scanned.laborCost != null && !edited.has('laborCost')) setLaborCost(scanned.laborCost);
+      // The bill the shop printed, not parts + labour: when the two halves
+      // disagreed with it the parser dropped them, and the total is what was
+      // actually paid.
+      if (scanned.totalCost != null && !edited.has('totalCost')) setTotalCost(scanned.totalCost);
+
+      if (scanned.checkedItems.length && !edited.has('checkedItems')) {
+        setCustomItems((current) => [
+          ...current,
+          ...scanned.customItems.filter((item) => !current.includes(item)),
+        ]);
+        setCheckedItems((current) => [
+          ...current,
+          ...scanned.checkedItems.filter((item) => !current.includes(item)),
+        ]);
+      }
+
+      const summary = describeWorkOrder(data);
+      setToast(
+        summary
+          ? { message: `Розпізнано: ${summary}`, variant: 'ok' }
+          : { message: 'Не вдалося розпізнати наряд', variant: 'warn' }
+      );
+    } catch (err) {
+      setToast({
+        message:
+          err?.response?.status === 503
+            ? 'Розпізнавання недоступне на сервері'
+            : 'Не вдалося розпізнати наряд. Спробуйте інше фото.',
+        variant: 'warn',
+      });
+    } finally {
+      scanningRef.current = false;
+      setScanning(false);
+    }
+  };
+
   // --- maintenance: total = parts + labor ---
   const onPartsChange = (v) => {
     setPartsCost(v);
@@ -370,34 +458,12 @@ export default function EntryForm({
 
         {type === 'refuel' && (
           <>
-            <label
-              className={`relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-xl border border-dashed px-3.5 py-3.5 text-sm font-semibold transition-colors ${
-                scanning
-                  ? 'pointer-events-none border-amber/50 text-amber'
-                  : 'cursor-pointer border-edge-soft text-mist hover:border-amber hover:text-amber'
-              }`}
-            >
-              <input
-                type="file"
-                accept="image/*"
-                capture="environment"
-                className="hidden"
-                disabled={scanning}
-                onChange={handleReceiptFile}
-              />
-              {scanning ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Розпізнаю чек…
-                  <span className="scan-beam" aria-hidden="true" />
-                </>
-              ) : (
-                <>
-                  <Camera className="h-4 w-4" />
-                  Сканувати чек
-                </>
-              )}
-            </label>
+            <ScanButton
+              scanning={scanning}
+              onFile={handleReceiptFile}
+              idle="Сканувати чек"
+              busy="Розпізнаю чек…"
+            />
             {mode === 'create' && scannedFile && (
               <p className="text-xs text-mist">Чек буде додано як фото запису.</p>
             )}
@@ -467,6 +533,15 @@ export default function EntryForm({
 
         {type === 'maintenance' && (
           <>
+            <ScanButton
+              scanning={scanning}
+              onFile={handleWorkOrderFile}
+              idle="Сканувати наряд СТО"
+              busy="Розпізнаю наряд…"
+            />
+            {mode === 'create' && scannedFile && (
+              <p className="text-xs text-mist">Наряд буде додано як фото запису.</p>
+            )}
             <div>
               <span className="mb-1.5 block text-sm text-mist">Що замінено</span>
               <div className="flex flex-col gap-1.5">
