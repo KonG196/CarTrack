@@ -461,7 +461,7 @@ def test_ocr_space_rung_reads_what_tesseract_missed(monkeypatch) -> None:
     monkeypatch.setattr(
         ocr_space,
         "recognize_text",
-        lambda image_bytes, content_type="image/jpeg": (
+        lambda image_bytes, content_type="image/jpeg", **kwargs: (
             "43,06 л х 15,99\nСУМА, ГРН. 688,53"
         ),
     )

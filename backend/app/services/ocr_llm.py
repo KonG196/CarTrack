@@ -186,6 +186,8 @@ def read_text(
     content_type: str,
     score: Callable[[str], int],
     enough: int,
+    *,
+    is_table: bool = False,
 ) -> str:
     """The best text the OCR rungs can produce, judged by the caller.
 
@@ -203,7 +205,7 @@ def read_text(
         return text
 
     try:
-        remote_text = ocr_space.recognize_text(image_bytes, content_type)
+        remote_text = ocr_space.recognize_text(image_bytes, content_type, is_table=is_table)
     except Exception:
         logger.warning("OCR.space fallback failed", exc_info=True)
         return text
@@ -251,18 +253,27 @@ def recognize_receipt(image_bytes: bytes, content_type: str = "image/jpeg") -> P
 
 
 def _work_order_score(text: str) -> int:
+    """How much of a service order this text yields, weighted by what it is for.
+
+    Money only, near enough: the items are a tiebreaker worth less than any one
+    sum. Counting them heavily is what let a tesseract pass on a real invoice —
+    one sum out of three, and twelve «items» that were the shop's phone number
+    and the terminal window behind the paper — look like a complete read and
+    stop the climb.
+    """
     parsed = parse_work_order(text)
-    money = sum(
-        value is not None
-        for value in (parsed.parts_cost, parsed.labor_cost, parsed.total_cost)
+    return (
+        10 * (parsed.total_cost is not None)
+        + 20 * (parsed.parts_cost is not None)
+        + 20 * (parsed.labor_cost is not None)
+        + min(len(parsed.items), 5)
     )
-    # The bill is the field the card cannot do without, so it outweighs a long
-    # list of half-read item names.
-    return money * 2 + min(len(parsed.items), 10)
 
 
-# What a work order must score before the climb stops: a bill and one item.
-_ORDER_ENOUGH = 3
+# All three sums. Anything less is worth one free call to a better reader — and
+# an order that genuinely prints no split simply costs that call and keeps what
+# it had.
+_ORDER_ENOUGH = 50
 
 
 def recognize_work_order(
@@ -274,7 +285,9 @@ def recognize_work_order(
     reads well, and there is no paid model configured to fall back to anyway.
     """
     return parse_work_order(
-        read_text(image_bytes, content_type, _work_order_score, _ORDER_ENOUGH)
+        read_text(
+            image_bytes, content_type, _work_order_score, _ORDER_ENOUGH, is_table=True
+        )
     )
 
 
@@ -312,9 +325,9 @@ def _classify(text: str) -> PhotoReading:
 def _photo_score(text: str) -> int:
     reading = _classify(text)
     if reading.kind == "refuel":
-        return 10 + reading.receipt.found_in_text
+        return 50 + reading.receipt.found_in_text
     if reading.kind == "work_order":
-        return 5 + min(len(reading.work_order.items), 4)
+        return _work_order_score(text)
     # Nothing readable yet, but a partial receipt still beats blank text: it is
     # what the next rung is compared against.
     return reading.receipt.found_in_text
@@ -325,5 +338,11 @@ def recognize_photo(image_bytes: bytes, content_type: str = "image/jpeg") -> Pho
 
     One climb up the rungs, both parsers on the text it returns, so a bot user
     photographs whatever paper the shop handed them and never picks a mode.
+
+    The rung is asked for table layout: a receipt reads the same either way,
+    while an order without it comes back a column at a time — every name, then
+    every price — and no line holds both.
     """
-    return _classify(read_text(image_bytes, content_type, _photo_score, 5))
+    return _classify(
+        read_text(image_bytes, content_type, _photo_score, _ORDER_ENOUGH, is_table=True)
+    )

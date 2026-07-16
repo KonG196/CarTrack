@@ -55,8 +55,17 @@ def _shrink_for_upload(image_bytes: bytes) -> tuple[bytes, str]:
     return buffer.getvalue(), "image/jpeg"
 
 
-def recognize_text(image_bytes: bytes, content_type: str = "image/jpeg") -> str | None:
-    """Return the text OCR.space reads on the image, or None on any failure."""
+def recognize_text(
+    image_bytes: bytes, content_type: str = "image/jpeg", *, is_table: bool = False
+) -> str | None:
+    """Return the text OCR.space reads on the image, or None on any failure.
+
+    ``is_table`` is not cosmetic. Left off, the engine reads a service order
+    column by column — every name first, then every price, then every sum — so
+    no line holds both a name and its money and the table cannot be read back.
+    On, the rows survive. It is off by default because the receipt parser is
+    tuned against the plain output and has the tests to prove it.
+    """
     if not enabled():
         return None
     image_bytes, content_type = _shrink_for_upload(image_bytes)
@@ -71,6 +80,8 @@ def recognize_text(image_bytes: bytes, content_type: str = "image/jpeg") -> str 
         # exactly the case it helps.
         "scale": "true",
     }
+    if is_table:
+        payload["isTable"] = "true"
     try:
         response = httpx.post(_URL, data=payload, timeout=_TIMEOUT_SECONDS)
         response.raise_for_status()

@@ -6,6 +6,8 @@ endpoint tests monkeypatch extract_text inside ocr_llm, where both the API and
 the bot read photos.
 """
 
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -121,6 +123,69 @@ def test_empty_text() -> None:
     parsed = parse_work_order("")
     assert not parsed.confident
     assert parsed.raw_text == ""
+
+
+# The one that matters: a verbatim OCR dump of a real invoice — рахунок-фактура
+# №643 from ФОП Ростоцький for this Golf's injector work, read by OCR.space with
+# isTable on. Every invented fixture above passed before this file existed, and
+# this one failed on all three sums.
+_REAL_INVOICE = (
+    Path(__file__).parent / "fixtures" / "invoice_643_ocrspace_table.txt"
+).read_text()
+
+
+def test_real_invoice_sums_are_read_exactly() -> None:
+    parsed = parse_work_order(_REAL_INVOICE)
+    assert parsed.labor_cost == 16000.00
+    assert parsed.parts_cost == 3200.00
+    assert parsed.total_cost == 19200.00
+    assert parsed.date == "2026-07-06"
+    assert parsed.confident
+
+
+def test_real_invoice_split_adds_up_to_the_bill() -> None:
+    """The shop's own arithmetic, which is the strongest check there is."""
+    parsed = parse_work_order(_REAL_INVOICE)
+    assert parsed.parts_cost + parsed.labor_cost == parsed.total_cost
+
+
+def test_the_same_word_means_labour_once_and_parts_once() -> None:
+    """«Разом:» appears twice, identical, meaning 16 000 then 3 200. Only the
+    heading above it says which — this is why the parser tracks sections."""
+    parsed = parse_work_order(_REAL_INVOICE)
+    assert _REAL_INVOICE.lower().count("разом:") == 2
+    assert parsed.labor_cost != parsed.parts_cost
+
+
+def test_real_invoice_items_are_work_not_the_letterhead() -> None:
+    parsed = parse_work_order(_REAL_INVOICE)
+    assert "Демонтаж-монтаж форсунок" in parsed.items
+    assert "Діагностика" in parsed.items
+    assert any("Фільтр палива" in item for item in parsed.items)
+    joined = " ".join(parsed.items).lower()
+    for stray in ("iban", "телефон", "єдрпоу", "загальна сума", "ростоцький"):
+        assert stray not in joined
+
+
+def test_the_room_the_photo_was_taken_in_is_not_a_service_item() -> None:
+    """A laptop behind the paper put «164 files changed, 9921 insertions(+)»
+    through OCR. It names something and carries numbers, which is the whole of
+    the item test — only being outside a priced section keeps it out."""
+    parsed = parse_work_order(_REAL_INVOICE)
+    joined = " ".join(parsed.items).lower()
+    for stray in ("insertions", "git diff", "shortstat", "console", "vault"):
+        assert stray not in joined
+
+
+def test_a_cyrillic_letter_where_a_digit_belongs() -> None:
+    """OCR reads «3 200,00» as «З 200,00». Untranslated it is 200 hryvnia —
+    a sixteenth of the real subtotal, and no error anywhere."""
+    assert "З 200,00" in _REAL_INVOICE
+    assert parse_work_order(_REAL_INVOICE).parts_cost == 3200.00
+
+
+def test_an_invoice_is_recognised_as_a_service_order() -> None:
+    assert looks_like_work_order(_REAL_INVOICE)
 
 
 def test_a_work_order_is_recognisable_as_one() -> None:
