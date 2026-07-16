@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import {
   Car,
   Fuel,
-  Receipt,
   Wallet,
   Droplets,
   Route,
@@ -393,25 +392,6 @@ export default function Dashboard() {
             <ChevronRight className="h-4 w-4 flex-shrink-0 text-mist" />
           </Card>
         </Link>
-      )}
-
-      {canAddEntries && (
-        <div className="grid grid-cols-2 gap-2.5">
-          <Link
-            to="/add?type=refuel"
-            className="flex items-center justify-center gap-2 rounded-2xl bg-amber px-4 py-3.5 text-sm font-medium text-amber-ink transition-colors hover:bg-amber-deep"
-          >
-            <Fuel className="h-4 w-4" />
-            Заправка
-          </Link>
-          <Link
-            to="/add?type=expense"
-            className="flex items-center justify-center gap-2 rounded-2xl border border-edge-soft bg-raised px-4 py-3.5 text-sm font-medium text-fg transition-colors hover:bg-edge"
-          >
-            <Receipt className="h-4 w-4" />
-            Витрата
-          </Link>
-        </div>
       )}
 
       <Card>
