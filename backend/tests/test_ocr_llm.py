@@ -1,7 +1,8 @@
 """Gemini receipt-recognition fallback: JSON mapping + endpoint wiring.
 
-No network calls: the mapper is tested on canned payloads and the endpoint
-tests monkeypatch recognize_receipt_llm / extract_text / settings.
+No network calls: the mapper is tested on canned payloads, and the endpoint
+tests monkeypatch recognize_receipt_llm / extract_text / settings inside
+ocr_llm — the module that owns the ladder for both the API and the bot.
 """
 
 import datetime as dt
@@ -9,7 +10,7 @@ import datetime as dt
 import pytest
 from fastapi.testclient import TestClient
 
-from app.routers import ocr as ocr_router
+from app.services import ocr_llm
 from app.services.ocr import ParsedReceipt
 from app.services.ocr_llm import parsed_receipt_from_llm
 
@@ -103,10 +104,10 @@ def _post_scan(client: TestClient, headers: dict):
 def test_endpoint_falls_back_to_llm_when_tesseract_fails(
     client: TestClient, auth_headers: dict, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("app.routers.ocr.extract_text", lambda b: "нечитабельно")
-    monkeypatch.setattr(ocr_router.settings, "GEMINI_API_KEY", "test-key")
+    monkeypatch.setattr("app.services.ocr_llm.extract_text", lambda b: "нечитабельно")
+    monkeypatch.setattr(ocr_llm.settings, "GEMINI_API_KEY", "test-key")
     monkeypatch.setattr(
-        "app.routers.ocr.recognize_receipt_llm",
+        "app.services.ocr_llm.recognize_receipt_llm",
         lambda image_bytes, content_type: ParsedReceipt(
             liters=43.06,
             price_per_liter=15.99,
@@ -125,13 +126,13 @@ def test_endpoint_falls_back_to_llm_when_tesseract_fails(
 def test_endpoint_survives_llm_error(
     client: TestClient, auth_headers: dict, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("app.routers.ocr.extract_text", lambda b: "нечитабельно")
-    monkeypatch.setattr(ocr_router.settings, "GEMINI_API_KEY", "test-key")
+    monkeypatch.setattr("app.services.ocr_llm.extract_text", lambda b: "нечитабельно")
+    monkeypatch.setattr(ocr_llm.settings, "GEMINI_API_KEY", "test-key")
 
     def boom(image_bytes: bytes, content_type: str) -> ParsedReceipt:
         raise RuntimeError("gemini down")
 
-    monkeypatch.setattr("app.routers.ocr.recognize_receipt_llm", boom)
+    monkeypatch.setattr("app.services.ocr_llm.recognize_receipt_llm", boom)
     response = _post_scan(client, auth_headers)
     assert response.status_code == 200
     assert response.json()["liters"] is None
@@ -140,13 +141,13 @@ def test_endpoint_survives_llm_error(
 def test_llm_not_called_without_key(
     client: TestClient, auth_headers: dict, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("app.routers.ocr.extract_text", lambda b: "нечитабельно")
-    monkeypatch.setattr(ocr_router.settings, "GEMINI_API_KEY", "")
+    monkeypatch.setattr("app.services.ocr_llm.extract_text", lambda b: "нечитабельно")
+    monkeypatch.setattr(ocr_llm.settings, "GEMINI_API_KEY", "")
 
     def must_not_be_called(image_bytes: bytes, content_type: str) -> ParsedReceipt:
         raise AssertionError("LLM fallback must stay disabled without a key")
 
-    monkeypatch.setattr("app.routers.ocr.recognize_receipt_llm", must_not_be_called)
+    monkeypatch.setattr("app.services.ocr_llm.recognize_receipt_llm", must_not_be_called)
     assert _post_scan(client, auth_headers).status_code == 200
 
 
@@ -154,14 +155,14 @@ def test_llm_not_called_when_tesseract_succeeded(
     client: TestClient, auth_headers: dict, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
-        "app.routers.ocr.extract_text",
+        "app.services.ocr_llm.extract_text",
         lambda b: "45.50 Л x 54.99\nСУМА 2502.05 ГРН",
     )
-    monkeypatch.setattr(ocr_router.settings, "GEMINI_API_KEY", "test-key")
+    monkeypatch.setattr(ocr_llm.settings, "GEMINI_API_KEY", "test-key")
 
     def must_not_be_called(image_bytes: bytes, content_type: str) -> ParsedReceipt:
         raise AssertionError("LLM fallback must not run when tesseract succeeded")
 
-    monkeypatch.setattr("app.routers.ocr.recognize_receipt_llm", must_not_be_called)
+    monkeypatch.setattr("app.services.ocr_llm.recognize_receipt_llm", must_not_be_called)
     body = _post_scan(client, auth_headers).json()
     assert body["liters"] == 45.5
