@@ -78,3 +78,10 @@ export async function confirmEmailChange(code) {
   const { data } = await client.post('/auth/email/confirm', { code });
   return data; // UserOut
 }
+
+// Irreversible: deletes the account, every owned car's history, and the files
+// on disk. The current password is required — a live session is not enough. A
+// DELETE carries its body under `data` in axios.
+export async function deleteAccount(password) {
+  await client.delete('/auth/me', { data: { password } });
+}

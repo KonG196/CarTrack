@@ -110,6 +110,12 @@ class EmailChangeIn(BaseModel):
     password: str = Field(min_length=1, max_length=128)
 
 
+class AccountDeleteIn(BaseModel):
+    # Deletion is irreversible and wipes every car's service history, so a live
+    # session is not enough — the current password must prove the owner.
+    password: str = Field(min_length=1, max_length=128)
+
+
 class EmailChangeOut(BaseModel):
     # Where the code went, so the UI can say it plainly instead of «check your
     # email» when there are now two of them in play.

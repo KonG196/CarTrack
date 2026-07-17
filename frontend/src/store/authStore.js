@@ -50,6 +50,13 @@ export const useAuthStore = create((set, get) => ({
     return user;
   },
 
+  async deleteAccount(password) {
+    await authApi.deleteAccount(password);
+    // The account is gone; drop the now-dead token and user like a logout.
+    localStorage.removeItem(TOKEN_KEY);
+    set({ token: null, user: null });
+  },
+
   logout() {
     localStorage.removeItem(TOKEN_KEY);
     set({ token: null, user: null });

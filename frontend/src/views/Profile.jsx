@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Check,
   Copy,
@@ -6,6 +7,7 @@ import {
   KeyRound,
   Mail,
   Send,
+  Trash2,
   UserCircle,
 } from 'lucide-react';
 import BackLink from '../components/BackLink';
@@ -403,6 +405,70 @@ function EmailCard({ onToast }) {
   );
 }
 
+function DangerZone() {
+  const navigate = useNavigate();
+  const deleteAccount = useAuthStore((s) => s.deleteAccount);
+  const [password, setPassword] = useState('');
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleDelete = async () => {
+    setConfirming(false);
+    setError('');
+    setBusy(true);
+    try {
+      await deleteAccount(password);
+      // Account and session are gone; land on the login screen.
+      navigate('/login', { replace: true });
+    } catch (err) {
+      setError(extractError(err, 'Не вдалося видалити акаунт'));
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card className="border-crit/30">
+      <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-crit">
+        <Trash2 className="h-4 w-4" />
+        Видалити акаунт
+      </h2>
+      <p className="mt-1 text-xs text-mist">
+        Безповоротно зникнуть усі ваші авто, історія обслуговування, документи й фото.
+        Скасувати неможливо. Введіть пароль для підтвердження.
+      </p>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (password) setConfirming(true);
+        }}
+        className="mt-3 space-y-3"
+      >
+        <TextField
+          label="Пароль"
+          type="password"
+          autoComplete="current-password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+        <ErrorMessage>{error}</ErrorMessage>
+        <Button type="submit" variant="danger" disabled={busy || !password}>
+          {busy ? 'Видалення…' : 'Видалити акаунт назавжди'}
+        </Button>
+      </form>
+
+      <ConfirmDialog
+        open={confirming}
+        title="Видалити акаунт назавжди?"
+        message="Уся сервісна історія ваших авто буде знищена без можливості відновлення."
+        confirmLabel="Так, видалити"
+        onConfirm={handleDelete}
+        onCancel={() => setConfirming(false)}
+      />
+    </Card>
+  );
+}
+
 export default function Profile() {
   const [toast, setToast] = useState('');
 
@@ -416,6 +482,7 @@ export default function Profile() {
       <EmailCard onToast={setToast} />
       <PasswordCard onToast={setToast} />
       <TelegramCard onToast={setToast} />
+      <DangerZone />
     </div>
   );
 }

@@ -1,15 +1,21 @@
 """Authentication endpoints: register, token, me, password reset via Telegram."""
 
+import logging
+import shutil
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.auth import create_access_token, get_current_user, hash_password, verify_password
+from app.config import settings
 from app.database import get_db
 from app.models import User
 from app.ratelimit import RateLimiter, client_ip
 from app.schemas import (
+    AccountDeleteIn,
     EmailChangeConfirmIn,
     EmailChangeIn,
     EmailChangeOut,
@@ -35,6 +41,7 @@ from app.services.verification import (
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+logger = logging.getLogger(__name__)
 
 # Sliding windows against credential brute force. Process-local by design
 # (single-worker deployment); cleared per test via the conftest fixture.
@@ -136,6 +143,37 @@ def update_me(
     db.commit()
     db.refresh(current_user)
     return current_user
+
+
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+def delete_me(
+    payload: AccountDeleteIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> None:
+    """Delete the account for good: every owned car, its whole history, and the
+    files on disk. Irreversible, so the current password must prove the owner —
+    a session left open on a borrowed laptop is not enough (see change_password).
+
+    Files live under ``<UPLOADS_DIR>/<owner_id>/`` (photos and documents both
+    keyed on the car's owner), so this user's directory holds exactly the files
+    of the cars being deleted. The ORM cascade (User.cars / User.memberships =
+    ``all, delete-orphan``) clears the rows; the directory is removed here. Disk
+    removal is best-effort — a failed unlink must not strand the row, which is
+    the record that actually authorises anything.
+    """
+    if not verify_password(payload.password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Пароль невірний"
+        )
+    user_uploads = Path(settings.UPLOADS_DIR) / str(current_user.id)
+    if user_uploads.exists():
+        try:
+            shutil.rmtree(user_uploads)
+        except OSError as exc:
+            logger.error("Failed to wipe uploads for user %s: %s", current_user.id, exc)
+    db.delete(current_user)
+    db.commit()
 
 
 @router.post("/password", status_code=status.HTTP_204_NO_CONTENT)
