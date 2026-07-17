@@ -78,7 +78,7 @@
 
 **Один реальний користувач** — власник і його VW Golf VII Variant 1.6 TDI (2016, 240 054 км, пригнаний з Німеччини 2022). Його справжня історія на проді: **19 записів, 49 500 грн, 7 інтервалів** (це витрати, які він сплатив особисто; роботи попереднього власника внесені з нульовою вартістю).
 
-**Реалізовано** — 3 стадії початкового роадмапу + 14 ітерацій (14–17.07.2026):
+**Реалізовано** — 3 стадії початкового роадмапу + 16 ітерацій (14–17.07.2026):
 
 | Ітерація | Зміст |
 |---|---|
@@ -99,8 +99,10 @@
 | **QR-паспорт** | публічна безтокенна сторінка авто (телефон, ОСЦПВ, тиск, допуск, VIN) + друкований QR у бардачок |
 | **iOS-поліш** | «Додати на головний екран» (Apple-мета, PNG+maskable-іконки, safe-area), онбординг-тур per-page, слайд-переходи між табами (View Transitions) |
 | **Видалення акаунта (GDPR)** | `DELETE /auth/me` з підтвердженням пароля → wipe файлів на диску + каскад усіх авто/історії; «небезпечна зона» в профілі |
+| **Security hardening** | SECRET_KEY boot-guard, X-Forwarded-For (правий hop), rate-limit password/email/delete, SVG stored-XSS закрито (allowlist + nosniff), ReDoS-фікс, Pillow decompression-bomb cap, SW-cache purge на logout, `/docs`+`/health` сховані за `ENV=production`; пен-тест-звіт у `docs/security/` |
+| **Сесії + ревокація** | refresh-токени (`/auth/refresh`, тихе оновлення на 401) — не розлогінює з часом; `token_version` вбиває сесії при зміні/скиданні пароля; lockout reset/verify-кодів (5 спроб); атомарний single-use інвайт |
 
-**Масштаб:** ~70 REST-ендпоінтів, 16 таблиць, **22 Alembic-ревізії**, 19 екранів, **~1000 бекенд-тестів і ~300 фронтенд**. Білінгу немає.
+**Масштаб:** ~71 REST-ендпоінт, 16 таблиць, **23 Alembic-ревізії**, 19 екранів, **~1050 бекенд-тестів і ~300 фронтенд**. Білінгу немає.
 ## 2. Архітектура і алгоритми
 
 ## 2.1 Загальна схема системи
@@ -430,15 +432,20 @@ Read-only сторінка авто для випадків «віддаю на 
 ## 2.4 Авторизація і безпека
 
 - **Паролі:** bcrypt через `passlib.CryptContext(schemes=["bcrypt"])`; версії запінені (`passlib==1.7.4` + `bcrypt==4.0.1`) через відому несумісність passlib з bcrypt ≥ 4.1.
-- **JWT:** HS256, payload `{"sub": str(user_id), "exp": ...}`. `ACCESS_TOKEN_EXPIRE_MINUTES`: дефолт у коді 43200 (30 діб — зручно для PWA), у docker-compose дефолт 60. `SECRET_KEY` з env (dev-дефолт `dev-secret-change-me`). Логін: `POST /api/auth/token` (OAuth2 password form; email обрізається і переводиться в нижній регістр), реєстрація `POST /api/auth/register` (409-подібний 400 при дублі email), профіль `GET /api/auth/me`.
-- **`get_current_user`:** декодує Bearer-токен, відхиляє токени з claim `purpose` (див. 2.3.6), парсить `sub` як int, шукає користувача в БД; будь-яка помилка → 401 з `WWW-Authenticate: Bearer`. Refresh-токенів, ролей, rate-limiting і token-revocation **немає**.
+- **JWT + сесії (access + refresh):** HS256. Логін `POST /api/auth/token` віддає **пару**: access `{"sub", "exp", "tv"}` (короткоживучий) і refresh `{"sub", "exp", "tv", "purpose": "refresh"}` (30 днів, `REFRESH_TOKEN_EXPIRE_DAYS`). Коли access згорає, клієнт міняє refresh на нову пару через `POST /api/auth/refresh` — сесія не переривається (axios-інтерсептор ловить 401, тихо оновлює раз, single-flight, і повторює запит). `tv` = `users.token_version`: звіряється щозапиту, тож **зміна/скидання пароля bump'ить його й убиває всі старі токени** (і access, і refresh). Легасі-токени без `tv` читаються як 0. Purpose-ізоляція: refresh не приймається як access і навпаки; link-код (`purpose="tg-link"`) — теж окремо.
+- **`get_current_user`:** декодує Bearer-access, відхиляє будь-який `purpose`-токен (refresh/link — не access), парсить `sub`, вантажить користувача, і **звіряє `payload.tv == user.token_version`** (інакше 401). `POST /api/auth/refresh` дзеркально: `decode_refresh_token` вимагає `purpose="refresh"` + валідний `tv`.
+- **SECRET_KEY boot-guard:** застосунок **відмовляється стартувати** на дефолтному/порожньому ключі (`dev-secret-change-me`, `change-me-in-production`, «change-me-to-a-long-random-string», порожній) — інакше HS256-ключ був би публічним і будь-хто форжив би токени. У проді ключ — випадковий 64-hex.
+- **Rate limiting** (`app/ratelimit.py`, in-memory sliding window): `/auth/token` 5/5хв, `/auth/register` 3/год, `/auth/reset/*` 3–5/15хв, `/auth/verify/resend` 3/15хв — плюс **per-user 5/15хв на password/email/delete** (щоб перехоплена сесія не брутила пароль). Ключ IP береться з **правого** елемента `X-Forwarded-For` (той, що дописав довірений проксі), а не лівого — інакше клієнт спуфив би бакет і брутфорс був би безлімітним.
+- **Lockout кодів:** 6-значні reset/verify-коди **згорають після 5 хибних спроб** (лічильник на користувачі, незалежний від IP) — bcrypt-хеш у базі, одноразові, TTL, уніфікована 400.
+- **Пен-тест auth-поверхні** (2026-07-17, `docs/security/2026-07-17-pentest.md`): `alg=none`, HS256-confusion, access↔refresh підміна, підроблений `tv`, прострочений refresh — усе 401. Залишкове: stateless-refresh без reuse-detection (вкрадений refresh живе до 30 днів / до bump'а `tv`); вектор — XSS localStorage (прийнятий).
 - **Ownership-скоупінг на кожному роуті:** три хелпери — `get_owned_car(db, user, car_id)` (`WHERE Car.id = ? AND Car.user_id = user.id`), `get_owned_log` та `get_owned_interval` (обидва через `JOIN cars` з фільтром `Car.user_id`). Чужий або неіснуючий ресурс дає однаковий **404** (без витоку існування, немає 403). Через ці хелпери проходять усі роути cars/logs/intervals/analytics/reports; `POST /api/ocr/scan` і `POST /api/ocr/scan-order` вимагають лише автентифікації (не прив'язані до авто). У боті ownership перевіряється у callback-хендлерах через `get_car(db, user, car_id)`.
 - **CORS:** allowlist з `CORS_ORIGINS` (кома-розділений рядок, дефолт `http://localhost:5173`), `allow_credentials=True`.
+- **Інша hardening:** завантаження — лише інертні растрові типи + PDF (SVG **заборонено**: активний контент → stored-XSS), файли віддаються з безпечним media-type + `X-Content-Type-Options: nosniff`; парсер нарядів захищено від ReDoS (стрип по одному токену, cap 300 симв.); `Image.MAX_IMAGE_PIXELS` проти decompression-bomb; service-worker `api-cache` чиститься на logout (щоб на спільному пристрої дані не перетекли іншому); інвайти — атомарний single-use (`UPDATE … WHERE used_at IS NULL`). За `ENV=production` ховаються `/docs`, `/openapi.json` і мапа інтеграцій у `/health`, а порожній `SMTP_HOST` блокує старт (щоб прод не авто-верифікував пошту).
 - Інваріант одометра: `POST/PATCH` лога з `odometer > car.current_odometer` пересуває одометр авто вперед (назад — ніколи); бот теж forward-only.
 
 ## 2.5 Міграції (Alembic)
 
-Ланцюг **лінійний, один head**: `base → 0001_baseline → 0002_log_photos → 0003_updated_at_reset → 0004_expense_categories → 0005_vin_plate_pace_snooze → 0006_car_specs_documents → 0007_obd_sessions_metrics → 0008_car_members → 0009_car_invites → 0010_digest_enabled → 0011_tank_liters_monthly_budget → 0012_tire_sets → 0013_refuel_fuel_kind → 0014_email_verification → 0015_pending_email → 0016_reminders_enabled → 0017_consumption_alert → 0018_seasonal_reminders → 0019_tire_rotation → 0020_car_scratchpad → 0021_car_passport → 0022_notify_types`. Усього **22 ревізії**.
+Ланцюг **лінійний, один head**: `base → 0001_baseline → 0002_log_photos → 0003_updated_at_reset → 0004_expense_categories → 0005_vin_plate_pace_snooze → 0006_car_specs_documents → 0007_obd_sessions_metrics → 0008_car_members → 0009_car_invites → 0010_digest_enabled → 0011_tank_liters_monthly_budget → 0012_tire_sets → 0013_refuel_fuel_kind → 0014_email_verification → 0015_pending_email → 0016_reminders_enabled → 0017_consumption_alert → 0018_seasonal_reminders → 0019_tire_rotation → 0020_car_scratchpad → 0021_car_passport → 0022_notify_types → 0023_token_version`. Усього **23 ревізії**.
 
 `app/migrations.py::run_migrations(engine)` викликається в lifespan API і на старті бота: (1) якщо таблиці `alembic_version` немає, але `users` існує — база легасі, її **штампують** `0001_baseline`; (2) `alembic upgrade head`; (3) `ensure_schema(engine)` лишився як фолбек для дуже старих dev-баз. Ревізії ідемпотентні (перевіряють наявність колонки/таблиці перед ALTER) — це дозволяє накотити їх на базу, створену колишнім `create_all`.
 
@@ -452,7 +459,7 @@ Read-only сторінка авто для випадків «віддаю на 
 16 таблиць. Усі FK з `ON DELETE CASCADE`. Гроші — `NUMERIC(10,2)`, обʼєми — `NUMERIC(6,2)`.
 
 **Акаунт і доступ**
-- `users` — id, email (unique), hashed_password (bcrypt), telegram_chat_id, display_name, pending_email, digest_enabled, **reminders_enabled**, **notify_fuel**, **notify_seasonal**, **notify_rotation** (усі 4 — гранульовані вимикачі пушів, дефолт true), email_verified, verify_code_hash, verify_code_expires_at, reset_code_hash, reset_code_expires_at, created_at
+- `users` — id, email (unique), hashed_password (bcrypt), telegram_chat_id, display_name, pending_email, digest_enabled, **reminders_enabled**, **notify_fuel**, **notify_seasonal**, **notify_rotation** (усі 4 — гранульовані вимикачі пушів, дефолт true), email_verified, verify_code_hash, verify_code_expires_at, **verify_code_attempts**, reset_code_hash, reset_code_expires_at, **reset_code_attempts** (обидва — lockout після 5 хибних), **token_version** (ревокація сесій при зміні пароля), created_at
 - `cars` — id, user_id (**власник**, лишений як денормалізація), brand, model, generation, engine, year, fuel_type (petrol/diesel/lpg/electric/hybrid), current_odometer, vin, plate, avg_daily_km_override, tank_liters, monthly_budget, **consumption_alert_log_id** (дедуп watchdog), **tire_reminder_year**, **washer_reminder_year** (дедуп сезонних пушів, раз на рік), **scratchpad** (блокнот водія), **public_token** (QR-паспорт, NULL доки не змінтено), **contact_phone**, **insurance_number**, **insurance_until**, **tire_pressure**, **fuel_approval** (паспортні поля для публічної сторінки), created_at, updated_at
 - `car_members` — id, car_id, user_id, role (`owner`/`editor`/`viewer`), created_at, unique(car_id, user_id)
 - `car_invites` — id, car_id, token_hash (**лише bcrypt-хеш**), role, created_by, expires_at, used_by, used_at, created_at
@@ -478,8 +485,8 @@ Read-only сторінка авто для випадків «віддаю на 
 **Файли на диску:** `uploads/<owner_id>/<uuid>.<ext>` — ключ по **власнику авто**, не по завантажувачу (інакше зі спільним доступом файл редактора був би невидимий власнику).
 ## 3.2. Автентифікація та формат помилок
 
-- **JWT** HS256, `SECRET_KEY` з env (дефолт `dev-secret-change-me`). Access-токен: payload `{"sub": "<user_id>", "exp": ...}`, термін дії `ACCESS_TOKEN_EXPIRE_MINUTES` (дефолт у коді **43200 хв = 30 діб**). Заголовок: `Authorization: Bearer <token>`, tokenUrl `/api/auth/token`.
-- Токени зі claim `purpose` (наприклад, Telegram link-код з `purpose="tg-link"`) **не** приймаються як access-токени → 401.
+- **JWT** HS256, `SECRET_KEY` з env (старт блокується на дефолті/порожньому — див. 2.4). Access-токен: payload `{"sub", "exp", "tv"}`; refresh-токен додає `"purpose": "refresh"` і живе `REFRESH_TOKEN_EXPIRE_DAYS` (30). `tv` = `token_version`, звіряється щозапиту (ревокація). Логін і `POST /api/auth/refresh` віддають пару; заголовок `Authorization: Bearer <access>`.
+- Токени зі claim `purpose` (refresh, Telegram link-код `purpose="tg-link"`) **не** приймаються як access → 401; access-токен не приймається на `/auth/refresh`.
 - Будь-який захищений ендпоінт без/з невалідним токеном → **401** `{"detail": "Could not validate credentials"}` + `WWW-Authenticate: Bearer`.
 - Формат помилок — стандарт FastAPI `{"detail": ...}`, АЛЕ `detail` буває двох форм: (а) **масив обʼєктів** pydantic для автоматичної 422-валідації тіла (`[{"loc": ..., "msg": ..., "type": ...}]`); (б) **простий рядок** для ручних HTTPException, включно з кастомними 422 із роутерів logs/intervals (напр. `"Invalid log type 'fuel'"`, `"Incomplete detail object: Field required"`). Клієнт мусить обробляти обидві форми.
 - Ізоляція даних: усі ресурси чужих користувачів відповідають **404** (не 403) — `"Car not found"`, `"Log entry not found"`, `"Service interval not found"`.
@@ -493,7 +500,7 @@ Read-only сторінка авто для випадків «віддаю на 
 
 | Група | Ендпоінти |
 |---|---|
-| Auth | `POST /auth/register` (→ `{email_verified, verification_sent}`), `POST /auth/token` (**403 доки пошта не підтверджена**), `GET|PATCH /auth/me` (**PATCH також перемикає `digest_enabled` / `reminders_enabled` / `notify_fuel` / `notify_seasonal` / `notify_rotation`** — екран `/notifications`), **`DELETE /auth/me`** (видалення акаунта: потрібен пароль → wipe `uploads/<id>/` + каскад усіх авто/історії, 204), **`POST /auth/password`** (потрібен поточний), **`POST /auth/email`** + **`POST /auth/email/confirm`** (зміна адреси через `pending_email`), `POST /auth/verify/confirm`, `POST /auth/verify/resend` (завжди 202), `POST /auth/reset/request` (**завжди 202**, приймає `channel: telegram|email`), `POST /auth/reset/confirm` |
+| Auth | `POST /auth/register` (→ `{email_verified, verification_sent}`), `POST /auth/token` (**403 доки пошта не підтверджена**; віддає access **+ refresh**), **`POST /auth/refresh`** (refresh-токен → нова пара; access/link-код тут відхиляються), `GET|PATCH /auth/me` (**PATCH також перемикає `digest_enabled` / `reminders_enabled` / `notify_fuel` / `notify_seasonal` / `notify_rotation`** — екран `/notifications`), **`DELETE /auth/me`** (видалення акаунта: потрібен пароль → wipe `uploads/<id>/` + каскад усіх авто/історії, 204), **`POST /auth/password`** (потрібен поточний → **нова пара токенів**: інші сесії ревокуються, поточна лишається), **`POST /auth/email`** + **`POST /auth/email/confirm`** (зміна адреси через `pending_email`), `POST /auth/verify/confirm`, `POST /auth/verify/resend` (завжди 202), `POST /auth/reset/request` (**завжди 202**, приймає `channel: telegram|email`), `POST /auth/reset/confirm` |
 | Гараж | `GET|POST /cars`, `GET|PATCH|DELETE /cars/{id}`, **`POST|DELETE /cars/{id}/passport-token`** (мінт/відкликання QR-паспорта) |
 | Публічне | **`GET /public/cars/{token}`** — безтокенна read-only паспортна сторінка (телефон, ОСЦПВ, тиск у шинах, допуск пального, VIN); чужий/відкликаний токен → 404 |
 | Журнал | `GET|POST /cars/{id}/logs` (фільтри `type`, **`q`**, limit/offset), `GET|PATCH|DELETE /logs/{id}`, `POST /logs/{id}/photos`, `GET|DELETE /photos/{id}`, `GET /cars/{id}/refuel-context` |
@@ -691,7 +698,7 @@ Read-only сторінка без логіна, віддає `GET /api/public/ca
 - `reset()` — викликається при логауті, чистить усе і видаляє ключ активного авто.
 - Кешування «наївне»: дані живуть у памʼяті стора, але кожен екран у `useEffect` рефетчить свій ресурс при монтуванні/зміні `activeCarId`; TTL, SWR-патернів чи React Query немає.
 
-**HTTP-шар** (`api/client.js`): axios-інстанс з `baseURL: '/api'`; request-інтерцептор додає `Authorization: Bearer <token>` з localStorage; response-інтерцептор на **401** видаляє токен і робить жорсткий redirect `window.location.href = '/login'` (втрачається стан SPA). `extractError(error, fallback)` дістає `detail` з відповіді FastAPI (рядок або масив валідаційних помилок).
+**HTTP-шар** (`api/client.js`): axios-інстанс з `baseURL: '/api'`; request-інтерцептор додає `Authorization: Bearer <access>` з localStorage. На **401** інтерцептор **тихо оновлює токен** через `POST /auth/refresh` (single-flight — пачка 401 ділить один виклик), ставить нову пару в localStorage і **повторює** оригінальний запит; лише якщо refresh теж провалився (або його нема) — чистить токени + service-worker `api-cache` і жорсткий redirect `window.location.href = '/login'`. `setTokens`/`clearTokens` — єдина точка запису токенів. `extractError` дістає `detail` (рядок або масив валідаційних помилок).
 
 ## 4.3. PWA-конфігурація
 
@@ -857,8 +864,8 @@ nginx-конфіг фронтенда (`frontend/nginx.conf`):
 2. **Oracle Always Free може відібрати «неактивний» інстанс** — політика це формально дозволяє. Бот постійно полить Telegram, тож ризик малий, але бекап у чат — єдина страховка.
 3. **DuckDNS — сторонній безкоштовний сервіс.** Ляже він — API стане недосяжним (фронт на Vercel лишиться, але без даних).
 4. **Gmail SMTP: ~500 листів/добу** і ризик, що Google порахує розсилку підозрілою. Для десятків користувачів вистачить, для сотень — ні.
-5. **JWT у localStorage.** XSS = крадіжка токена; refresh-токенів немає. Свідомий компроміс на користь простоти PWA.
-6. **Rate limiting in-memory, per-process** — рестарт обнуляє лічильники; `X-Forwarded-For` довіряється беззастережно (коректно за Caddy/nginx).
+5. **Токени в localStorage.** Тепер access **+ refresh** (сесія живе тижнями через `/auth/refresh`); ревокуються `token_version` при зміні пароля. Компроміс лишається — XSS вкрав би refresh (до 30 днів); httpOnly-cookie відкинуто, бо фронт (Vercel) і API на різних доменах → third-party cookie ненадійний. Reuse-detection для refresh немає (stateless).
+6. **Rate limiting in-memory, per-process** — рестарт обнуляє лічильники (для одного інстанса ОК). IP береться з **правого** hop `X-Forwarded-For` (не спуфиться за одним довіреним проксі); за 2+ проксі індекс треба підняти.
 7. **Мультивалютності немає** — митниця в EUR збережена як 0.
 8. **Сирі OBD-логи не зберігаються** (лише агрегати + ≤200 точок); розпізнаються тільки відомі колонки Car Scanner.
 9. **Глобальної бази специфікацій немає** — тех-довідник ручний, один пресет (Golf 7 CXXB).
