@@ -180,7 +180,7 @@ export default function Layout() {
   return (
     <TourProvider>
     <div className="min-h-screen bg-garage">
-      <header className="sticky top-0 z-40 border-b border-edge bg-garage/90 pt-[env(safe-area-inset-top)] backdrop-blur">
+      <header className="app-header sticky top-0 z-40 border-b border-edge bg-garage/90 pt-[env(safe-area-inset-top)] backdrop-blur">
         <div className="mx-auto flex max-w-md items-center justify-between gap-3 px-4 py-3">
           <NavLink to="/" aria-label="На головну" className="shrink-0">
             <Wordmark />
@@ -198,7 +198,7 @@ export default function Layout() {
         <Outlet />
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-edge bg-garage/95 backdrop-blur">
+      <nav className="app-nav fixed inset-x-0 bottom-0 z-40 border-t border-edge bg-garage/95 backdrop-blur">
         <div className="mx-auto grid max-w-md grid-cols-5 items-end px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-1.5">
           {NAV_ITEMS.map(({ to, label, icon: Icon, end, primary, tour }) => (
             <NavLink

@@ -346,7 +346,28 @@
 main {
   view-transition-name: page;
 }
-/* root = хедер + нав: без крос-фейду, просто стоять */
+/* Хедер і нижня навігація — власні знімки, що НЕ рухаються й НЕ зникають під час
+   слайду. Без цього (коли вони частина root) Safari на iOS ховає sticky/fixed
+   елементи на час переходу, і шапка з навігацією блимають. Власна назва лишає їх
+   окремими шарами: без анімації (стоять на місці) і поверх сторінки, що їде,
+   тож контент слайдиться ПІД ними — як і має бути в застосунку. */
+.app-header {
+  view-transition-name: appheader;
+}
+.app-nav {
+  view-transition-name: appnav;
+}
+::view-transition-group(appheader),
+::view-transition-group(appnav) {
+  z-index: 20;
+}
+::view-transition-old(appheader),
+::view-transition-new(appheader),
+::view-transition-old(appnav),
+::view-transition-new(appnav) {
+  animation: none;
+}
+/* root = решта хрому (банери, тло): без крос-фейду, просто стоїть */
 ::view-transition-old(root),
 ::view-transition-new(root) {
   animation: none;
