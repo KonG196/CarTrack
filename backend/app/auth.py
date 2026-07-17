@@ -28,12 +28,45 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 
+#: Marks a refresh token so it can never be used as an access token, and an
+#: access token can never be spent at /auth/refresh.
+REFRESH_PURPOSE = "refresh"
+
+
 def create_access_token(user_id: int, token_version: int = 0) -> str:
     expire = dt.datetime.now(dt.timezone.utc) + dt.timedelta(
         minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
     )
     payload = {"sub": str(user_id), "exp": expire, "tv": token_version}
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=ALGORITHM)
+
+
+def create_refresh_token(user_id: int, token_version: int = 0) -> str:
+    expire = dt.datetime.now(dt.timezone.utc) + dt.timedelta(
+        days=settings.REFRESH_TOKEN_EXPIRE_DAYS
+    )
+    payload = {
+        "sub": str(user_id),
+        "exp": expire,
+        "tv": token_version,
+        "purpose": REFRESH_PURPOSE,
+    }
+    return jwt.encode(payload, settings.SECRET_KEY, algorithm=ALGORITHM)
+
+
+def decode_refresh_token(token: str) -> tuple[int, int] | None:
+    """(user_id, token_version) from a valid refresh token, else None. Rejects
+    access tokens and link codes — only a genuine refresh token is accepted."""
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
+    except jwt.InvalidTokenError:
+        return None
+    if payload.get("purpose") != REFRESH_PURPOSE:
+        return None
+    try:
+        return int(payload["sub"]), int(payload.get("tv", 0))
+    except (KeyError, ValueError, TypeError):
+        return None
 
 
 def get_current_user(

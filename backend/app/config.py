@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite:///./kapot_tracker.db"
     SECRET_KEY: str = "dev-secret-change-me"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 43200
+    # The refresh token keeps a session alive across access-token expiry: the
+    # client silently trades it for a fresh access token, so nobody is logged
+    # out mid-use. Revoked all the same by a token_version bump.
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 30
     CORS_ORIGINS: str = "http://localhost:5173"
     TELEGRAM_BOT_TOKEN: str = ""
     TELEGRAM_BOT_USERNAME: str = ""

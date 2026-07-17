@@ -58,10 +58,13 @@ export async function resendVerification(email) {
 }
 
 export async function changePassword(currentPassword, newPassword) {
-  await client.post('/auth/password', {
+  // Returns a fresh {access_token, refresh_token}: the change revokes other
+  // sessions, so this one is re-issued to avoid logging the caller out.
+  const { data } = await client.post('/auth/password', {
     current_password: currentPassword,
     new_password: newPassword,
   });
+  return data;
 }
 
 // Starts a move; nothing changes until the code sent to the new address comes

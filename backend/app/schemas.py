@@ -181,6 +181,13 @@ class UserUpdate(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    # Long-lived; the client trades it for a fresh access token at /auth/refresh
+    # when the access token expires, so a live session is not interrupted.
+    refresh_token: str | None = None
+
+
+class RefreshIn(BaseModel):
+    refresh_token: str = Field(min_length=1)
 
 
 class RegisterOut(BaseModel):

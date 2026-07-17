@@ -19,7 +19,10 @@ def test_password_changes_and_the_old_one_stops_working(
         json={"current_password": DEFAULT_PASSWORD, "new_password": "new-secret-1"},
         headers=auth_headers,
     )
-    assert response.status_code == 204, response.text
+    assert response.status_code == 200, response.text
+    # A fresh token pair comes back so the caller stays signed in.
+    assert response.json()["access_token"]
+    assert response.json()["refresh_token"]
 
     old = client.post(
         "/api/auth/token",

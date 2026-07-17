@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import * as authApi from '../api/auth';
-import { TOKEN_KEY, extractError } from '../api/client';
+import { TOKEN_KEY, clearTokens, extractError, setTokens } from '../api/client';
 
 export const useAuthStore = create((set, get) => ({
   token: localStorage.getItem(TOKEN_KEY),
@@ -8,9 +8,9 @@ export const useAuthStore = create((set, get) => ({
   userLoading: false,
 
   async login(email, password) {
-    const { access_token } = await authApi.login(email, password);
-    localStorage.setItem(TOKEN_KEY, access_token);
-    set({ token: access_token });
+    const data = await authApi.login(email, password);
+    setTokens(data);
+    set({ token: data.access_token });
     const user = await authApi.getMe();
     set({ user });
     return user;
@@ -50,16 +50,24 @@ export const useAuthStore = create((set, get) => ({
     return user;
   },
 
+  // Changing the password revokes every OTHER session; the server hands back a
+  // fresh pair for THIS one, so we swap the stored tokens and stay signed in.
+  async changePassword(currentPassword, newPassword) {
+    const data = await authApi.changePassword(currentPassword, newPassword);
+    setTokens(data);
+    set({ token: data.access_token });
+  },
+
   async deleteAccount(password) {
     await authApi.deleteAccount(password);
-    // The account is gone; drop the now-dead token and user like a logout.
-    localStorage.removeItem(TOKEN_KEY);
+    // The account is gone; drop the now-dead tokens and user like a logout.
+    clearTokens();
     await purgeApiCache();
     set({ token: null, user: null });
   },
 
   logout() {
-    localStorage.removeItem(TOKEN_KEY);
+    clearTokens();
     // Purge the service-worker api-cache too: without this, the next person to
     // sign in on a shared device could be served this user's cached cars/logs
     // (NetworkFirst falls back to cache when offline/slow).

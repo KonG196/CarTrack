@@ -9,7 +9,14 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.auth import create_access_token, get_current_user, hash_password, verify_password
+from app.auth import (
+    create_access_token,
+    create_refresh_token,
+    decode_refresh_token,
+    get_current_user,
+    hash_password,
+    verify_password,
+)
 from app.config import settings
 from app.database import get_db
 from app.models import User
@@ -20,6 +27,7 @@ from app.schemas import (
     EmailChangeIn,
     EmailChangeOut,
     PasswordChangeIn,
+    RefreshIn,
     RegisterOut,
     ResetConfirmIn,
     ResetRequestIn,
@@ -117,9 +125,39 @@ def login(
         )
     # A legitimate owner should not stay locked out by their earlier typos.
     login_limiter.reset(limit_key)
+    return _issue_tokens(user)
+
+
+def _issue_tokens(user: User) -> Token:
+    """A matching access + refresh pair, both bound to the current token_version."""
     return Token(
-        access_token=create_access_token(user.id, user.token_version), token_type="bearer"
+        access_token=create_access_token(user.id, user.token_version),
+        refresh_token=create_refresh_token(user.id, user.token_version),
+        token_type="bearer",
     )
+
+
+@router.post("/refresh", response_model=Token)
+def refresh_token(payload: RefreshIn, db: Session = Depends(get_db)) -> Token:
+    """Trade a valid refresh token for a fresh access+refresh pair.
+
+    Rejects an access token or link code (wrong purpose), an expired/forged
+    token, and — via token_version — one issued before the last password
+    change or reset. On any of those the client must log in again.
+    """
+    decoded = decode_refresh_token(payload.refresh_token)
+    invalid = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    if decoded is None:
+        raise invalid
+    user_id, token_version = decoded
+    user = db.get(User, user_id)
+    if user is None or token_version != user.token_version:
+        raise invalid
+    return _issue_tokens(user)
 
 
 @router.get("/me", response_model=UserOut)
@@ -182,16 +220,19 @@ def delete_me(
     db.commit()
 
 
-@router.post("/password", status_code=status.HTTP_204_NO_CONTENT)
+@router.post("/password", response_model=Token)
 def change_password(
     payload: PasswordChangeIn,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> None:
-    """Change the password, proving the current one first.
+) -> Token:
+    """Change the password, proving the current one first, and hand back a fresh
+    token pair so the caller stays signed in.
 
     Being logged in is not proof of being the owner — a session left open on a
     borrowed laptop is enough to be logged in. Knowing the current password is.
+    Bumping token_version revokes every OTHER session; the returned pair keeps
+    THIS one alive, so the person who just changed their password isn't kicked.
     """
     _enforce_rate_limit(sensitive_limiter, current_user.id)
     if not verify_password(payload.current_password, current_user.hashed_password):
@@ -199,10 +240,10 @@ def change_password(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Поточний пароль невірний"
         )
     current_user.hashed_password = hash_password(payload.new_password)
-    # Revoke every other session: a changed password should not leave old
-    # tokens alive. The caller re-logs in (their current token is now stale too).
     current_user.token_version += 1
     db.commit()
+    db.refresh(current_user)
+    return _issue_tokens(current_user)
 
 
 @router.post("/email", response_model=EmailChangeOut)

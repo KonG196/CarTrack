@@ -13,7 +13,7 @@ from app.services.reset import confirm_reset
 from tests.conftest import DEFAULT_EMAIL, DEFAULT_PASSWORD
 
 
-def test_password_change_revokes_existing_tokens(
+def test_password_change_revokes_other_tokens_but_keeps_this_session(
     client: TestClient, auth_headers: dict[str, str]
 ) -> None:
     resp = client.post(
@@ -21,16 +21,54 @@ def test_password_change_revokes_existing_tokens(
         json={"current_password": DEFAULT_PASSWORD, "new_password": "brand-new-1"},
         headers=auth_headers,
     )
-    assert resp.status_code == 204, resp.text
-    # The token that was valid a moment ago now carries a stale version.
+    assert resp.status_code == 200, resp.text
+    # The old token (any other session) is now dead...
     assert client.get("/api/auth/me", headers=auth_headers).status_code == 401
-    # A fresh login works and mints a token with the new version.
-    again = client.post(
-        "/api/auth/token", data={"username": DEFAULT_EMAIL, "password": "brand-new-1"}
+    # ...but the fresh pair returned to the caller keeps THIS session alive.
+    fresh = {"Authorization": f"Bearer {resp.json()['access_token']}"}
+    assert client.get("/api/auth/me", headers=fresh).status_code == 200
+
+
+def test_refresh_issues_a_new_access_token(
+    client: TestClient, auth_headers: dict[str, str]  # noqa: ARG001 — registers the user
+) -> None:
+    login = client.post(
+        "/api/auth/token", data={"username": DEFAULT_EMAIL, "password": DEFAULT_PASSWORD}
     )
-    assert again.status_code == 200, again.text
-    new_headers = {"Authorization": f"Bearer {again.json()['access_token']}"}
-    assert client.get("/api/auth/me", headers=new_headers).status_code == 200
+    assert login.status_code == 200, login.text
+    refresh = login.json()["refresh_token"]
+    assert refresh
+
+    r = client.post("/api/auth/refresh", json={"refresh_token": refresh})
+    assert r.status_code == 200, r.text
+    new_access = r.json()["access_token"]
+    assert client.get(
+        "/api/auth/me", headers={"Authorization": f"Bearer {new_access}"}
+    ).status_code == 200
+
+
+def test_access_token_is_rejected_at_refresh(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    access = auth_headers["Authorization"].split()[1]
+    # An access token has no refresh purpose -> cannot be spent for a new one.
+    assert client.post("/api/auth/refresh", json={"refresh_token": access}).status_code == 401
+
+
+def test_refresh_dies_after_password_change(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    login = client.post(
+        "/api/auth/token", data={"username": DEFAULT_EMAIL, "password": DEFAULT_PASSWORD}
+    )
+    refresh = login.json()["refresh_token"]
+    client.post(
+        "/api/auth/password",
+        json={"current_password": DEFAULT_PASSWORD, "new_password": "brand-new-1"},
+        headers=auth_headers,
+    )
+    # token_version moved on, so the old refresh token no longer refreshes.
+    assert client.post("/api/auth/refresh", json={"refresh_token": refresh}).status_code == 401
 
 
 def test_reset_code_burns_after_five_wrong_attempts(

@@ -13,7 +13,7 @@ import {
 import BackLink from '../components/BackLink';
 
 import { extractError } from '../api/client';
-import { changePassword, confirmEmailChange, requestEmailChange } from '../api/auth';
+import { confirmEmailChange, requestEmailChange } from '../api/auth';
 import * as telegramApi from '../api/telegram';
 import Toast from '../components/Toast';
 import { Button, Card, ConfirmDialog, ErrorMessage, Spinner, TextField } from '../components/UI';
@@ -230,6 +230,7 @@ function TelegramCard({ onToast }) {
 }
 
 function PasswordCard({ onToast }) {
+  const changePassword = useAuthStore((s) => s.changePassword);
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [repeat, setRepeat] = useState('');
