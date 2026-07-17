@@ -11,7 +11,9 @@ alike: unknown, expired, or already spent.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
-from sqlalchemy import select
+import datetime as dt
+
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session, selectinload
 
 from app.access import (
@@ -23,7 +25,7 @@ from app.access import (
 )
 from app.auth import get_current_user
 from app.database import get_db
-from app.models import Car, CarMember, User
+from app.models import Car, CarInvite, CarMember, User
 from app.schemas import (
     InviteAcceptOut,
     InviteCarOut,
@@ -38,7 +40,6 @@ from app.services.invites import (
     as_utc,
     create_invite,
     find_live_invite,
-    spend_invite,
 )
 
 router = APIRouter(tags=["members"])
@@ -184,8 +185,18 @@ def accept_invite(
         return InviteAcceptOut(car_id=car.id, role=existing.role, already_member=True)
 
     role = invite.role  # read before the commit expires the row
+    # Spend the invite atomically: the UPDATE only lands if it is still unused,
+    # so two people racing the same single-use link cannot both be onboarded —
+    # exactly one wins the guarded write, the loser gets the same 404.
+    spent = db.execute(
+        update(CarInvite)
+        .where(CarInvite.id == invite.id, CarInvite.used_at.is_(None))
+        .values(used_by=current_user.id, used_at=dt.datetime.now(dt.timezone.utc))
+    )
+    if spent.rowcount != 1:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=INVITE_NOT_FOUND)
     db.add(CarMember(car_id=car.id, user_id=current_user.id, role=role))
-    spend_invite(db, invite, current_user)
     db.commit()
     return InviteAcceptOut(car_id=car.id, role=role, already_member=False)
 

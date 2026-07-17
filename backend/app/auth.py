@@ -28,11 +28,11 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 
-def create_access_token(user_id: int) -> str:
+def create_access_token(user_id: int, token_version: int = 0) -> str:
     expire = dt.datetime.now(dt.timezone.utc) + dt.timedelta(
         minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
     )
-    payload = {"sub": str(user_id), "exp": expire}
+    payload = {"sub": str(user_id), "exp": expire, "tv": token_version}
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=ALGORITHM)
 
 
@@ -60,5 +60,9 @@ def get_current_user(
 
     user = db.get(User, user_id)
     if user is None:
+        raise credentials_exception
+    # A token minted before the last password change/reset is dead. Missing tv
+    # (legacy token) reads as 0, matching a fresh account until its first bump.
+    if payload.get("tv", 0) != user.token_version:
         raise credentials_exception
     return user

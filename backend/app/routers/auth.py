@@ -117,7 +117,9 @@ def login(
         )
     # A legitimate owner should not stay locked out by their earlier typos.
     login_limiter.reset(limit_key)
-    return Token(access_token=create_access_token(user.id), token_type="bearer")
+    return Token(
+        access_token=create_access_token(user.id, user.token_version), token_type="bearer"
+    )
 
 
 @router.get("/me", response_model=UserOut)
@@ -197,6 +199,9 @@ def change_password(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Поточний пароль невірний"
         )
     current_user.hashed_password = hash_password(payload.new_password)
+    # Revoke every other session: a changed password should not leave old
+    # tokens alive. The caller re-logs in (their current token is now stale too).
+    current_user.token_version += 1
     db.commit()
 
 

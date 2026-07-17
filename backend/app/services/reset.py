@@ -28,6 +28,10 @@ def generate_reset_code() -> str:
     return f"{secrets.randbelow(1_000_000):06d}"
 
 
+#: Wrong guesses before the reset code is burned (per-account, IP-independent).
+_MAX_RESET_ATTEMPTS = 5
+
+
 async def send_reset_code(chat_id: str, code: str) -> None:
     """Send the reset code to the user's linked Telegram chat.
 
@@ -71,6 +75,7 @@ async def initiate_reset(db: Session, email: str, channel: str | None = None) ->
     user.reset_code_expires_at = dt.datetime.now(dt.timezone.utc) + dt.timedelta(
         minutes=RESET_CODE_TTL_MINUTES
     )
+    user.reset_code_attempts = 0  # a fresh code starts with a fresh attempt budget
     db.commit()
     # The pick is honoured when that channel can reach the account, and quietly
     # swapped when it cannot: silence would be worse than the other channel.
@@ -105,9 +110,20 @@ def confirm_reset(db: Session, email: str, code: str, new_password: str) -> bool
     if expires_at < dt.datetime.now(dt.timezone.utc):
         return False
     if not verify_password(code, user.reset_code_hash):
+        # Burn the code after a handful of misses so a 6-digit code cannot be
+        # brute forced even if the IP rate limiter is somehow evaded.
+        user.reset_code_attempts += 1
+        if user.reset_code_attempts >= _MAX_RESET_ATTEMPTS:
+            user.reset_code_hash = None
+            user.reset_code_expires_at = None
+        db.commit()
         return False
     user.hashed_password = hash_password(new_password)
     user.reset_code_hash = None
     user.reset_code_expires_at = None
+    user.reset_code_attempts = 0
+    # A reset revokes every existing session — the point of a reset is that the
+    # old holder is locked out, tokens included.
+    user.token_version += 1
     db.commit()
     return True

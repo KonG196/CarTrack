@@ -75,8 +75,19 @@ class User(Base):
     )
     verify_code_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     verify_code_expires_at: Mapped[Optional[dt.datetime]] = mapped_column(DateTime, nullable=True)
+    verify_code_attempts: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
     reset_code_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     reset_code_expires_at: Mapped[Optional[dt.datetime]] = mapped_column(DateTime, nullable=True)
+    reset_code_attempts: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    # Bumped on password change / reset; embedded in the access token and
+    # checked on every request, so a leaked token dies when the password does.
+    token_version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
 
     cars: Mapped[list[Car]] = relationship(back_populates="user", cascade="all, delete-orphan")
