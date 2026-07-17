@@ -22,6 +22,11 @@ from app.services.photos import photo_path, save_photo_file
 router = APIRouter(tags=["photos"])
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+# Inert raster types only. SVG is excluded on purpose — an uploaded SVG served
+# from our origin can carry an executing <script>.
+SAFE_IMAGE_TYPES: frozenset[str] = frozenset(
+    {"image/jpeg", "image/png", "image/webp", "image/gif", "image/heic", "image/heif"}
+)
 
 
 def get_owned_photo(
@@ -60,10 +65,11 @@ async def upload_photo(
 ) -> LogPhoto:
     log = get_owned_log(db, current_user, log_id, min_role=ROLE_EDITOR)
 
-    if not (file.content_type or "").startswith("image/"):
+    # Raster only — SVG is active content (same-origin <script> = token theft).
+    if (file.content_type or "") not in SAFE_IMAGE_TYPES:
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail="Only image uploads are supported",
+            detail="Only image uploads (JPEG/PNG/WebP/HEIC) are supported",
         )
     too_large = HTTPException(
         status_code=status.HTTP_413_CONTENT_TOO_LARGE,
@@ -101,7 +107,12 @@ def get_photo(
     path = photo_path(_storage_owner_id(db, photo), photo.filename)
     if not path.is_file():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Photo not found")
-    return FileResponse(path, media_type=photo.content_type)
+    served_type = photo.content_type if photo.content_type in SAFE_IMAGE_TYPES else "application/octet-stream"
+    return FileResponse(
+        path,
+        media_type=served_type,
+        headers={"X-Content-Type-Options": "nosniff"},
+    )
 
 
 @router.delete("/photos/{photo_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -54,13 +54,27 @@ export const useAuthStore = create((set, get) => ({
     await authApi.deleteAccount(password);
     // The account is gone; drop the now-dead token and user like a logout.
     localStorage.removeItem(TOKEN_KEY);
+    await purgeApiCache();
     set({ token: null, user: null });
   },
 
   logout() {
     localStorage.removeItem(TOKEN_KEY);
+    // Purge the service-worker api-cache too: without this, the next person to
+    // sign in on a shared device could be served this user's cached cars/logs
+    // (NetworkFirst falls back to cache when offline/slow).
+    purgeApiCache();
     set({ token: null, user: null });
   },
 }));
+
+async function purgeApiCache() {
+  if (typeof caches === 'undefined') return;
+  try {
+    await caches.delete('api-cache');
+  } catch {
+    /* best-effort: a failed purge must not block sign-out */
+  }
+}
 
 export { extractError };

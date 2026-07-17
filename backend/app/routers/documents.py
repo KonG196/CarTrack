@@ -26,7 +26,14 @@ router = APIRouter(tags=["documents"])
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 
-# A document is a scan or a PDF; nothing else is a document.
+# A document is a raster scan or a PDF. SVG/HTML are deliberately excluded: they
+# are active content, and once served from our origin an uploaded <script> in an
+# SVG runs same-origin and can steal the token — a shared-car editor uploading a
+# scripted "document" was a real stored-XSS path. Only inert types are allowed.
+SAFE_CONTENT_TYPES: frozenset[str] = frozenset(
+    {"image/jpeg", "image/png", "image/webp", "image/gif", "image/heic", "image/heif",
+     "application/pdf"}
+)
 ALLOWED_CONTENT_TYPES: tuple[str, ...] = ("application/pdf",)
 
 DOCUMENT_INTERVAL_DAYS = 365
@@ -53,12 +60,11 @@ def get_owned_document(
 
 
 def _check_content_type(content_type: Optional[str]) -> None:
-    value = content_type or ""
-    if value.startswith("image/") or value in ALLOWED_CONTENT_TYPES:
+    if (content_type or "") in SAFE_CONTENT_TYPES:
         return
     raise HTTPException(
         status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-        detail="Only image or PDF uploads are supported",
+        detail="Only image (JPEG/PNG/WebP/HEIC) or PDF uploads are supported",
     )
 
 
@@ -175,7 +181,14 @@ def get_document(
     path = photo_path(car.user_id, document.filename)
     if not path.is_file():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
-    return FileResponse(path, media_type=document.content_type)
+    # Never hand back an active/renderable type from our origin. Legacy rows or a
+    # spoofed upload type fall to octet-stream; nosniff stops MIME guessing.
+    served_type = document.content_type if document.content_type in SAFE_CONTENT_TYPES else "application/octet-stream"
+    return FileResponse(
+        path,
+        media_type=served_type,
+        headers={"X-Content-Type-Options": "nosniff"},
+    )
 
 
 @router.delete("/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)

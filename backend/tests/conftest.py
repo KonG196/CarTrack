@@ -19,6 +19,7 @@ from app.routers.auth import (
     register_limiter,
     reset_confirm_limiter,
     reset_request_limiter,
+    sensitive_limiter,
     verify_resend_limiter,
 )
 
@@ -56,6 +57,7 @@ def _clear_rate_limiters() -> None:
         reset_request_limiter,
         reset_confirm_limiter,
         verify_resend_limiter,
+        sensitive_limiter,
         lookup_limiter,
     ):
         limiter.clear()

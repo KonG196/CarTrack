@@ -36,7 +36,14 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Kapot Tracker API", lifespan=lifespan)
+# Hide the interactive docs and schema in production — they hand an attacker a
+# full map of the API surface for free. Left on in dev for convenience.
+_docs_kwargs = (
+    {"docs_url": None, "redoc_url": None, "openapi_url": None}
+    if settings.is_production
+    else {}
+)
+app = FastAPI(title="Kapot Tracker API", lifespan=lifespan, **_docs_kwargs)
 
 app.add_middleware(
     CORSMiddleware,
@@ -68,12 +75,10 @@ app.include_router(plate.router, prefix="/api")
 
 @app.get("/api/health")
 def health() -> dict[str, object]:
-    """Liveness, plus which optional integrations are actually configured.
-
-    Not a probe of the remote services — only of what this instance was told.
-    A misconfigured key still shows as enabled here; the point is to make an
-    unset one visible without reading logs.
-    """
+    """Liveness only. The integration map is unauthenticated recon, so it is dev
+    -only; in production this stays a bare {status: ok}."""
+    if settings.is_production:
+        return {"status": "ok"}
     return {
         "status": "ok",
         "features": {

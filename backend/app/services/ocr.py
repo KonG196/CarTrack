@@ -11,6 +11,11 @@ from typing import Optional
 import pytesseract
 from PIL import Image, ImageFilter, ImageOps
 
+# The 10 MB upload cap bounds compressed bytes, not decoded pixels: a tiny file
+# can decode to hundreds of megapixels. Cap it so a decompression-bomb image
+# raises instead of allocating a huge buffer per request (authenticated DoS).
+Image.MAX_IMAGE_PIXELS = 40_000_000  # ~40 MP; Pillow errors above 2x this.
+
 # Canonical brand name -> spellings recognized in receipt text (lowercase,
 # both Latin and Cyrillic variants).
 GAS_STATION_BRANDS: tuple[tuple[str, tuple[str, ...]], ...] = (
@@ -182,7 +187,12 @@ def extract_text(image_bytes: bytes) -> str:
     the most refuel fields wins. TesseractNotFoundError — the tesseract
     binary itself is absent — propagates to the caller.
     """
-    image = ImageOps.grayscale(Image.open(io.BytesIO(image_bytes)))
+    try:
+        src = Image.open(io.BytesIO(image_bytes))
+        src.load()  # force decode now so a bomb/invalid image fails here, bounded
+    except (Image.DecompressionBombError, OSError, ValueError) as exc:
+        raise ValueError("Unreadable or oversized image") from exc
+    image = ImageOps.grayscale(src)
     image = _downscale(image)
     best_text = _ocr(image, psm=6)
     best_score = _parse_score(best_text)

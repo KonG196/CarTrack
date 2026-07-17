@@ -36,6 +36,9 @@ _PERCENT_RE = re.compile(r"\b\d{1,3}\s*%")
 # the first three digits of 8223,38.
 _MONEY = r"\d{1,3}(?:[  ]\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?"
 _MONEY_RE = re.compile(_MONEY)
+# One trailing money/unit token, anchored at end — stripped iteratively (see
+# _clean_item_name). Un-nested, so no catastrophic backtracking.
+_TRAIL_TOKEN_RE = re.compile(rf"\s+(?:{_MONEY}|[xх×*]|шт\.?|компл\.?)\s*$")
 
 # Letters an OCR pass puts where digits belong. Applied only where the whole
 # line is expected to be a number, so a word can never be folded into one.
@@ -225,14 +228,26 @@ def _is_summary_line(line: str) -> bool:
 def _clean_item_name(line: str) -> str:
     """«3  Фільтр масляний ЦБ012317  1  566,00  566,00» -> «Фільтр масляний ЦБ012317»."""
     flat = re.sub(r"\s+", " ", line).strip()
+    # No genuine line item is this long; the cap keeps a crafted OCR line from
+    # feeding the trailing regex enough tokens to backtrack (ReDoS DoS).
+    if len(flat) > 300:
+        flat = flat[:300]
     # The unit column sits between the name and the price, so it is cut out
     # rather than trimmed off an end. Dropping the whole row for containing it
     # would cost «Діагностика | фікс. варт. | 1 | 2 000,00» — a real line item.
     without_unit = _UNIT_RE.sub(" ", flat)
     without_lead = re.sub(r"^\s*\d{1,2}[.)]?\s+", "", without_unit)
-    without_trail = re.sub(
-        rf"(?:\s+(?:{_MONEY}|[xх×*]|шт\.?|компл\.?))+\s*$", "", without_lead
-    )
+    # Strip trailing money/unit tokens ONE at a time until none remain. The old
+    # single regex nested `\s+` and the money group's inner space-class both
+    # under `+`, so a crafted line ("1 000 000 000 …!") took exponential time to
+    # backtrack (ReDoS → event-loop DoS). One un-nested token per pass is linear
+    # and gives the same result.
+    without_trail = without_lead
+    while True:
+        stripped = _TRAIL_TOKEN_RE.sub("", without_trail)
+        if stripped == without_trail:
+            break
+        without_trail = stripped
     return re.sub(r"\s{2,}", " ", without_trail).strip(" .-—:;|")
 
 

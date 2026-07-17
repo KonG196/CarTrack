@@ -50,6 +50,9 @@ register_limiter = RateLimiter(limit=3, window_seconds=60 * 60)
 reset_request_limiter = RateLimiter(limit=3, window_seconds=15 * 60)
 reset_confirm_limiter = RateLimiter(limit=5, window_seconds=15 * 60)
 verify_resend_limiter = RateLimiter(limit=3, window_seconds=15 * 60)
+# Password-proof actions on a live session (change password / email / delete
+# account): throttle per user so a hijacked session cannot brute the password.
+sensitive_limiter = RateLimiter(limit=5, window_seconds=15 * 60)
 
 
 def _enforce_rate_limit(limiter: RateLimiter, key) -> None:
@@ -162,6 +165,7 @@ def delete_me(
     removal is best-effort — a failed unlink must not strand the row, which is
     the record that actually authorises anything.
     """
+    _enforce_rate_limit(sensitive_limiter, current_user.id)
     if not verify_password(payload.password, current_user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Пароль невірний"
@@ -187,6 +191,7 @@ def change_password(
     Being logged in is not proof of being the owner — a session left open on a
     borrowed laptop is enough to be logged in. Knowing the current password is.
     """
+    _enforce_rate_limit(sensitive_limiter, current_user.id)
     if not verify_password(payload.current_password, current_user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Поточний пароль невірний"
@@ -208,6 +213,7 @@ def request_email_change(
     retry instead of the account.
     """
     new_email = payload.new_email.strip().lower()
+    _enforce_rate_limit(sensitive_limiter, current_user.id)
     if not verify_password(payload.password, current_user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Пароль невірний"

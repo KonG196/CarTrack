@@ -59,13 +59,20 @@ class RateLimiter:
 
 
 def client_ip(request: Request) -> str:
-    """Best-effort client IP for rate-limit keys.
+    """Client IP for rate-limit keys, resistant to header spoofing.
 
-    Behind nginx the first X-Forwarded-For element is the real client
-    (nginx.conf must set ``proxy_set_header X-Forwarded-For``); otherwise
-    the socket peer address is used.
+    A client can send its own ``X-Forwarded-For``; the trusted proxy in front
+    (Caddy/nginx) then APPENDS the real peer, so the **last** element is the one
+    the attacker cannot forge — taking the first element let anyone reset their
+    own bucket per request and brute force auth. With no proxy (direct hit) there
+    is no header and we fall back to the socket peer.
+
+    Assumes exactly one trusted proxy hop. If more are ever added, raise the
+    from-the-right index accordingly.
     """
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
-        return forwarded.split(",")[0].strip()
+        hops = [h.strip() for h in forwarded.split(",") if h.strip()]
+        if hops:
+            return hops[-1]
     return request.client.host if request.client else "unknown"

@@ -2,7 +2,15 @@
 
 from functools import lru_cache
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# JWT is HS256-signed with SECRET_KEY, so a known key = forge-any-user. These
+# literals ship in the repo (code default + docker-compose fallback); booting on
+# one in a real deployment is a silent full-takeover hole, so we refuse to start.
+_INSECURE_SECRET_KEYS = frozenset(
+    {"", "dev-secret-change-me", "change-me-in-production", "change-me-to-a-long-random-string"}
+)
 
 
 class Settings(BaseSettings):
@@ -13,6 +21,8 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
+    # "production" turns on fail-closed guards (SMTP required, docs hidden).
+    ENV: str = "development"
     DATABASE_URL: str = "sqlite:///./kapot_tracker.db"
     SECRET_KEY: str = "dev-secret-change-me"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 43200
@@ -57,8 +67,26 @@ class Settings(BaseSettings):
     OCR_SPACE_USE_DEMO_KEY: bool = True
 
     @property
+    def is_production(self) -> bool:
+        return self.ENV.strip().lower() in ("production", "prod")
+
+    @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
+
+    @model_validator(mode="after")
+    def _reject_insecure_config(self) -> "Settings":
+        # Always fatal: a default signing key means anyone can mint tokens.
+        if self.SECRET_KEY.strip() in _INSECURE_SECRET_KEYS:
+            raise ValueError(
+                "SECRET_KEY is unset or a known default — set a strong random value "
+                '(python3 -c "import secrets; print(secrets.token_hex(32))").'
+            )
+        # In production an empty SMTP_HOST would auto-verify every registration
+        # (no ownership proof); fine for local dev, never for a hosted instance.
+        if self.is_production and not self.SMTP_HOST.strip():
+            raise ValueError("SMTP_HOST is required when ENV=production (email verification).")
+        return self
 
 
 @lru_cache
