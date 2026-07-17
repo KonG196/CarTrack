@@ -428,6 +428,17 @@ html.vt .rise-in {
   opacity: 1;
   transform: none;
 }
+/* Сторінка, на яку слайднули, лишається «оселеною»: без цього, коли перехід
+   завершується і клас .vt зникає, внутрішня поява (rise-in) стартувала б наново
+   поверх уже показаної сторінки — контент двічі стрибав би. Слайд і є її появою.
+   Позначку ставимо на нове <main>; наступна навігація монтує свіже <main> без
+   неї, тож перший показ кожної сторінки (і повне завантаження) анімується. */
+main.vt-settle .stagger > *,
+main.vt-settle .rise-in {
+  animation: none;
+  opacity: 1;
+  transform: none;
+}
 
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-old(page),

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { useAuthStore } from '../store/authStore';
@@ -16,11 +16,9 @@ const PAGE_TOURS = {
 
 const PAD = 8;
 // Room the callout needs on one side of the spotlight. If the target sits too
-// low to leave this much below it, the callout moves to the top instead — the
-// two must never overlap.
+// low to leave this much below it, the callout moves to the top instead.
 const CALLOUT_SPACE = 250;
-// Fixed chrome the target must clear when centred: the sticky header and the
-// bottom nav bar.
+// Fixed chrome the target must clear when centred: sticky header, bottom nav.
 const SAFE_TOP = 56;
 const SAFE_BOTTOM = 72;
 
@@ -33,26 +31,12 @@ function pickCalloutSide(r) {
   return below >= above ? 'bottom' : 'top';
 }
 
-// Four fixed panels frame the spotlight — a single element cannot dim around a
-// cutout, but four around the rectangle can. No backdrop-blur and no geometry
-// transition on purpose: animating either is what stuttered on iOS, and an
-// instant reposition also lets the spotlight track scrolling exactly.
-function DimPanels({ hole }) {
-  const cls = 'fixed z-[60] bg-black/60';
-  return (
-    <>
-      <div className={cls} style={{ top: 0, left: 0, right: 0, height: Math.max(0, hole.top) }} />
-      <div className={cls} style={{ top: hole.top + hole.height, left: 0, right: 0, bottom: 0 }} />
-      <div
-        className={cls}
-        style={{ top: hole.top, left: 0, width: Math.max(0, hole.left), height: hole.height }}
-      />
-      <div
-        className={cls}
-        style={{ top: hole.top, left: hole.left + hole.width, right: 0, height: hole.height }}
-      />
-    </>
-  );
+function place(el, top, left, width, height) {
+  if (!el) return;
+  el.style.top = `${top}px`;
+  el.style.left = `${left}px`;
+  el.style.width = `${Math.max(0, width)}px`;
+  el.style.height = `${Math.max(0, height)}px`;
 }
 
 export default function TourOverlay() {
@@ -63,13 +47,18 @@ export default function TourOverlay() {
   const firstLogId = useCarStore((s) => s.logs?.items?.[0]?.id);
   const activeCarId = useCarStore((s) => s.activeCarId);
   const userReady = useAuthStore((s) => !!s.user);
-  const [rect, setRect] = useState(null);
-  const [tapPoint, setTapPoint] = useState(null);
+  const [ready, setReady] = useState(false);
   const [calloutPos, setCalloutPos] = useState('bottom');
 
-  // Auto-show a section's tour the first time this account opens its page. Wait
-  // for the account and a car (the tours point at car data), and give the page a
-  // beat to settle before starting.
+  const panelTop = useRef(null);
+  const panelBottom = useRef(null);
+  const panelLeft = useRef(null);
+  const panelRight = useRef(null);
+  const blocker = useRef(null);
+  const ring = useRef(null);
+  const tap = useRef(null);
+
+  // Auto-show a section's tour the first time this account opens its page.
   useEffect(() => {
     const name = PAGE_TOURS[location.pathname];
     if (!name || active || !userReady || !activeCarId || wasSeen(name)) return undefined;
@@ -77,9 +66,8 @@ export default function TourOverlay() {
     return () => clearTimeout(id);
   }, [location.pathname, active, userReady, activeCarId, wasSeen, start]);
 
-  // A step's page: a string, or a function of context (the logbook detail needs
-  // a real id). null means «skip this step» — e.g. an empty journal. A path may
-  // carry a query (?tab=) — the analytics tabs — so compare against the full URL.
+  // A step's page: a string, or a function of context. null means «skip». May
+  // carry a query (?tab=), so compare against the full URL.
   const stepPath = useMemo(() => {
     if (!step?.path) return undefined;
     return typeof step.path === 'function' ? step.path({ firstLogId }) : step.path;
@@ -94,92 +82,132 @@ export default function TourOverlay() {
     if (stepPath && stepPath !== currentUrl) navigate(stepPath);
   }, [stepPath, currentUrl, navigate]);
 
-  // Find the target, scroll it toward the middle so a callout fits on either
-  // side, and measure. Poll while the page mounts; skip the step if the element
-  // never appears. `rect` stays null until the target is measured, so the page
-  // is never dimmed with no spotlight to show.
+  // Position and TRACK the spotlight imperatively, once per frame, straight off
+  // the element's live rect. This is what keeps the highlight exactly on target
+  // on iOS — where a programmatic scroll applies a frame late, so a one-shot
+  // measure lands in the wrong place. Change-detected, so a stationary target is
+  // a no-op (no layout writes, no React re-renders) — smooth, not stuttery.
+  // The loop below reads the current target from here, so a step change just
+  // updates this ref — no rAF teardown/restart, which is what stranded the
+  // spotlight on the previous step. null = navigating (nothing to show yet).
+  const targetRef = useRef(null);
   useEffect(() => {
-    if (!step) return undefined;
-    if (stepPath && stepPath !== currentUrl) {
-      setRect(null);
-      setTapPoint(null);
+    targetRef.current =
+      !step || (stepPath && stepPath !== currentUrl)
+        ? null
+        : { target: step.target, tap: step.tap, demo: step.demo, key: `${tour}-${index}` };
+  }, [step, stepPath, currentUrl, tour, index]);
+
+  // ONE rAF loop for the life of the tour. Every frame it reads the live rect of
+  // the current target and positions the spotlight to match — always exact on
+  // iOS (where a programmatic scroll lands a frame late). Change-detected, so a
+  // stationary target is a no-op: no layout writes, no React re-renders, smooth.
+  useEffect(() => {
+    if (!active) {
+      setReady(false);
       return undefined;
     }
-    let tries = 0;
-    let retry;
     let raf;
-    let demoTimer;
-    let demoInterval;
-    let cleanup = () => {};
+    let scrolledKey = null;
+    let pollKey = null;
+    let pollStart = 0;
+    let lastKey = '';
+    let lastTapKey = '';
+    let lastPos = null;
+    let shown = false;
 
-    // The «tap here» gesture sits on the sub-control the user should press: the
-    // demo element (e.g. the copy button) when there is one, otherwise the
-    // spotlight's centre.
-    const measureTap = (el) => {
-      if (!step.tap) {
-        setTapPoint(null);
+    const tick = (now) => {
+      raf = requestAnimationFrame(tick);
+      const cur = targetRef.current;
+      if (!cur) {
+        if (shown) {
+          shown = false;
+          setReady(false);
+        }
         return;
       }
-      const de = step.demo ? el.querySelector(step.demo) : null;
-      const box = (de || el).getBoundingClientRect();
-      setTapPoint({ x: box.left + box.width / 2, y: box.top + box.height / 2 });
-    };
-
-    const attach = () => {
-      const el = document.querySelector(`[data-tour="${step.target}"]`);
+      const el = document.querySelector(`[data-tour="${cur.target}"]`);
       if (!el) {
-        if (tries++ < 15) retry = setTimeout(attach, 150);
-        else next();
+        // Poll ~2.5s for a mounting element, then skip the step.
+        if (pollKey !== cur.key) {
+          pollKey = cur.key;
+          pollStart = now;
+        }
+        if (now - pollStart > 2500) next();
         return;
       }
-      const measure = () => {
-        const rr = el.getBoundingClientRect();
-        setRect(rr);
-        setCalloutPos(pickCalloutSide(rr));
-        measureTap(el);
-      };
-      // Bring the target to the safe-area centre — but ONLY when it is
-      // meaningfully off, so a target already in view is left untouched. This is
-      // what stopped the spotlight from constantly jumping and stuttering on iOS:
-      // no running re-align loop, and no scroll listener re-rendering every frame.
-      const align = () => {
-        const b = el.getBoundingClientRect();
+      let r = el.getBoundingClientRect();
+      // Scroll into the safe-area centre once per step, and only if meaningfully
+      // off — an in-view target is left alone (no jumping).
+      if (scrolledKey !== cur.key) {
+        scrolledKey = cur.key;
         const safeCentre = (SAFE_TOP + (window.innerHeight - SAFE_BOTTOM)) / 2;
-        const delta = b.top + b.height / 2 - safeCentre;
-        if (Math.abs(delta) > 40) window.scrollBy({ top: delta });
-        measure();
-      };
-      measure();
-      // Twice only: a frame later (to outlast the route's scroll-to-top reset)
-      // and once as late content (analytics charts) settles.
-      raf = requestAnimationFrame(align);
-      const settle = setTimeout(align, 450);
-      window.addEventListener('resize', measure);
-      // Play the real in-place result while the step is open: dispatch a demo
-      // event the control listens for (the copy icon flips to a checkmark, holds,
-      // reverts) and loop it so the demonstration keeps repeating.
-      if (step.demo) {
-        const fire = () =>
-          el.querySelector(step.demo)?.dispatchEvent(new CustomEvent('kapot:tour-demo'));
-        demoTimer = setTimeout(() => {
-          fire();
-          demoInterval = setInterval(fire, 2600);
-        }, 1050);
+        const delta = r.top + r.height / 2 - safeCentre;
+        if (Math.abs(delta) > 40) {
+          window.scrollBy({ top: delta });
+          r = el.getBoundingClientRect();
+        }
       }
-      cleanup = () => {
-        clearTimeout(settle);
-        window.removeEventListener('resize', measure);
-      };
+      const top = r.top - PAD;
+      const left = r.left - PAD;
+      const w = r.width + PAD * 2;
+      const h = r.height + PAD * 2;
+      // The step key is part of the change key, so a new step always repositions
+      // even if the coordinates happen to match.
+      const key = `${cur.key}|${Math.round(top)},${Math.round(left)},${Math.round(w)},${Math.round(h)}`;
+      if (key !== lastKey) {
+        lastKey = key;
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        place(panelTop.current, 0, 0, vw, top);
+        place(panelBottom.current, top + h, 0, vw, vh - (top + h));
+        place(panelLeft.current, top, 0, left, h);
+        place(panelRight.current, top, left + w, vw - (left + w), h);
+        place(blocker.current, top, left, w, h);
+        place(ring.current, top, left, w, h);
+        const p = pickCalloutSide(r);
+        if (p !== lastPos) {
+          lastPos = p;
+          setCalloutPos(p);
+        }
+      }
+      if (cur.tap && tap.current) {
+        const de = cur.demo ? el.querySelector(cur.demo) : null;
+        const tb = (de || el).getBoundingClientRect();
+        const tapKey = `${cur.key}|${Math.round(tb.left + tb.width / 2)},${Math.round(tb.top + tb.height / 2)}`;
+        if (tapKey !== lastTapKey) {
+          lastTapKey = tapKey;
+          tap.current.style.left = `${tb.left + tb.width / 2}px`;
+          tap.current.style.top = `${tb.top + tb.height / 2}px`;
+        }
+      }
+      if (!shown) {
+        shown = true;
+        setReady(true);
+      }
     };
-    attach();
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [active, next]);
+
+  // Loop the in-place demo (copy icon → checkmark) while a demo step is open.
+  useEffect(() => {
+    if (!step?.demo || (stepPath && stepPath !== currentUrl)) return undefined;
+    let interval;
+    const fire = () =>
+      document
+        .querySelector(`[data-tour="${step.target}"]`)
+        ?.querySelector(step.demo)
+        ?.dispatchEvent(new CustomEvent('kapot:tour-demo'));
+    const timer = setTimeout(() => {
+      fire();
+      interval = setInterval(fire, 2600);
+    }, 1050);
     return () => {
-      clearTimeout(retry);
-      cancelAnimationFrame(raf);
-      clearTimeout(demoTimer);
-      clearInterval(demoInterval);
-      cleanup();
+      clearTimeout(timer);
+      clearInterval(interval);
     };
-  }, [step, stepPath, currentUrl, next]);
+  }, [step, stepPath, currentUrl]);
 
   useEffect(() => {
     if (!active) return undefined;
@@ -195,38 +223,28 @@ export default function TourOverlay() {
   if (!step) return null;
 
   const isLast = index === steps.length - 1;
-  const hole = rect
-    ? {
-        top: rect.top - PAD,
-        left: rect.left - PAD,
-        width: rect.width + PAD * 2,
-        height: rect.height + PAD * 2,
-      }
-    : null;
 
-  // Never dim the screen without a spotlight to show — that reads as broken.
-  // Hold the overlay back until the target is measured.
-  if (!hole) return null;
-
+  // The spotlight elements carry NO position from React — the rAF loop above owns
+  // their top/left/width/height. Visibility is gated on `ready` (inherited by the
+  // fixed children) so nothing flashes before the first positioning frame.
   return (
-    <>
-      <DimPanels hole={hole} />
-      {/* A transparent blocker over the target so a stray tap does not fire
-          the real control mid-tour. Tapping it, like the callout, advances. */}
+    <div style={{ visibility: ready ? 'visible' : 'hidden' }}>
+      <div ref={panelTop} className="fixed z-[60] bg-black/60" />
+      <div ref={panelBottom} className="fixed z-[60] bg-black/60" />
+      <div ref={panelLeft} className="fixed z-[60] bg-black/60" />
+      <div ref={panelRight} className="fixed z-[60] bg-black/60" />
+      {/* Transparent blocker over the target: a stray tap advances rather than
+          firing the real control. */}
+      <div ref={blocker} className="fixed z-[61]" onClick={next} aria-hidden="true" />
       <div
-        className="fixed z-[61]"
-        style={{ top: hole.top, left: hole.left, width: hole.width, height: hole.height }}
-        onClick={next}
-        aria-hidden="true"
-      />
-      <div
+        ref={ring}
         className="pointer-events-none fixed z-[62] rounded-xl ring-2 ring-amber"
-        style={{ top: hole.top, left: hole.left, width: hole.width, height: hole.height }}
       />
-      {step.tap && tapPoint && (
+      {step.tap && (
         <div
+          ref={tap}
           className="pointer-events-none fixed z-[62] h-6 w-6"
-          style={{ left: tapPoint.x, top: tapPoint.y, transform: 'translate(-50%, -50%)' }}
+          style={{ transform: 'translate(-50%, -50%)' }}
           aria-hidden="true"
         >
           <span className="tour-tap-ripple absolute inset-0 rounded-full border-2 border-amber/80" />
@@ -293,6 +311,6 @@ export default function TourOverlay() {
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 }

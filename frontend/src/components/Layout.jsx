@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { flushSync } from 'react-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Home, BookOpen, PlusCircle, BarChart2, Settings, Car, Plus } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useCarStore } from '../store/carStore';
@@ -28,32 +29,16 @@ const NAV_ITEMS = [
 
 // Горизонтальний порядок табів — з нього беремо напрямок слайду.
 const TAB_ORDER = ['/', '/logbook', '/analytics', '/garage'];
-let vtCleanup;
 
-// Напрямок переходу для View Transitions: «Додати» — знизу вгору й назад униз,
-// решта — вліво/вправо за порядком табів. Ставимо data-vt на <html> ДО навігації,
-// щоб CSS підхопив його на знімку; клас .vt на час переходу глушить внутрішню
-// появу сторінки. Атрибути ставляться лише коли браузер має API — інакше
-// перехід миттєвий, як завжди.
-function beginNav(to) {
-  const from = window.location.pathname;
-  if (to === from || !document.startViewTransition) return;
-  let dir = 'forward';
-  if (to === '/add') dir = 'up';
-  else if (from === '/add') dir = 'down';
-  else {
-    const fi = TAB_ORDER.indexOf(from);
-    const ti = TAB_ORDER.indexOf(to);
-    if (fi !== -1 && ti !== -1) dir = ti > fi ? 'forward' : 'back';
-  }
-  const html = document.documentElement;
-  html.dataset.vt = dir;
-  html.classList.add('vt');
-  window.clearTimeout(vtCleanup);
-  vtCleanup = window.setTimeout(() => {
-    html.classList.remove('vt');
-    delete html.dataset.vt;
-  }, 480);
+// Напрямок слайду: «Додати» — знизу вгору й назад униз, решта — вліво/вправо за
+// порядком табів. Керує тим, які кадри бере CSS через data-vt на <html>.
+function directionFor(from, to) {
+  if (to === '/add') return 'up';
+  if (from === '/add') return 'down';
+  const fi = TAB_ORDER.indexOf(from);
+  const ti = TAB_ORDER.indexOf(to);
+  if (fi !== -1 && ti !== -1) return ti > fi ? 'forward' : 'back';
+  return 'forward';
 }
 
 function CarSelector() {
@@ -80,7 +65,7 @@ function CarSelector() {
           label: [car.brand, car.model, gen].filter(Boolean).join(' '),
         };
       })}
-      buttonClassName="flex min-w-0 max-w-[13rem] items-center gap-1.5 rounded-xl border border-edge bg-panel py-1.5 pl-2.5 pr-3 text-sm text-fg transition-colors hover:border-edge-soft"
+      buttonClassName="flex min-w-0 max-w-[46vw] items-center gap-1.5 rounded-xl border border-edge bg-panel py-1.5 pl-2.5 pr-3 text-sm text-fg transition-colors hover:border-edge-soft"
       button={
         <>
           <Car className="h-4 w-4 flex-shrink-0 text-amber" />
@@ -114,7 +99,41 @@ export default function Layout() {
   const fetchMembers = useCarStore((s) => s.fetchMembers);
   const flushOutbox = useCarStore((s) => s.flushOutbox);
   const location = useLocation();
+  const navigate = useNavigate();
   const [syncToast, setSyncToast] = useState('');
+
+  // Slide between tabs the way an iOS app does: the leaving page moves one way,
+  // the arriving page moves in from the other side, both at once. BrowserRouter
+  // ignores NavLink's `viewTransition` prop (that only fires under the data
+  // router), so we drive the View Transition ourselves. `flushSync` commits the
+  // route change inside the capture callback so the «after» snapshot is the new
+  // page, already settled (`.vt` suppresses its own entrance). Marking the new
+  // <main> «.vt-settle» keeps that entrance from replaying once the slide ends.
+  // Where the API is missing (older Safari) the NavLink just navigates — instant,
+  // no animation, as before.
+  const onNavClick = useCallback(
+    (e, to) => {
+      const from = location.pathname;
+      if (to === from) {
+        e.preventDefault();
+        return;
+      }
+      if (!document.startViewTransition) return;
+      e.preventDefault();
+      const html = document.documentElement;
+      html.dataset.vt = directionFor(from, to);
+      html.classList.add('vt');
+      const transition = document.startViewTransition(() => {
+        flushSync(() => navigate(to));
+        document.querySelector('main')?.classList.add('vt-settle');
+      });
+      transition.finished.finally(() => {
+        html.classList.remove('vt');
+        delete html.dataset.vt;
+      });
+    },
+    [location.pathname, navigate],
+  );
 
   useEffect(() => {
     if (token && !user) {
@@ -162,13 +181,11 @@ export default function Layout() {
     <TourProvider>
     <div className="min-h-screen bg-garage">
       <header className="sticky top-0 z-40 border-b border-edge bg-garage/90 pt-[env(safe-area-inset-top)] backdrop-blur">
-        <div className="mx-auto flex max-w-md items-center gap-3 px-4 py-3">
+        <div className="mx-auto flex max-w-md items-center justify-between gap-3 px-4 py-3">
           <NavLink to="/" aria-label="На головну" className="shrink-0">
             <Wordmark />
           </NavLink>
-          {/* flex-1 min-w-0 = «take exactly the space left after the wordmark»,
-              so the car button truncates instead of pushing off the screen. */}
-          <span data-tour="car-switcher" className="flex min-w-0 flex-1 justify-end">
+          <span data-tour="car-switcher" className="min-w-0">
             <CarSelector />
           </span>
         </div>
@@ -188,8 +205,7 @@ export default function Layout() {
               key={to}
               to={to}
               end={end}
-              viewTransition
-              onClick={() => beginNav(to)}
+              onClick={(e) => onNavClick(e, to)}
               data-tour={tour}
               className={({ isActive }) =>
                 `flex flex-col items-center gap-0.5 text-[11px] font-medium transition-colors ${
