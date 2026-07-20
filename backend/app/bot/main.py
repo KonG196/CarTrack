@@ -22,6 +22,7 @@ BOT_COMMANDS: list[BotCommand] = [
     BotCommand(command="status", description="Стан авто та найближчі ТО"),
     BotCommand(command="report", description="PDF-звіт по авто"),
     BotCommand(command="note", description="Блокнот: коди, телефони, PIN"),
+    BotCommand(command="backup", description="Резервна копія бази (адмін)"),
 ]
 
 

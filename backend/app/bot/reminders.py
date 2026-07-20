@@ -319,5 +319,7 @@ async def reminder_loop(bot: Bot) -> None:
             await send_weekly_digests(bot)
         except Exception:
             logger.exception("Weekly digest pass failed")
-        await run_daily_backup(bot)
+        # Backups are on-demand now (bot /backup, admin-only; or the app's data
+        # export) — no daily auto-push into the chat. run_daily_backup stays for
+        # the /backup command and the `python -m app.backup` CLI.
         await asyncio.sleep(RUN_PERIOD_SECONDS)

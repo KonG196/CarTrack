@@ -30,10 +30,16 @@ from app.bot.parsers import (
     parse_quick_expense,
     parse_refuel,
 )
+from app import backup
+from app.config import settings
 from app.database import SessionLocal
 from app.models import User
 from app.routers.telegram import InvalidLinkCodeError
 
+import logging
+from pathlib import Path
+
+logger = logging.getLogger(__name__)
 router = Router()
 
 
@@ -528,6 +534,29 @@ async def _send_report(
         pdf_bytes, filename=f"kapot-tracker-report-{car.id}.pdf"
     )
     await message.answer_document(document, caption=f"Звіт: {_car_label(car, user)}")
+
+
+@router.message(Command("backup"))
+async def cmd_backup(message: Message) -> None:
+    """On-demand DB backup, admin only. The dump holds EVERY user's data, so it
+    goes only to the configured admin chat — and only the admin may ask for it.
+    Replaces the old daily auto-push; now it is pull-only (here or in the app)."""
+    admin_chat = settings.BACKUP_TELEGRAM_CHAT_ID
+    if not admin_chat or str(message.chat.id) != admin_chat:
+        await message.answer("Команда доступна лише адміністратору.")
+        return
+    progress = await message.answer("Готую резервну копію бази…")
+    try:
+        path = await asyncio.to_thread(backup.create_backup)
+        await asyncio.to_thread(
+            backup.rotate_backups, Path(settings.BACKUP_DIR), settings.BACKUP_KEEP
+        )
+        await backup.send_backup_via_telegram(path, bot=message.bot)
+        await progress.delete()
+    except Exception:
+        logger.exception("Manual backup failed")
+        await progress.edit_text("Не вдалося зробити бекап. Спробуйте пізніше.")
+
 
 def _was_asked_for_odometer(chat_id: int) -> bool:
     asked_at = _awaiting_odometer.get(chat_id)
