@@ -19,78 +19,58 @@ describe('num', () => {
   });
 });
 
-describe('deriveRefuel — fills the one empty field from the other two', () => {
-  it('total from liters + price', () => {
-    expect(deriveRefuel({ liters: '40', pricePerLiter: '50', totalCost: '' })).toEqual({
-      totalCost: '2000.00',
-    });
-  });
-
-  it('price from liters + total', () => {
-    expect(deriveRefuel({ liters: '40', pricePerLiter: '', totalCost: '2000' })).toEqual({
-      pricePerLiter: '50.00',
-    });
-  });
-
-  it('liters from price + total (the reported case: total + price/l → litres)', () => {
-    expect(deriveRefuel({ liters: '', pricePerLiter: '50', totalCost: '2000' })).toEqual({
-      liters: '40.00',
-    });
-  });
-
-  it('accepts decimal comma input', () => {
-    expect(deriveRefuel({ liters: '45,5', pricePerLiter: '54,99', totalCost: '' })).toEqual({
-      totalCost: '2502.05',
-    });
-  });
-
-  it('rounds to 2 decimals', () => {
-    expect(deriveRefuel({ liters: '3', pricePerLiter: '', totalCost: '10' })).toEqual({
-      pricePerLiter: '3.33',
-    });
-  });
-
-  it('returns null with fewer than two values', () => {
-    expect(deriveRefuel({ liters: '40', pricePerLiter: '', totalCost: '' })).toBeNull();
-    expect(deriveRefuel({ liters: '', pricePerLiter: '', totalCost: '2000' })).toBeNull();
-  });
-
-  it('treats zero as missing', () => {
-    expect(deriveRefuel({ liters: '0', pricePerLiter: '50', totalCost: '' })).toBeNull();
-    expect(deriveRefuel({ liters: '0', pricePerLiter: '', totalCost: '2000' })).toBeNull();
-  });
-
-  it('ignores invalid text', () => {
-    expect(deriveRefuel({ liters: '40', pricePerLiter: 'abc', totalCost: '' })).toBeNull();
-  });
-});
-
-describe('deriveRefuel — all three present recomputes the least-recently edited', () => {
-  it('with order [total, price] present, recomputes liters', () => {
-    // user last typed total then price; litres is the stale one → t/p
+describe('deriveRefuel — computes only the field the user did NOT provide', () => {
+  it('user owns liters + price → total is computed', () => {
     expect(
-      deriveRefuel(
-        { liters: '99', pricePerLiter: '50', totalCost: '2000' },
-        ['totalCost', 'pricePerLiter'],
-      ),
+      deriveRefuel({ liters: '40', pricePerLiter: '50', totalCost: '' }, ['liters', 'pricePerLiter']),
+    ).toEqual({ totalCost: '2000.00' });
+  });
+
+  it('user owns liters + total → price is computed', () => {
+    expect(
+      deriveRefuel({ liters: '40', pricePerLiter: '', totalCost: '2000' }, ['liters', 'totalCost']),
+    ).toEqual({ pricePerLiter: '50.00' });
+  });
+
+  it('user owns price + total → litres is computed (the reported case)', () => {
+    expect(
+      deriveRefuel({ liters: '', pricePerLiter: '50', totalCost: '2000' }, ['pricePerLiter', 'totalCost']),
     ).toEqual({ liters: '40.00' });
   });
 
-  it('with order [liters, price] present, recomputes total', () => {
+  it('overwrites a stale value in the non-owned field (not the user’s own)', () => {
+    // liters holds junk but the user only owns price+total → liters is recomputed
     expect(
-      deriveRefuel(
-        { liters: '40', pricePerLiter: '60', totalCost: '999' },
-        ['liters', 'pricePerLiter'],
-      ),
-    ).toEqual({ totalCost: '2400.00' });
+      deriveRefuel({ liters: '999', pricePerLiter: '50', totalCost: '2000' }, ['pricePerLiter', 'totalCost']),
+    ).toEqual({ liters: '40.00' });
   });
 
-  it('with order [liters, total] present, recomputes price', () => {
+  it('never touches a field the user filled themselves (all three owned → null)', () => {
     expect(
-      deriveRefuel(
-        { liters: '40', pricePerLiter: '999', totalCost: '2400' },
-        ['totalCost', 'liters'],
-      ),
-    ).toEqual({ pricePerLiter: '60.00' });
+      deriveRefuel({ liters: '40', pricePerLiter: '50', totalCost: '9999' }, ['liters', 'pricePerLiter', 'totalCost']),
+    ).toBeNull();
+  });
+
+  it('does nothing with fewer than two owned inputs', () => {
+    expect(deriveRefuel({ liters: '40', pricePerLiter: '', totalCost: '' }, ['liters'])).toBeNull();
+    expect(deriveRefuel({ liters: '40', pricePerLiter: '50', totalCost: '' }, [])).toBeNull();
+  });
+
+  it('does nothing when an owned input is missing or zero', () => {
+    expect(
+      deriveRefuel({ liters: '0', pricePerLiter: '50', totalCost: '' }, ['liters', 'pricePerLiter']),
+    ).toBeNull();
+    expect(
+      deriveRefuel({ liters: '', pricePerLiter: 'abc', totalCost: '2000' }, ['pricePerLiter', 'totalCost']),
+    ).toBeNull();
+  });
+
+  it('accepts decimal comma and rounds to 2 decimals', () => {
+    expect(
+      deriveRefuel({ liters: '45,5', pricePerLiter: '54,99', totalCost: '' }, ['liters', 'pricePerLiter']),
+    ).toEqual({ totalCost: '2502.05' });
+    expect(
+      deriveRefuel({ liters: '3', pricePerLiter: '', totalCost: '10' }, ['liters', 'totalCost']),
+    ).toEqual({ pricePerLiter: '3.33' });
   });
 });

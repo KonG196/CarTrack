@@ -158,12 +158,13 @@ export default function EntryForm({
     };
   }, [carId]);
 
-  // --- refuel auto-math: fill the one derivable field, but only when the user
-  //     pauses or leaves a field — never mid-keystroke, so litres/price/total
-  //     stop overwriting each other while you are still typing. ---
-  const refuelOrderRef = useRef([]); // fields the user edited, most-recent first
+  // --- refuel auto-math: compute the ONE field the user never entered, from
+  //     the two they did — never a field they typed themselves or are typing
+  //     right now, and only after they pause or leave the field. ---
+  const refuelOwnedRef = useRef(new Set()); // fields the user provided
   const refuelValsRef = useRef({ liters, pricePerLiter, totalCost });
   const refuelIdleRef = useRef(null);
+  const REFUEL_IDLE_MS = 1400; // «більша затримка» — well after the last keystroke
 
   useEffect(() => {
     refuelValsRef.current = { liters, pricePerLiter, totalCost };
@@ -173,22 +174,23 @@ export default function EntryForm({
 
   const runRefuelDerive = () => {
     if (type !== 'refuel') return;
-    const patch = deriveRefuel(refuelValsRef.current, refuelOrderRef.current);
+    const patch = deriveRefuel(refuelValsRef.current, [...refuelOwnedRef.current]);
     if (!patch) return;
+    // Only ever a single non-user field; a value the user owns is never in here.
     if (patch.liters !== undefined) setLiters(patch.liters);
     if (patch.pricePerLiter !== undefined) setPricePerLiter(patch.pricePerLiter);
     if (patch.totalCost !== undefined) setTotalCost(patch.totalCost);
   };
 
   const noteRefuelEdit = (field) => {
-    refuelOrderRef.current = [field, ...refuelOrderRef.current.filter((f) => f !== field)];
+    refuelOwnedRef.current.add(field); // the user now owns this field
     markEdited(field);
-    // «Аж потім, коли не пишу»: derive a short beat after the last keystroke.
+    // Derive only well after the last keystroke, so it never fires mid-typing.
     clearTimeout(refuelIdleRef.current);
-    refuelIdleRef.current = setTimeout(runRefuelDerive, 700);
+    refuelIdleRef.current = setTimeout(runRefuelDerive, REFUEL_IDLE_MS);
   };
 
-  // Leaving a field (tap elsewhere / scroll away) derives immediately.
+  // Leaving a field (tap elsewhere / scroll away) derives right away.
   const onRefuelBlur = () => {
     clearTimeout(refuelIdleRef.current);
     runRefuelDerive();
@@ -249,11 +251,20 @@ export default function EntryForm({
       read: scanReceipt,
       failure: 'Не вдалося розпізнати чек. Спробуйте інше фото.',
       apply: (data, edited) => {
-        if (data.liters != null && !edited.has('liters')) setLiters(String(data.liters));
-        if (data.price_per_liter != null && !edited.has('pricePerLiter'))
+        // Scanned numbers are the user's inputs too — mark them owned so the
+        // one field the receipt didn't carry still gets computed.
+        if (data.liters != null && !edited.has('liters')) {
+          setLiters(String(data.liters));
+          refuelOwnedRef.current.add('liters');
+        }
+        if (data.price_per_liter != null && !edited.has('pricePerLiter')) {
           setPricePerLiter(String(data.price_per_liter));
-        if (data.total_cost != null && !edited.has('totalCost'))
+          refuelOwnedRef.current.add('pricePerLiter');
+        }
+        if (data.total_cost != null && !edited.has('totalCost')) {
           setTotalCost(Number(data.total_cost).toFixed(2));
+          refuelOwnedRef.current.add('totalCost');
+        }
         if (data.date && !edited.has('date')) setDate(data.date);
         if (data.gas_station && !edited.has('gasStation')) setGasStation(data.gas_station);
       },

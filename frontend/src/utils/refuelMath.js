@@ -5,35 +5,28 @@ export const num = (v) => {
 
 const FIELDS = ['liters', 'pricePerLiter', 'totalCost'];
 
-// Fill in the one derivable refuel field from the other two. Called when the
-// user pauses / leaves a field — NOT on every keystroke, so the three numbers
-// stop fighting each other while you type.
+// Fill in the ONE field the user never entered, from the two they did — and
+// only that field. A value the user typed themselves (or is typing right now)
+// is never touched; if the user has filled all three, nothing is computed.
 //
-// `order` is the fields the user edited, most-recent first. With two values
-// present the empty one is computed; with all three, the field the user touched
-// LEAST recently is the one recomputed (the two you just typed win). Returns a
-// patch (subset of {liters,pricePerLiter,totalCost} as strings) or null.
-export function deriveRefuel({ liters, pricePerLiter, totalCost }, order = []) {
+// `owned` = the fields the user provided (typed or accepted from a scan). The
+// single field NOT in `owned` is the app's to compute; it needs both owned
+// values to be positive numbers. Returns a one-key patch (string) or null.
+export function deriveRefuel({ liters, pricePerLiter, totalCost }, owned = []) {
+  const free = FIELDS.filter((k) => !owned.includes(k));
+  if (free.length !== 1) return null; // need exactly two owned inputs, one gap
+  const target = free[0];
+
   const v = {
     liters: num(liters),
     pricePerLiter: num(pricePerLiter),
     totalCost: num(totalCost),
   };
-  const present = FIELDS.filter((k) => v[k] != null && v[k] > 0);
-
-  let target;
-  if (present.length === 2) {
-    target = FIELDS.find((k) => !present.includes(k));
-  } else if (present.length === 3) {
-    const recent = order.filter((k) => present.includes(k)).slice(0, 2);
-    target = FIELDS.find((k) => !recent.includes(k));
-  } else {
-    return null;
-  }
+  const inputs = FIELDS.filter((k) => k !== target);
+  if (!inputs.every((k) => v[k] != null && v[k] > 0)) return null;
 
   const { liters: l, pricePerLiter: p, totalCost: t } = v;
-  if (target === 'liters' && p && t) return { liters: (t / p).toFixed(2) };
-  if (target === 'pricePerLiter' && l && t) return { pricePerLiter: (t / l).toFixed(2) };
-  if (target === 'totalCost' && l && p) return { totalCost: (l * p).toFixed(2) };
-  return null;
+  if (target === 'liters') return { liters: (t / p).toFixed(2) };
+  if (target === 'pricePerLiter') return { pricePerLiter: (t / l).toFixed(2) };
+  return { totalCost: (l * p).toFixed(2) };
 }
