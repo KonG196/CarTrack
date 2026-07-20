@@ -3,7 +3,7 @@ import { Fuel, Wrench, Hammer, Receipt, Plus, Camera, Loader2, AlertTriangle } f
 import { extractError } from '../api/client';
 import { scanReceipt, scanWorkOrder } from '../api/ocr';
 import { getRefuelContext } from '../api/logs';
-import { num, computeRefuelUpdate } from '../utils/refuelMath';
+import { num, deriveRefuel } from '../utils/refuelMath';
 import { formatDate } from '../utils/format';
 import { expenseCategoryFrom } from '../utils/expenseCategory';
 import { describeWorkOrder, workOrderToFormValues } from '../utils/workOrder';
@@ -158,34 +158,56 @@ export default function EntryForm({
     };
   }, [carId]);
 
-  // --- refuel auto-math: editing any two of (liters, price, total) computes the third ---
-  const applyRefuelUpdate = (update) => {
-    if (!update) return;
-    if (update.liters !== undefined) setLiters(update.liters);
-    if (update.pricePerLiter !== undefined) setPricePerLiter(update.pricePerLiter);
-    if (update.totalCost !== undefined) setTotalCost(update.totalCost);
-    markEdited(...Object.keys(update));
+  // --- refuel auto-math: fill the one derivable field, but only when the user
+  //     pauses or leaves a field — never mid-keystroke, so litres/price/total
+  //     stop overwriting each other while you are still typing. ---
+  const refuelOrderRef = useRef([]); // fields the user edited, most-recent first
+  const refuelValsRef = useRef({ liters, pricePerLiter, totalCost });
+  const refuelIdleRef = useRef(null);
+
+  useEffect(() => {
+    refuelValsRef.current = { liters, pricePerLiter, totalCost };
+  }, [liters, pricePerLiter, totalCost]);
+
+  useEffect(() => () => clearTimeout(refuelIdleRef.current), []);
+
+  const runRefuelDerive = () => {
+    if (type !== 'refuel') return;
+    const patch = deriveRefuel(refuelValsRef.current, refuelOrderRef.current);
+    if (!patch) return;
+    if (patch.liters !== undefined) setLiters(patch.liters);
+    if (patch.pricePerLiter !== undefined) setPricePerLiter(patch.pricePerLiter);
+    if (patch.totalCost !== undefined) setTotalCost(patch.totalCost);
+  };
+
+  const noteRefuelEdit = (field) => {
+    refuelOrderRef.current = [field, ...refuelOrderRef.current.filter((f) => f !== field)];
+    markEdited(field);
+    // «Аж потім, коли не пишу»: derive a short beat after the last keystroke.
+    clearTimeout(refuelIdleRef.current);
+    refuelIdleRef.current = setTimeout(runRefuelDerive, 700);
+  };
+
+  // Leaving a field (tap elsewhere / scroll away) derives immediately.
+  const onRefuelBlur = () => {
+    clearTimeout(refuelIdleRef.current);
+    runRefuelDerive();
   };
 
   const onLitersChange = (v) => {
     setLiters(v);
-    markEdited('liters');
-    applyRefuelUpdate(computeRefuelUpdate('liters', { liters: v, pricePerLiter, totalCost }));
+    noteRefuelEdit('liters');
   };
 
   const onPriceChange = (v) => {
     setPricePerLiter(v);
-    markEdited('pricePerLiter');
-    applyRefuelUpdate(
-      computeRefuelUpdate('pricePerLiter', { liters, pricePerLiter: v, totalCost })
-    );
+    noteRefuelEdit('pricePerLiter');
   };
 
   const onTotalChange = (v) => {
     setTotalCost(v);
-    markEdited('totalCost');
-    if (type !== 'refuel') return;
-    applyRefuelUpdate(computeRefuelUpdate('totalCost', { liters, pricePerLiter, totalCost: v }));
+    if (type === 'refuel') noteRefuelEdit('totalCost');
+    else markEdited('totalCost');
   };
 
   // --- scanning ---
@@ -464,11 +486,14 @@ export default function EntryForm({
             min="0"
             numeric
             required
-            hint={odometerHint || undefined}
             value={odometer}
             onChange={(e) => setOdometer(e.target.value)}
           />
         </div>
+
+        {/* Full-width, not tucked into the half-width odometer column, where it
+            wrapped to two cramped lines. */}
+        {odometerHint && <p className="-mt-1 text-xs text-mist">{odometerHint}</p>}
 
         {warnings.length > 0 && (
           <div className="flex flex-col gap-1.5">
@@ -501,6 +526,7 @@ export default function EntryForm({
                 numeric
                 value={liters}
                 onChange={(e) => onLitersChange(e.target.value)}
+                onBlur={onRefuelBlur}
               />
               <TextField
                 label="Ціна за літр, ₴"
@@ -510,6 +536,7 @@ export default function EntryForm({
                 numeric
                 value={pricePerLiter}
                 onChange={(e) => onPriceChange(e.target.value)}
+                onBlur={onRefuelBlur}
               />
             </div>
             {showFuelKind && (
@@ -723,6 +750,7 @@ export default function EntryForm({
           required
           value={totalCost}
           onChange={(e) => onTotalChange(e.target.value)}
+          onBlur={type === 'refuel' ? onRefuelBlur : undefined}
         />
 
         <TextField

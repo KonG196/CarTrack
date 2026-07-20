@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { num, computeRefuelUpdate } from './refuelMath';
+import { num, deriveRefuel } from './refuelMath';
 
 describe('num', () => {
   it('parses plain decimals', () => {
@@ -19,96 +19,78 @@ describe('num', () => {
   });
 });
 
-describe('computeRefuelUpdate', () => {
-  it('computes total from liters and price when liters change', () => {
-    expect(
-      computeRefuelUpdate('liters', { liters: '40', pricePerLiter: '50', totalCost: '' })
-    ).toEqual({ totalCost: '2000.00' });
+describe('deriveRefuel — fills the one empty field from the other two', () => {
+  it('total from liters + price', () => {
+    expect(deriveRefuel({ liters: '40', pricePerLiter: '50', totalCost: '' })).toEqual({
+      totalCost: '2000.00',
+    });
   });
 
-  it('computes price from liters and total when liters change and price is empty', () => {
-    expect(
-      computeRefuelUpdate('liters', { liters: '40', pricePerLiter: '', totalCost: '2000' })
-    ).toEqual({ pricePerLiter: '50.00' });
+  it('price from liters + total', () => {
+    expect(deriveRefuel({ liters: '40', pricePerLiter: '', totalCost: '2000' })).toEqual({
+      pricePerLiter: '50.00',
+    });
   });
 
-  it('computes total from price and liters when price changes', () => {
-    expect(
-      computeRefuelUpdate('pricePerLiter', { liters: '40', pricePerLiter: '55.5', totalCost: '' })
-    ).toEqual({ totalCost: '2220.00' });
-  });
-
-  it('computes liters from price and total when price changes and liters is empty', () => {
-    expect(
-      computeRefuelUpdate('pricePerLiter', { liters: '', pricePerLiter: '50', totalCost: '2000' })
-    ).toEqual({ liters: '40.00' });
-  });
-
-  it('computes price from total and liters when total changes', () => {
-    expect(
-      computeRefuelUpdate('totalCost', { liters: '40', pricePerLiter: '', totalCost: '2000' })
-    ).toEqual({ pricePerLiter: '50.00' });
-  });
-
-  it('computes liters from total and price when total changes and liters is empty', () => {
-    expect(
-      computeRefuelUpdate('totalCost', { liters: '', pricePerLiter: '50', totalCost: '2000' })
-    ).toEqual({ liters: '40.00' });
-  });
-
-  // last-edited precedence: when all three fields are filled, the pair listed
-  // first for the edited field wins (as originally implemented in AddEntry)
-  it('editing liters with all fields filled recomputes total (price wins over total)', () => {
-    expect(
-      computeRefuelUpdate('liters', { liters: '30', pricePerLiter: '50', totalCost: '2000' })
-    ).toEqual({ totalCost: '1500.00' });
-  });
-
-  it('editing price with all fields filled recomputes total', () => {
-    expect(
-      computeRefuelUpdate('pricePerLiter', { liters: '40', pricePerLiter: '60', totalCost: '2000' })
-    ).toEqual({ totalCost: '2400.00' });
-  });
-
-  it('editing total with all fields filled recomputes price (liters win over price)', () => {
-    expect(
-      computeRefuelUpdate('totalCost', { liters: '40', pricePerLiter: '50', totalCost: '2400' })
-    ).toEqual({ pricePerLiter: '60.00' });
+  it('liters from price + total (the reported case: total + price/l → litres)', () => {
+    expect(deriveRefuel({ liters: '', pricePerLiter: '50', totalCost: '2000' })).toEqual({
+      liters: '40.00',
+    });
   });
 
   it('accepts decimal comma input', () => {
-    expect(
-      computeRefuelUpdate('liters', { liters: '45,5', pricePerLiter: '54,99', totalCost: '' })
-    ).toEqual({ totalCost: '2502.05' });
+    expect(deriveRefuel({ liters: '45,5', pricePerLiter: '54,99', totalCost: '' })).toEqual({
+      totalCost: '2502.05',
+    });
   });
 
-  it('rounds the computed value to 2 decimals', () => {
-    expect(
-      computeRefuelUpdate('totalCost', { liters: '3', pricePerLiter: '', totalCost: '10' })
-    ).toEqual({ pricePerLiter: '3.33' });
+  it('rounds to 2 decimals', () => {
+    expect(deriveRefuel({ liters: '3', pricePerLiter: '', totalCost: '10' })).toEqual({
+      pricePerLiter: '3.33',
+    });
   });
 
-  it('returns null when only one value is present', () => {
-    expect(
-      computeRefuelUpdate('liters', { liters: '40', pricePerLiter: '', totalCost: '' })
-    ).toBeNull();
-    expect(
-      computeRefuelUpdate('totalCost', { liters: '', pricePerLiter: '', totalCost: '2000' })
-    ).toBeNull();
+  it('returns null with fewer than two values', () => {
+    expect(deriveRefuel({ liters: '40', pricePerLiter: '', totalCost: '' })).toBeNull();
+    expect(deriveRefuel({ liters: '', pricePerLiter: '', totalCost: '2000' })).toBeNull();
   });
 
-  it('treats zero values as missing (no computation)', () => {
-    expect(
-      computeRefuelUpdate('liters', { liters: '0', pricePerLiter: '50', totalCost: '' })
-    ).toBeNull();
-    expect(
-      computeRefuelUpdate('pricePerLiter', { liters: '0', pricePerLiter: '50', totalCost: '' })
-    ).toBeNull();
+  it('treats zero as missing', () => {
+    expect(deriveRefuel({ liters: '0', pricePerLiter: '50', totalCost: '' })).toBeNull();
+    expect(deriveRefuel({ liters: '0', pricePerLiter: '', totalCost: '2000' })).toBeNull();
   });
 
-  it('ignores invalid text in the other fields', () => {
+  it('ignores invalid text', () => {
+    expect(deriveRefuel({ liters: '40', pricePerLiter: 'abc', totalCost: '' })).toBeNull();
+  });
+});
+
+describe('deriveRefuel — all three present recomputes the least-recently edited', () => {
+  it('with order [total, price] present, recomputes liters', () => {
+    // user last typed total then price; litres is the stale one → t/p
     expect(
-      computeRefuelUpdate('liters', { liters: '40', pricePerLiter: 'abc', totalCost: '' })
-    ).toBeNull();
+      deriveRefuel(
+        { liters: '99', pricePerLiter: '50', totalCost: '2000' },
+        ['totalCost', 'pricePerLiter'],
+      ),
+    ).toEqual({ liters: '40.00' });
+  });
+
+  it('with order [liters, price] present, recomputes total', () => {
+    expect(
+      deriveRefuel(
+        { liters: '40', pricePerLiter: '60', totalCost: '999' },
+        ['liters', 'pricePerLiter'],
+      ),
+    ).toEqual({ totalCost: '2400.00' });
+  });
+
+  it('with order [liters, total] present, recomputes price', () => {
+    expect(
+      deriveRefuel(
+        { liters: '40', pricePerLiter: '999', totalCost: '2400' },
+        ['totalCost', 'liters'],
+      ),
+    ).toEqual({ pricePerLiter: '60.00' });
   });
 });

@@ -139,7 +139,7 @@ export default function Logbook() {
         />
       </div>
 
-      <div data-tour="logbook-filters" className="-mx-4 overflow-x-auto px-4">
+      <div data-tour="logbook-filters" className="no-scrollbar -mx-4 overflow-x-auto px-4">
         <div className="flex w-max gap-2">
           {FILTERS.map((f) => (
             <button
