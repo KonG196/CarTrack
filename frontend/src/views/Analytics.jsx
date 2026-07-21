@@ -17,7 +17,7 @@ import {
 import { useCarStore } from '../store/carStore';
 import { extractError } from '../api/client';
 import { downloadCarReport } from '../api/reports';
-import { formatMoney, formatKm, formatDate, monthLabel } from '../utils/format';
+import { formatMoney, formatMoneyCompact, formatKm, formatDate, monthLabel } from '../utils/format';
 import { expenseCategoryRows, shouldShowStations } from '../utils/analyticsBreakdown';
 import {
   consumptionChartRows,
@@ -98,6 +98,14 @@ function compactHryvnia(v) {
   return String(v);
 }
 
+// Distance to a service: «через 400 км» when it is still ahead, «прострочено на
+// 1 000 км» once it is behind. Rendering a negative «через -1 000 км» read as a
+// glitch.
+function kmLeftLabel(km) {
+  if (km == null) return '—';
+  return km >= 0 ? `через ${formatKm(km)}` : `прострочено на ${formatKm(Math.abs(km))}`;
+}
+
 function ForecastSection({ forecast }) {
   const upcoming = forecast?.upcoming || [];
 
@@ -147,10 +155,10 @@ function ForecastSection({ forecast }) {
                     {item.predicted_due_date
                       ? formatDate(item.predicted_due_date)
                       : item.km_left != null
-                        ? `через ${formatKm(item.km_left)}`
+                        ? kmLeftLabel(item.km_left)
                         : '—'}
                     {item.predicted_due_date && item.km_left != null && (
-                      <span className="text-mist/70"> · через {formatKm(item.km_left)}</span>
+                      <span className="text-mist/70"> · {kmLeftLabel(item.km_left)}</span>
                     )}
                   </p>
                 </div>
@@ -371,15 +379,18 @@ export default function Analytics() {
 
       <Card className="p-3.5">
         <p className="mb-2 text-xs text-mist">За категоріями (весь час)</p>
-        <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
           {SERIES.map(({ key, label, color }) => (
-            <div key={key} className="flex items-center justify-between gap-2 text-sm">
-              <span className="flex items-center gap-1.5 text-mist">
-                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
-                {label}
+            <div key={key} className="flex min-w-0 items-center justify-between gap-2 text-sm">
+              <span className="flex min-w-0 items-center gap-1.5 text-mist">
+                <span
+                  className="h-2 w-2 flex-shrink-0 rounded-full"
+                  style={{ backgroundColor: color }}
+                />
+                <span className="truncate">{label}</span>
               </span>
-              <span className="font-mono font-medium tabular-nums text-fg">
-                {formatMoney(analytics.totals.by_type?.[key] ?? 0)}
+              <span className="flex-shrink-0 whitespace-nowrap font-mono font-medium tabular-nums text-fg">
+                {formatMoneyCompact(analytics.totals.by_type?.[key] ?? 0)}
               </span>
             </div>
           ))}
@@ -389,12 +400,12 @@ export default function Analytics() {
             <p className="mb-2 text-xs text-mist">
               «Інше» за категоріями
             </p>
-            <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
               {expenseRows.map(({ name, total }) => (
-                <div key={name} className="flex items-center justify-between gap-2 text-sm">
+                <div key={name} className="flex min-w-0 items-center justify-between gap-2 text-sm">
                   <span className="truncate text-mist">{name}</span>
-                  <span className="font-mono font-medium tabular-nums text-fg">
-                    {formatMoney(total)}
+                  <span className="flex-shrink-0 whitespace-nowrap font-mono font-medium tabular-nums text-fg">
+                    {formatMoneyCompact(total)}
                   </span>
                 </div>
               ))}

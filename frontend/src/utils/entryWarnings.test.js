@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { entryWarnings, lastEntryHint } from './entryWarnings';
 
 const TODAY = '2026-07-14';
-// formatKm groups thousands with a narrow no-break space, not a plain one.
+// formatKm groups thousands with a narrow no-break space, and separates the
+// number from its unit with a (wider) no-break space.
+const UNIT = '\u00A0';
 const NNBSP = ' ';
 
 const context = {
@@ -20,7 +22,7 @@ describe('entryWarnings', () => {
       TODAY
     );
     expect(warnings).toEqual([
-      `Менше за останній запис (123${NNBSP}456${NNBSP}км) — це історичний запис?`,
+      `Менше за останній запис (123${NNBSP}456${UNIT}км) — це історичний запис?`,
     ]);
   });
 
@@ -57,7 +59,7 @@ describe('entryWarnings', () => {
     expect(
       entryWarnings({ type: 'refuel', odometer: '100', date: '2027-01-01', context }, TODAY)
     ).toEqual([
-      `Менше за останній запис (123${NNBSP}456${NNBSP}км) — це історичний запис?`,
+      `Менше за останній запис (123${NNBSP}456${UNIT}км) — це історичний запис?`,
       'Дата в майбутньому',
     ]);
   });
@@ -91,13 +93,13 @@ describe('entryWarnings', () => {
 describe('lastEntryHint', () => {
   it('shows the last entry odometer and date', () => {
     expect(lastEntryHint(context)).toBe(
-      `Останній запис: 123${NNBSP}456${NNBSP}км · 10.07.2026`
+      `Останній запис: 123${NNBSP}456${UNIT}км · 10.07.2026`
     );
   });
 
   it('shows the odometer alone when the date is missing', () => {
     expect(lastEntryHint({ last_entry_odometer: 500, last_entry_date: null })).toBe(
-      `Останній запис: 500${NNBSP}км`
+      `Останній запис: 500${UNIT}км`
     );
   });
 

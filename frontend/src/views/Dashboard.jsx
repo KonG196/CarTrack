@@ -16,7 +16,7 @@ import {
 import { useCarStore } from '../store/carStore';
 import { getRefuelContext } from '../api/logs';
 import { canDo } from '../utils/permissions';
-import { formatMoney, formatKm, formatDate } from '../utils/format';
+import { formatMoney, formatMoneyCompact, formatKm, formatDate } from '../utils/format';
 import { Card, Spinner, ErrorMessage } from '../components/UI';
 import Toast from '../components/Toast';
 import CompleteIntervalModal from '../components/CompleteIntervalModal';
@@ -50,7 +50,7 @@ function StatCard({ icon: Icon, label, value }) {
         <Icon className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
         {label}
       </span>
-      <span className="mt-auto font-mono text-lg font-semibold leading-tight tabular-nums text-fg">
+      <span className="mt-auto whitespace-nowrap font-mono text-base font-semibold leading-tight tabular-nums text-fg">
         {value}
       </span>
     </Card>
@@ -284,7 +284,7 @@ export default function Dashboard() {
             <StatCard
               icon={Wallet}
               label="Цей місяць"
-              value={formatMoney(analytics.totals.this_month)}
+              value={formatMoneyCompact(analytics.totals.this_month)}
             />
             <StatCard
               icon={Droplets}
