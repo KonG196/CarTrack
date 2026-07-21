@@ -24,6 +24,7 @@ from aiogram.types import (
 from sqlalchemy.orm import Session
 
 from app.bot import service
+from app.bot.ai_intent import parse_message_intent, refuel_fields_from_intent
 from app.bot.parsers import (
     parse_bare_odometer,
     parse_odometer,
@@ -600,7 +601,40 @@ async def handle_text(message: Message) -> None:
             await _handle_expense(message, db, user, expense)
             return
 
+        # Deterministic parsers missed — let the model read the free text and
+        # pick the action. Off the event loop (httpx is sync) and best-effort:
+        # a None/quota/timeout just falls through to «не зрозумів».
+        if settings.GEMINI_API_KEY:
+            intent = await asyncio.to_thread(parse_message_intent, text)
+            if intent and await _handle_intent(message, db, user, intent):
+                return
+
         await message.answer(UNKNOWN_TEXT, reply_markup=MAIN_KEYBOARD)
+
+
+async def _handle_intent(message: Message, db: Session, user: User, intent: dict) -> bool:
+    """Route an LLM-parsed free-text message; True once it produced an entry."""
+    action = intent.get("action")
+    if action == "odometer":
+        odometer = intent.get("odometer")
+        if isinstance(odometer, (int, float)) and not isinstance(odometer, bool) and odometer > 0:
+            await _handle_odometer(message, db, user, int(odometer))
+            return True
+        return False
+    if action == "refuel":
+        fields = refuel_fields_from_intent(intent)
+        if fields is None:
+            return False
+        await _handle_refuel(message, db, user, PendingRefuel(date=dt.date.today(), **fields))
+        return True
+    if action == "expense":
+        title = (intent.get("title") or "").strip()
+        amount = intent.get("total_cost")
+        if title and isinstance(amount, (int, float)) and not isinstance(amount, bool) and amount > 0:
+            await _handle_expense(message, db, user, (title, float(amount)))
+            return True
+        return False
+    return False
 
 
 async def _handle_odometer(message: Message, db: Session, user: User, value: int) -> None:

@@ -196,6 +196,45 @@ def _ask_gemini(prompt: str, image_bytes: bytes, content_type: str) -> Optional[
         return None
 
 
+#: A free-text intent parse must be quick — a bot user is waiting on the reply,
+#: so give up fast and let the caller fall back rather than hang the chat.
+_TEXT_TIMEOUT_SECONDS = 12.0
+
+
+def ask_gemini_json_text(prompt: str) -> Optional[Any]:
+    """Ask the model a text-only question; return the JSON it answers with.
+
+    Same key / retry / quota handling as _ask_gemini but without an image — used
+    to turn a free-text log message into a structured intent. None on any
+    failure so the caller keeps its deterministic behaviour.
+    """
+    if not settings.GEMINI_API_KEY:
+        return None
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"responseMimeType": "application/json", "temperature": 0},
+    }
+    for delay in (*_RETRY_DELAYS_SECONDS, None):
+        response = httpx.post(
+            _GEMINI_URL.format(model=settings.GEMINI_MODEL),
+            headers={"x-goog-api-key": settings.GEMINI_API_KEY},
+            json=payload,
+            timeout=_TEXT_TIMEOUT_SECONDS,
+        )
+        if response.status_code not in _RETRY_STATUSES or delay is None:
+            break
+        if _is_out_of_credit(response):
+            break
+        time.sleep(delay)
+    if response.status_code != 200:
+        return None
+    try:
+        answer = response.json()["candidates"][0]["content"]["parts"][0]["text"]
+        return json.loads(answer)
+    except (KeyError, IndexError, TypeError, json.JSONDecodeError):
+        return None
+
+
 def _is_out_of_credit(response: httpx.Response) -> bool:
     """A 429 that will still be a 429 tomorrow.
 
