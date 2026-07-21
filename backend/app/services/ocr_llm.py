@@ -272,22 +272,27 @@ def recognize_receipt(image_bytes: bytes, content_type: str = "image/jpeg") -> P
     A failure of the remote model keeps the local result: nothing may break
     because someone else's API is down.
     """
-    parsed = parse_receipt_text(read_text(image_bytes, content_type, _receipt_score, 2))
-    if parsed.found_in_text >= 2:
-        return parsed
+    # Tesseract first — local, fast, free. If it already has the numbers, done.
+    tess = parse_receipt_text(extract_text(image_bytes))
+    if tess.found_in_text >= 2:
+        return tess
 
-    # Last rung: a vision model that understands the receipt rather than reading
-    # it. Costs money, so it goes last and only if configured.
-    if not settings.GEMINI_API_KEY:
-        return parsed
-    try:
-        llm_parsed = recognize_receipt_llm(image_bytes, content_type)
-    except Exception:
-        logger.warning("Vision fallback failed, keeping the local result", exc_info=True)
-        return parsed
-    if llm_parsed is not None and llm_parsed.found_in_text > parsed.found_in_text:
-        return llm_parsed
-    return parsed
+    # When a vision model is configured, prefer it over the free remote rung:
+    # it reads angled/crumpled receipts far better AND in ~10s, whereas the demo
+    # OCR.space key can take ~45s — long enough that the whole scan blew past the
+    # client timeout and «failed» even though the model would have read it fine.
+    if settings.GEMINI_API_KEY:
+        try:
+            llm_parsed = recognize_receipt_llm(image_bytes, content_type)
+        except Exception:
+            logger.warning("Vision fallback failed, keeping the local result", exc_info=True)
+            llm_parsed = None
+        if llm_parsed is not None and llm_parsed.found_in_text > tess.found_in_text:
+            return llm_parsed
+        # Model missing/rate-limited/short: fall through to the free remote rung.
+
+    remote = parse_receipt_text(read_text(image_bytes, content_type, _receipt_score, 2))
+    return remote if remote.found_in_text > tess.found_in_text else tess
 
 
 def _score_of(parsed: ParsedWorkOrder) -> int:
@@ -394,28 +399,32 @@ def recognize_work_order(
     only when the free rungs came up short, because it is the only rung that
     costs money.
     """
-    parsed = parse_work_order(
-        read_text(
-            image_bytes, content_type, _work_order_score, _ORDER_ENOUGH, is_table=True
-        )
-    )
-    if _work_order_score(parsed.raw_text) >= _ORDER_ENOUGH or not settings.GEMINI_API_KEY:
-        return parsed
+    # Tesseract first — fast and free.
+    tess = parse_work_order(extract_text(image_bytes))
+    if _score_of(tess) >= _ORDER_ENOUGH:
+        return tess
 
-    try:
-        data = _ask_gemini(_ORDER_PROMPT, image_bytes, content_type)
-    except Exception:
-        logger.warning("Vision fallback failed, keeping the local result", exc_info=True)
-        return parsed
-    if data is None:
-        return parsed
-    llm_parsed = parsed_work_order_from_llm(data)
-    if llm_parsed is None:
-        return parsed
-    # Keep the text the free rungs read either way: it is what a wrong answer is
-    # diagnosed from, and the model returns none.
-    llm_parsed.raw_text = parsed.raw_text
-    return llm_parsed if _score_of(llm_parsed) > _score_of(parsed) else parsed
+    # Prefer the model over the slow demo OCR.space rung when configured (same
+    # reasoning as receipts: it reads the table better and in a fraction of the
+    # time, so the scan finishes inside the client timeout).
+    if settings.GEMINI_API_KEY:
+        try:
+            data = _ask_gemini(_ORDER_PROMPT, image_bytes, content_type)
+        except Exception:
+            logger.warning("Vision fallback failed, keeping the local result", exc_info=True)
+            data = None
+        if data is not None:
+            llm_parsed = parsed_work_order_from_llm(data)
+            if llm_parsed is not None:
+                # Keep the tesseract text: a wrong answer is diagnosed from it.
+                llm_parsed.raw_text = tess.raw_text
+                if _score_of(llm_parsed) > _score_of(tess):
+                    return llm_parsed
+
+    remote = parse_work_order(
+        read_text(image_bytes, content_type, _work_order_score, _ORDER_ENOUGH, is_table=True)
+    )
+    return remote if _score_of(remote) > _score_of(tess) else tess
 
 
 
