@@ -5,6 +5,7 @@ import { Home, BookOpen, PlusCircle, BarChart2, Settings, Car, Plus } from 'luci
 import { useAuthStore } from '../store/authStore';
 import { useCarStore } from '../store/carStore';
 import { Menu } from './UI';
+import AppBadge from './AppBadge';
 import OfflineBanner from './OfflineBanner';
 import Toast from './Toast';
 import Wordmark from './Wordmark';
@@ -180,6 +181,7 @@ export default function Layout() {
   return (
     <TourProvider>
     <div className="min-h-screen bg-garage">
+      <AppBadge />
       <header className="app-header sticky top-0 z-40 border-b border-edge bg-garage/90 pt-[env(safe-area-inset-top)] backdrop-blur">
         <div className="mx-auto flex max-w-md items-center justify-between gap-3 px-4 py-3">
           <NavLink to="/" aria-label="На головну" className="shrink-0">
