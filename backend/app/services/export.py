@@ -20,16 +20,28 @@ from sqlalchemy.orm import Session, selectinload
 from app.access import ensure_owner_membership
 from app.models import (
     Car,
+    CarSpec,
     LogEntry,
     MaintenanceDetails,
     RefuelDetails,
     RepairDetails,
     ServiceInterval,
+    TireSet,
     User,
 )
-from app.schemas import CarCreate, LogEntryCreate, ServiceIntervalCreate
+from app.schemas import (
+    CarCreate,
+    CarSpecCreate,
+    LogEntryCreate,
+    ServiceIntervalCreate,
+    TireSetCreate,
+)
 
-SCHEMA_VERSION = 1
+# v2 adds the car's identity/config scalars (VIN, plate, budget, insurance,
+# tank, passport contacts…), its cheat-sheet specs and its tyre sets. v1 dumps
+# still import — the extra sections just default to empty.
+SCHEMA_VERSION = 2
+SUPPORTED_SCHEMA_VERSIONS = (1, 2)
 
 CSV_COLUMNS = (
     "date",
@@ -69,6 +81,8 @@ def _user_cars(db: Session, user: User) -> list[Car]:
             .where(Car.user_id == user.id)
             .options(
                 selectinload(Car.intervals),
+                selectinload(Car.specs),
+                selectinload(Car.tire_sets),
                 selectinload(Car.logs).selectinload(LogEntry.refuel),
                 selectinload(Car.logs).selectinload(LogEntry.maintenance),
                 selectinload(Car.logs).selectinload(LogEntry.repair),
@@ -131,6 +145,19 @@ def _serialize_car(car: Car) -> dict:
         "year": car.year,
         "fuel_type": car.fuel_type,
         "current_odometer": car.current_odometer,
+        # Identity + config the import already accepts (via CarCreate) but that
+        # older exports silently dropped — a round-trip must not lose them.
+        "vin": car.vin,
+        "plate": car.plate,
+        "avg_daily_km_override": car.avg_daily_km_override,
+        "tank_liters": car.tank_liters,
+        "monthly_budget": float(car.monthly_budget) if car.monthly_budget is not None else None,
+        "scratchpad": car.scratchpad,
+        "contact_phone": car.contact_phone,
+        "insurance_number": car.insurance_number,
+        "insurance_until": car.insurance_until.isoformat() if car.insurance_until else None,
+        "tire_pressure": car.tire_pressure,
+        "fuel_approval": car.fuel_approval,
         "intervals": [
             {
                 "title": interval.title,
@@ -140,6 +167,28 @@ def _serialize_car(car: Car) -> dict:
                 "last_date": interval.last_date.isoformat() if interval.last_date else None,
             }
             for interval in sorted(car.intervals, key=lambda i: i.id)
+        ],
+        "specs": [
+            {
+                "category": spec.category,
+                "name": spec.name,
+                "value": spec.value,
+                "sort_order": spec.sort_order,
+            }
+            for spec in sorted(car.specs, key=lambda s: (s.sort_order, s.id))
+        ],
+        "tire_sets": [
+            {
+                "name": tire_set.name,
+                "season": tire_set.season,
+                "size": tire_set.size,
+                "dot_year": tire_set.dot_year,
+                "purchased_at": tire_set.purchased_at.isoformat() if tire_set.purchased_at else None,
+                "odometer_at_install": tire_set.odometer_at_install,
+                "odometer_at_rotation": tire_set.odometer_at_rotation,
+                "is_installed": tire_set.is_installed,
+            }
+            for tire_set in sorted(car.tire_sets, key=lambda t: t.id)
         ],
         "logs": [
             _serialize_log(log)
@@ -250,6 +299,26 @@ def _build_log(car_id: int, payload: LogEntryCreate) -> LogEntry:
     return log
 
 
+def _build_tire_set(car_id: int, raw: dict, path: str) -> TireSet:
+    """Restore a tyre set, carrying its mounted state + odometer stamps.
+
+    TireSetCreate validates the user-editable core (name/season/size/dot_year/
+    purchased_at); is_installed and the odometer stamps are not part of the
+    create schema (the app mounts a set through a dedicated endpoint), so they
+    are carried over here directly. The export enforces at most one mounted set
+    per car, so restoring is_installed verbatim keeps that invariant.
+    """
+    payload = _validate(TireSetCreate, raw, path)
+    tire_set = TireSet(car_id=car_id, **payload.model_dump())
+    if raw.get("is_installed") is True:
+        tire_set.is_installed = True
+    for attr in ("odometer_at_install", "odometer_at_rotation"):
+        value = raw.get(attr)
+        if isinstance(value, int) and value >= 0:
+            setattr(tire_set, attr, value)
+    return tire_set
+
+
 def import_data(db: Session, user: User, payload: dict) -> dict:
     """Append everything in an export payload to the user's account.
 
@@ -258,14 +327,16 @@ def import_data(db: Session, user: User, payload: dict) -> dict:
     only after the last element. Raises ImportValidationError with the path
     of the first invalid element — the caller must roll back.
     """
-    if payload.get("schema_version") != SCHEMA_VERSION:
+    if payload.get("schema_version") not in SUPPORTED_SCHEMA_VERSIONS:
+        supported = ", ".join(str(v) for v in SUPPORTED_SCHEMA_VERSIONS)
         raise ImportValidationError(
-            f"schema_version: only version {SCHEMA_VERSION} is supported"
+            f"schema_version: supported versions are {supported}"
         )
     if not isinstance(payload.get("cars"), list):
         raise ImportValidationError("cars: must be a list")
 
     cars_created = logs_created = intervals_created = 0
+    specs_created = tire_sets_created = 0
     for car_index, car_raw in enumerate(payload["cars"]):
         car_path = f"cars[{car_index}]"
         car_payload: CarCreate = _validate(CarCreate, car_raw, car_path)
@@ -282,6 +353,18 @@ def import_data(db: Session, user: User, payload: dict) -> dict:
             db.add(ServiceInterval(car_id=car.id, **interval_payload.model_dump()))
             intervals_created += 1
 
+        # v2 sections; absent (empty) in a v1 dump, so this is backward-compatible.
+        for index, spec_raw in enumerate(_list_field(car_raw, "specs", car_path)):
+            spec_payload: CarSpecCreate = _validate(
+                CarSpecCreate, spec_raw, f"{car_path}.specs[{index}]"
+            )
+            db.add(CarSpec(car_id=car.id, **spec_payload.model_dump()))
+            specs_created += 1
+
+        for index, tire_raw in enumerate(_list_field(car_raw, "tire_sets", car_path)):
+            db.add(_build_tire_set(car.id, tire_raw, f"{car_path}.tire_sets[{index}]"))
+            tire_sets_created += 1
+
         for index, log_raw in enumerate(_list_field(car_raw, "logs", car_path)):
             log_payload: LogEntryCreate = _validate(
                 LogEntryCreate, log_raw, f"{car_path}.logs[{index}]"
@@ -294,4 +377,6 @@ def import_data(db: Session, user: User, payload: dict) -> dict:
         "cars_created": cars_created,
         "logs_created": logs_created,
         "intervals_created": intervals_created,
+        "specs_created": specs_created,
+        "tire_sets_created": tire_sets_created,
     }

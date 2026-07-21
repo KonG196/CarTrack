@@ -50,6 +50,8 @@ def test_round_trip_export_import_doubles_counts(
         "cars_created": 1,
         "logs_created": 4,
         "intervals_created": 1,
+        "specs_created": 0,
+        "tire_sets_created": 0,
     }
 
     cars = client.get("/api/cars", headers=auth_headers).json()
@@ -86,10 +88,64 @@ def test_import_wrong_schema_version_422(
     client: TestClient, auth_headers: dict
 ) -> None:
     response = client.post(
-        "/api/import", json=_import_payload(schema_version=2), headers=auth_headers
+        "/api/import", json=_import_payload(schema_version=99), headers=auth_headers
     )
     assert response.status_code == 422
     assert len(client.get("/api/cars", headers=auth_headers).json()) == 0
+
+
+def test_v1_dump_still_imports(client: TestClient, auth_headers: dict) -> None:
+    # A pre-v2 dump (no specs/tire_sets, no config scalars) must still import.
+    response = client.post("/api/import", json=_import_payload(), headers=auth_headers)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["cars_created"] == 1
+    assert body["specs_created"] == 0 and body["tire_sets_created"] == 0
+
+
+def test_v2_round_trip_preserves_config_specs_and_tires(
+    client: TestClient, auth_headers: dict
+) -> None:
+    car = client.post(
+        "/api/cars",
+        json={
+            "brand": "VW", "model": "Passat", "year": 2016, "fuel_type": "diesel",
+            "current_odometer": 168000, "vin": "WVWZZZ3CZGE000001", "plate": "AA1234BB",
+            "monthly_budget": 15000, "insurance_until": "2027-03-01", "tank_liters": 66,
+        },
+        headers=auth_headers,
+    ).json()
+    client.post(
+        f"/api/cars/{car['id']}/specs",
+        json={"category": "Моменти затяжки", "name": "Колісні болти", "value": "120 Нм"},
+        headers=auth_headers,
+    )
+    tire = client.post(
+        f"/api/cars/{car['id']}/tires",
+        json={"name": "Зима Nokian", "season": "winter", "size": "215/55 R17", "dot_year": 2022},
+        headers=auth_headers,
+    ).json()
+    client.post(f"/api/tires/{tire['id']}/install", headers=auth_headers)
+
+    exported = client.get("/api/export", headers=auth_headers).json()
+    assert exported["schema_version"] == 2
+    result = client.post("/api/import", json=exported, headers=auth_headers).json()
+    assert result["specs_created"] == 1
+    assert result["tire_sets_created"] == 1
+
+    cars = client.get("/api/cars", headers=auth_headers).json()
+    new_car = next(c for c in cars if c["id"] != car["id"])
+    assert new_car["vin"] == "WVWZZZ3CZGE000001"
+    assert new_car["plate"] == "AA1234BB"
+    assert new_car["monthly_budget"] == 15000
+    assert new_car["insurance_until"] == "2027-03-01"
+
+    specs = client.get(f"/api/cars/{new_car['id']}/specs", headers=auth_headers).json()
+    assert any(s["name"] == "Колісні болти" and s["value"] == "120 Нм" for s in specs)
+    tires = client.get(f"/api/cars/{new_car['id']}/tires", headers=auth_headers).json()
+    assert len(tires) == 1
+    assert tires[0]["is_installed"] is True
+    assert tires[0]["dot_year"] == 2022
 
 
 def test_import_invalid_element_rolls_back_everything(

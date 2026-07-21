@@ -102,7 +102,7 @@ def test_export_json_contains_all_entities(
     assert "kapot-tracker-export-" in response.headers["content-disposition"]
 
     body = response.json()
-    assert body["schema_version"] == 1
+    assert body["schema_version"] == 2
     assert body["exported_at"]
     assert len(body["cars"]) == 1
 

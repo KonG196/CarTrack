@@ -82,7 +82,10 @@ export default function AddEntry() {
     let toast = 'Запис додано';
     try {
       const log = await addLog(payload);
-      if (scannedFile && payload.type === 'refuel') {
+      // Attach the scanned чек/наряд to ANY entry type, not just refuels — the
+      // form promises «Наряд буде додано як фото» for maintenance/repair too,
+      // and the QR-passport resale story leans on those service-order photos.
+      if (scannedFile) {
         try {
           await uploadPhoto(log.id, scannedFile);
         } catch {
