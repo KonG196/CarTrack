@@ -9,6 +9,8 @@ No seasonal reminders live here on purpose: «time to change over» is a date,
 not a mileage, and the plan leaves it to an ordinary date interval.
 """
 
+import datetime as dt
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -18,7 +20,8 @@ from app.auth import get_current_user
 from app.database import get_db
 from app.models import Car, TireSet, User
 from app.routers.cars import get_owned_car
-from app.schemas import TireSetCreate, TireSetOut, TireSetUpdate
+from app.schemas import TireSeasonStatus, TireSetCreate, TireSetOut, TireSetUpdate
+from app.services import climate
 
 router = APIRouter(tags=["tires"])
 
@@ -69,6 +72,26 @@ def list_tire_sets(
 ) -> list[TireSet]:
     car = get_accessible_car(db, current_user, car_id, min_role=ROLE_VIEWER)
     return car_tire_sets(db, car)
+
+
+@router.get("/cars/{car_id}/tires/season-status", response_model=TireSeasonStatus)
+def tire_season_status(
+    car_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> TireSeasonStatus:
+    """Whether the car's region is in a tyre/washer changeover window right now.
+
+    A read-only signal for the in-app banner — the seasonal date logic lives in
+    climate.py and is keyed off the car's plate region (central-Ukraine
+    fallback). Viewer+, like the rest of the reads here.
+    """
+    car = get_accessible_car(db, current_user, car_id, min_role=ROLE_VIEWER)
+    today = dt.date.today()
+    return TireSeasonStatus(
+        changeover_season=climate.tire_changeover_season(car.plate, today),
+        washer_changeover_due=climate.washer_changeover_due(car.plate, today),
+    )
 
 
 @router.post(

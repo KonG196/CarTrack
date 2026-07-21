@@ -496,6 +496,9 @@ class TireSet(Base):
     # The km-since-rotation multiple last nudged about, so the 10k reminder is
     # not repeated every day. Reset when the set is rotated or re-installed.
     rotation_reminded_km: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # The calendar year an age nudge was last sent for this set, so «your tyres
+    # are N years old» is not repeated every day. Resets implicitly each year.
+    age_reminded_year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
 
     car: Mapped[Car] = relationship(back_populates="tire_sets")

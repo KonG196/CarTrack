@@ -152,12 +152,35 @@ async def send_consumption_alerts(bot: Bot) -> None:
                 )
 
 
+def _tires_link_url() -> str:
+    """Absolute link to the web tyres screen that works for any auth state.
+
+    Routed through /login?next=/tires: a logged-in browser is bounced straight
+    to the tyres page, a logged-out one lands on login/register and returns
+    there afterwards. The bot cannot know the browser's session, so this one URL
+    is correct for everyone.
+    """
+    return f"{settings.PUBLIC_URL.rstrip('/')}/login?next=%2Ftires"
+
+
+def build_tires_link_keyboard(text: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text=text, url=_tires_link_url())]]
+    )
+
+
 def _build_seasonal_text(reminder: service.SeasonalReminder) -> str:
     car = reminder.car
     if reminder.kind == "tires":
         return (
             f"🛞 {car.brand} {car.model}: наближається зима, а на авто досі літня "
             "гума. Варто записатися на шиномонтаж, поки немає двотижневих черг."
+        )
+    if reminder.kind == "tires_add":
+        return (
+            f"🛞 {car.brand} {car.model}: сезон шиномонтажу — час подбати про гуму. "
+            "Додайте свій комплект шин у застосунку, і я нагадуватиму про сезонну "
+            "заміну, ротацію вісей і вік шин."
         )
     return (
         "🥶 Наближаються перші нічні заморозки у вашому регіоні. Не забудьте "
@@ -177,9 +200,15 @@ async def send_seasonal_reminders(bot: Bot) -> None:
     with SessionLocal() as db:
         for user, reminder in service.seasonal_reminder_targets(db, today=today):
             try:
+                reply_markup = (
+                    build_tires_link_keyboard("🛞 Додати шини")
+                    if reminder.kind == "tires_add"
+                    else None
+                )
                 await bot.send_message(
                     chat_id=user.telegram_chat_id,
                     text=_build_seasonal_text(reminder),
+                    reply_markup=reply_markup,
                 )
                 service.stamp_seasonal(db, reminder.car, reminder.kind, today.year)
             except Exception:
@@ -233,6 +262,37 @@ async def send_rotation_reminders(bot: Bot) -> None:
             except Exception:
                 logger.exception(
                     "Failed to send rotation reminder to user %s", user.id
+                )
+
+
+def _build_tire_age_text(reminder: service.TireAgeReminder) -> str:
+    car = reminder.car
+    return (
+        f"🛞 {car.brand} {car.model}: комплекту «{reminder.tire_set.name}» уже "
+        f"{reminder.age_years} р. Гума з віком твердне й тріскається — варто "
+        "перевірити стан і, можливо, замінити, навіть якщо протектор ще лишився."
+    )
+
+
+async def send_tire_age_reminders(bot: Bot) -> None:
+    """One pass: nudge owners whose mounted set has aged past the threshold.
+
+    Isolated per owner; the set's year stamp is written only after a successful
+    send, so a blocked chat is retried and the nudge is at most once per year.
+    """
+    today = dt.date.today()
+    with SessionLocal() as db:
+        for user, reminder in service.tire_age_reminder_targets(db, today=today):
+            try:
+                await bot.send_message(
+                    chat_id=user.telegram_chat_id,
+                    text=_build_tire_age_text(reminder),
+                    reply_markup=build_tires_link_keyboard("🛞 Відкрити шини"),
+                )
+                service.stamp_tire_age(db, reminder.tire_set, today.year)
+            except Exception:
+                logger.exception(
+                    "Failed to send tyre-age reminder to user %s", user.id
                 )
 
 
@@ -315,6 +375,10 @@ async def reminder_loop(bot: Bot) -> None:
             await send_rotation_reminders(bot)
         except Exception:
             logger.exception("Rotation reminder pass failed")
+        try:
+            await send_tire_age_reminders(bot)
+        except Exception:
+            logger.exception("Tyre-age reminder pass failed")
         try:
             await send_weekly_digests(bot)
         except Exception:

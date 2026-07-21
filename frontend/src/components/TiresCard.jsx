@@ -1,8 +1,20 @@
 import { useEffect, useState } from 'react';
-import { CircleDot, Plus, Trash2, Check, Gauge, CalendarDays, RotateCw } from 'lucide-react';
+import {
+  CircleDot,
+  Plus,
+  Trash2,
+  Check,
+  Gauge,
+  CalendarDays,
+  RotateCw,
+  Snowflake,
+  Sun,
+  AlertTriangle,
+} from 'lucide-react';
 import { extractError } from '../api/client';
 import {
   getTireSets,
+  getTireSeasonStatus,
   createTireSet,
   deleteTireSet,
   installTireSet,
@@ -10,9 +22,12 @@ import {
   tireSeasonLabel,
   TIRE_SEASONS,
 } from '../api/tires';
+import { tireAgeYears, tireAgeLevel, tireSeasonMismatch } from '../utils/tireAge';
 
 // Makers advise swapping the axles every ~10 000 km; past that the card nudges.
 const ROTATION_INTERVAL_KM = 10000;
+// Accusative season word for the changeover banner («на зимову/літню гуму»).
+const SEASON_ACCUSATIVE = { winter: 'зимову', summer: 'літню' };
 import { formatKm, formatDate } from '../utils/format';
 import { canDo } from '../utils/permissions';
 import { Button, DateField, TextField, SelectField, Card, Spinner, ErrorMessage, ConfirmDialog } from './UI';
@@ -96,6 +111,7 @@ function TireForm({ onSubmit, onCancel }) {
 export default function TiresCard({ car, onToast }) {
   const canManage = canDo(car?.your_role, 'tire:manage');
   const [tireSets, setTireSets] = useState([]);
+  const [seasonStatus, setSeasonStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -107,6 +123,8 @@ export default function TiresCard({ car, onToast }) {
     let cancelled = false;
     setLoading(true);
     setError('');
+    setSeasonStatus(null);
+    setTireSets([]); // drop the previous car's sets so a slow/failed load never shows them
     getTireSets(car.id)
       .then((data) => {
         if (!cancelled) setTireSets(data);
@@ -117,6 +135,13 @@ export default function TiresCard({ car, onToast }) {
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
+    // Best-effort: the seasonal banner is a nice-to-have, so a failure here
+    // must not block or error the set list.
+    getTireSeasonStatus(car.id)
+      .then((data) => {
+        if (!cancelled) setSeasonStatus(data);
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -202,6 +227,33 @@ export default function TiresCard({ car, onToast }) {
 
       {error && <ErrorMessage className="mb-2">{error}</ErrorMessage>}
 
+      {!loading &&
+        !error &&
+        seasonStatus?.changeover_season &&
+        tireSeasonMismatch(
+          seasonStatus.changeover_season,
+          tireSets.find((t) => t.is_installed),
+        ) && (
+          <div className="mb-3 flex items-start gap-2 rounded-xl border border-edge bg-raised p-3 text-sm font-medium text-amber">
+            {seasonStatus.changeover_season === 'winter' ? (
+              <Snowflake className="mt-0.5 h-4 w-4 flex-shrink-0" />
+            ) : (
+              <Sun className="mt-0.5 h-4 w-4 flex-shrink-0" />
+            )}
+            <span>
+              Час переходити на {SEASON_ACCUSATIVE[seasonStatus.changeover_season]} гуму
+              {tireSets.length === 0 ? ' — додайте свій комплект нижче.' : '.'}
+            </span>
+          </div>
+        )}
+
+      {!loading && !error && seasonStatus?.washer_changeover_due && (
+        <p className="mb-3 flex items-center gap-1.5 text-xs text-mist">
+          <Snowflake className="h-3 w-3 flex-shrink-0" />
+          Скоро нічні заморозки — залийте зимову рідину в омивач.
+        </p>
+      )}
+
       {showForm && (
         <div className="mb-3 rounded-xl border border-edge bg-raised p-3">
           <TireForm onSubmit={handleCreate} onCancel={() => setShowForm(false)} />
@@ -218,7 +270,10 @@ export default function TiresCard({ car, onToast }) {
         </p>
       ) : (
         <div className="divide-y divide-edge">
-          {tireSets.map((tireSet) => (
+          {tireSets.map((tireSet) => {
+            const ageYears = tireAgeYears(tireSet);
+            const ageLevel = tireAgeLevel(ageYears);
+            return (
             <div key={tireSet.id} className="flex items-start justify-between gap-3 py-3">
               <div className="min-w-0">
                 <p className="flex items-center gap-2 text-sm font-medium text-fg">
@@ -247,6 +302,16 @@ export default function TiresCard({ car, onToast }) {
                     </span>
                   )}
                 </p>
+                {(ageLevel === 'warn' || ageLevel === 'crit') && (
+                  <p
+                    className={`mt-1 flex items-center gap-1 text-xs font-medium ${
+                      ageLevel === 'crit' ? 'text-crit' : 'text-amber'
+                    }`}
+                  >
+                    <AlertTriangle className="h-3 w-3 flex-shrink-0" />
+                    Шинам {ageYears} р. — {ageLevel === 'crit' ? 'час замінити' : 'перевірте стан'}
+                  </p>
+                )}
                 {tireSet.is_installed && tireSet.km_since_rotation != null && (
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     <span
@@ -297,7 +362,8 @@ export default function TiresCard({ car, onToast }) {
                 </div>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </Card>

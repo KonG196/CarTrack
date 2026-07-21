@@ -90,3 +90,23 @@ def test_no_nudge_when_seasonal_off(db_session_factory) -> None:
         user.notify_seasonal = False
         db.commit()
         assert service.seasonal_reminder_targets(db, today=day) == []
+
+
+def test_changeover_season_both_windows() -> None:
+    # Central plate: autumn window Oct 15-29 -> winter, spring window Apr 1-15
+    # -> summer, everything else None.
+    assert climate.tire_changeover_season("AA0001AA", dt.date(2026, 10, 16)) == "winter"
+    assert climate.tire_changeover_season("AA0001AA", dt.date(2026, 4, 2)) == "summer"
+    assert climate.tire_changeover_season("AA0001AA", dt.date(2026, 7, 1)) is None
+
+
+def test_add_tires_nudge_when_car_has_no_sets(db_session_factory) -> None:
+    # A car with zero tire sets gets the «set up your tyres» CTA nudge instead of
+    # nothing, once per autumn (deduped via the shared tire_reminder_year stamp).
+    day = dt.date(2026, 10, 10)  # west tyre window, before the washer window
+    with db_session_factory() as db:
+        car = _owner_with_car(db, plate="AC1234BB", season=None)  # no TireSet rows
+        kinds = {r.kind for _u, r in service.seasonal_reminder_targets(db, today=day)}
+        assert kinds == {"tires_add"}
+        service.stamp_seasonal(db, car, "tires_add", day.year)
+        assert service.seasonal_reminder_targets(db, today=day) == []

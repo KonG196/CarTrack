@@ -839,6 +839,18 @@ class TireSetOut(BaseModel):
     km_since_rotation: Optional[int] = None
 
 
+class TireSeasonStatus(BaseModel):
+    """Whether the car's region is in a seasonal tyre/washer changeover window.
+
+    Drives the in-app «time to change over» banner. ``changeover_season`` is the
+    season the region should move to now ("winter" in autumn, "summer" in
+    spring) or None outside both fortnights.
+    """
+
+    changeover_season: Optional[Literal["winter", "summer"]] = None
+    washer_changeover_due: bool = False
+
+
 # Analytics
 
 

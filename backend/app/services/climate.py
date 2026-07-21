@@ -51,6 +51,13 @@ ZONE_TIRE_DATE = {
     ZONE_CENTER: (10, 15),
     ZONE_SOUTH_EAST: (10, 25),
 }
+# Spring: time to move BACK onto summer tyres. The south-east warms first and
+# the west last — the reverse order of autumn.
+ZONE_TIRE_SPRING_DATE = {
+    ZONE_SOUTH_EAST: (3, 25),
+    ZONE_CENTER: (4, 1),
+    ZONE_WEST: (4, 8),
+}
 ZONE_WASHER_DATE = {
     ZONE_WEST: (10, 20),
     ZONE_CENTER: (10, 27),
@@ -82,6 +89,20 @@ def _in_window(plate: str | None, today: dt.date, zone_dates: dict[str, tuple[in
 def tire_changeover_due(plate: str | None, today: dt.date) -> bool:
     """Whether it is the fortnight to move this region onto winter tyres."""
     return _in_window(plate, today, ZONE_TIRE_DATE)
+
+
+def tire_changeover_season(plate: str | None, today: dt.date) -> str | None:
+    """The tyre season this region should move to now, or None.
+
+    ``"winter"`` inside the autumn fortnight, ``"summer"`` inside the spring
+    fortnight — the two windows when a swap is worth a nudge. Any other day is
+    None. Drives the in-app «time to change over» banner both ways.
+    """
+    if _in_window(plate, today, ZONE_TIRE_DATE):
+        return "winter"
+    if _in_window(plate, today, ZONE_TIRE_SPRING_DATE):
+        return "summer"
+    return None
 
 
 def washer_changeover_due(plate: str | None, today: dt.date) -> bool:

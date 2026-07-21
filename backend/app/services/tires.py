@@ -8,8 +8,42 @@ its own.
 
 from __future__ import annotations
 
+import datetime as dt
+
 #: Rotate the axles every this many kilometres.
 ROTATION_INTERVAL_KM = 10_000
+
+#: Warn to inspect tyres once they reach this age: rubber hardens and cracks
+#: with time regardless of tread depth, so an old set is worth a look.
+TIRE_AGE_WARN_YEARS = 4
+#: Past this age replacement is usually overdue — the compound is well past its
+#: prime even if the tread still looks fine.
+TIRE_AGE_CRIT_YEARS = 8
+
+
+def tire_age_years(
+    dot_year: int | None, purchased_at: dt.date | None, today: dt.date
+) -> int | None:
+    """Age of a tyre set in whole years, or None when it cannot be known.
+
+    The DOT production year is the honest measure — rubber ages from the day it
+    was made, not the day it was fitted — so it wins; the purchase year is only
+    a fallback for a set entered without a DOT. Never negative (a future year is
+    a typo, not a time machine).
+    """
+    base_year = (
+        dot_year
+        if dot_year is not None
+        else (purchased_at.year if purchased_at is not None else None)
+    )
+    if base_year is None:
+        return None
+    return max(0, today.year - base_year)
+
+
+def is_tire_age_due(age_years: int | None) -> bool:
+    """Whether a set is old enough to warrant an inspect-or-replace nudge."""
+    return age_years is not None and age_years >= TIRE_AGE_WARN_YEARS
 
 
 def due_rotation_km(

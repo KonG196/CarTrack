@@ -15,6 +15,11 @@ export async function getTireSets(carId) {
   return data;
 }
 
+export async function getTireSeasonStatus(carId) {
+  const { data } = await client.get(`/cars/${carId}/tires/season-status`);
+  return data; // { changeover_season: 'winter'|'summer'|null, washer_changeover_due: bool }
+}
+
 export async function createTireSet(carId, payload) {
   const { data } = await client.post(`/cars/${carId}/tires`, payload);
   return data;

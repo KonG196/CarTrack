@@ -44,7 +44,7 @@ from app.services.fuel import (
 from app.services.intervals import compute_interval_status, effective_avg_daily_km
 from app.services.intervals_complete import IntervalCompletion, complete_interval
 from app.services.ocr import ParsedReceipt
-from app.services.tires import due_rotation_km
+from app.services.tires import due_rotation_km, is_tire_age_due, tire_age_years
 from app.services.ocr_llm import PhotoReading, recognize_receipt
 from app.services.ocr_llm import recognize_photo as ocr_recognize_photo
 from app.services.photos import new_photo_filename, write_photo_file
@@ -712,7 +712,7 @@ def stamp_consumption_alert(db: Session, car: Car, log_id: int) -> None:
 @dataclass
 class SeasonalReminder:
     car: Car
-    kind: str  # "tires" | "washer"
+    kind: str  # "tires" | "tires_add" | "washer"
 
 
 def installed_tire_set(db: Session, car: Car) -> Optional[TireSet]:
@@ -731,8 +731,10 @@ def seasonal_reminder_targets(
     Owner-only and reminders-gated like the rest. Each nudge is once per autumn
     (guarded by the year stamped on the car), fires only inside its regional
     window, and the tyre nudge only when the car is actually still on summer
-    tyres. The region comes from the plate; a car with no plate falls to the
-    central-Ukraine calendar.
+    tyres. A car with NO tyre sets at all gets a «set up your tyres» nudge
+    instead, so an owner who never opened the tyres screen still hears about the
+    changeover. The region comes from the plate; a car with no plate falls to
+    the central-Ukraine calendar.
     """
     if today is None:
         today = dt.date.today()
@@ -754,9 +756,13 @@ def seasonal_reminder_targets(
             if car.tire_reminder_year != today.year and climate.tire_changeover_due(
                 car.plate, today
             ):
-                mounted = installed_tire_set(db, car)
-                if mounted is not None and mounted.season == "summer":
-                    targets.append((user, SeasonalReminder(car=car, kind="tires")))
+                if not car.tire_sets:
+                    # Nothing recorded — nudge them to set tyres up (CTA in the bot).
+                    targets.append((user, SeasonalReminder(car=car, kind="tires_add")))
+                else:
+                    mounted = installed_tire_set(db, car)
+                    if mounted is not None and mounted.season == "summer":
+                        targets.append((user, SeasonalReminder(car=car, kind="tires")))
             if car.washer_reminder_year != today.year and climate.washer_changeover_due(
                 car.plate, today
             ):
@@ -765,7 +771,7 @@ def seasonal_reminder_targets(
 
 
 def stamp_seasonal(db: Session, car: Car, kind: str, year: int) -> None:
-    if kind == "tires":
+    if kind in ("tires", "tires_add"):
         car.tire_reminder_year = year
     elif kind == "washer":
         car.washer_reminder_year = year
@@ -826,6 +832,63 @@ def rotation_reminder_targets(
 
 def stamp_rotation(db: Session, tire_set: TireSet, due_km: int) -> None:
     tire_set.rotation_reminded_km = due_km
+    db.commit()
+
+
+# Tire age nudge
+
+
+@dataclass
+class TireAgeReminder:
+    car: Car
+    tire_set: TireSet
+    age_years: int
+
+
+def tire_age_reminder_targets(
+    db: Session, today: dt.date | None = None
+) -> list[tuple[User, TireAgeReminder]]:
+    """Owners whose mounted set has aged past the inspect-or-replace threshold.
+
+    Owner-only and gated on notify_seasonal (the tyre-notifications toggle).
+    Only the mounted set is checked — that is the rubber actually being driven
+    on — and each set is nudged at most once per calendar year via the
+    age_reminded_year stamp. Age comes from the DOT year (fallback: purchase
+    year); a set with neither is skipped.
+    """
+    if today is None:
+        today = dt.date.today()
+    users = (
+        db.execute(
+            select(User)
+            .where(
+                User.telegram_chat_id.is_not(None),
+                User.notify_seasonal.is_(True),
+            )
+            .order_by(User.id)
+        )
+        .scalars()
+        .all()
+    )
+    targets: list[tuple[User, TireAgeReminder]] = []
+    for user in users:
+        for car in list_owned_cars(db, user):
+            mounted = installed_tire_set(db, car)
+            if mounted is None:
+                continue
+            age = tire_age_years(mounted.dot_year, mounted.purchased_at, today)
+            if not is_tire_age_due(age):
+                continue
+            if mounted.age_reminded_year == today.year:
+                continue
+            targets.append(
+                (user, TireAgeReminder(car=car, tire_set=mounted, age_years=age))
+            )
+    return targets
+
+
+def stamp_tire_age(db: Session, tire_set: TireSet, year: int) -> None:
+    tire_set.age_reminded_year = year
     db.commit()
 
 
