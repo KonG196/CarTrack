@@ -869,6 +869,37 @@ class NotificationList(BaseModel):
     count: int
 
 
+class YearReviewStation(BaseModel):
+    name: str
+    avg_price_per_liter: float
+
+
+class YearReviewBiggest(BaseModel):
+    type: str
+    title: str
+    amount: float
+    date: dt.date
+
+
+class YearReviewOut(BaseModel):
+    """«Ваш рік з Kapot» recap. Numeric fields are null for a year with no logs."""
+
+    year: int
+    has_data: bool
+    available_years: list[int] = Field(default_factory=list)
+    total_spent: Optional[float] = None
+    by_type: Optional[dict[str, float]] = None
+    entries_count: Optional[int] = None
+    refuels_count: Optional[int] = None
+    liters: Optional[float] = None
+    km_driven: Optional[int] = None
+    cost_per_km: Optional[float] = None
+    avg_consumption_l_100km: Optional[float] = None
+    cheapest_station: Optional[YearReviewStation] = None
+    biggest_expense: Optional[YearReviewBiggest] = None
+    busiest_month: Optional[int] = None
+
+
 # Analytics
 
 

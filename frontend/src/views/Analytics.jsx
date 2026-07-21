@@ -1,6 +1,16 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { AlertTriangle, Droplets, FileDown, Loader2, PiggyBank, Wallet, Wrench } from 'lucide-react';
+import { Link, useSearchParams } from 'react-router-dom';
+import {
+  AlertTriangle,
+  ChevronRight,
+  Droplets,
+  FileDown,
+  Loader2,
+  PiggyBank,
+  Sparkles,
+  Wallet,
+  Wrench,
+} from 'lucide-react';
 
 // Genitive fuel word for the spike card («стрибок витрати дизелю/бензину…»).
 const FUEL_WORD = { petrol: 'бензину', diesel: 'дизелю', lpg: 'газу', electric: 'електрики' };
@@ -358,6 +368,16 @@ export default function Analytics() {
     <div className="stagger space-y-4">
       {header}
       {reportError && <ErrorMessage>{reportError}</ErrorMessage>}
+
+      <Link to="/year" className="block">
+        <Card className="flex items-center gap-3 border-amber/40 p-3 transition active:scale-[0.99] motion-reduce:active:scale-100">
+          <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-amber/15">
+            <Sparkles className="h-4 w-4 text-amber" />
+          </span>
+          <p className="flex-1 text-sm font-medium text-fg">Ваш рік з Kapot</p>
+          <ChevronRight className="h-4 w-4 flex-shrink-0 text-mist" />
+        </Card>
+      </Link>
 
       <TabBar tab={tab} onTab={setTab} />
 

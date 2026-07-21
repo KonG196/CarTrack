@@ -18,6 +18,7 @@ import Intervals from './views/Intervals';
 import Profile from './views/Profile';
 import CarEditor from './views/CarEditor';
 import Tires from './views/Tires';
+import YearReview from './views/YearReview';
 import Documents from './views/Documents';
 import Notifications from './views/Notifications';
 import CarSpecs from './views/CarSpecs';
@@ -78,6 +79,7 @@ export default function App() {
         <Route path="/logbook/:id" element={<LogDetail />} />
         <Route path="/add" element={<AddEntry />} />
         <Route path="/analytics" element={<Analytics />} />
+        <Route path="/year" element={<YearReview />} />
         <Route path="/diagnostics" element={<Diagnostics />} />
         <Route path="/garage" element={<Garage />} />
         <Route path="/garage/new" element={<CarEditor />} />
