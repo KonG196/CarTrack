@@ -17,6 +17,7 @@ from app.routers import (
     intervals,
     logs,
     members,
+    notifications,
     obd,
     ocr,
     photos,
@@ -59,6 +60,7 @@ app.include_router(members.router, prefix="/api")
 app.include_router(logs.router, prefix="/api")
 app.include_router(photos.router, prefix="/api")
 app.include_router(intervals.router, prefix="/api")
+app.include_router(notifications.router, prefix="/api")
 app.include_router(analytics.router, prefix="/api")
 app.include_router(reports.router, prefix="/api")
 app.include_router(ocr.router, prefix="/api")

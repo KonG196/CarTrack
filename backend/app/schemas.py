@@ -851,6 +851,24 @@ class TireSeasonStatus(BaseModel):
     washer_changeover_due: bool = False
 
 
+class NotificationOut(BaseModel):
+    """One in-app nudge. ``id`` is a stable key for client-side dismiss."""
+
+    id: str
+    kind: str  # interval | spike | tire_age | rotation | seasonal | insurance
+    severity: str  # crit | warn | info
+    car_id: int
+    car_label: str
+    title: str
+    body: str
+    action: Optional[str] = None  # a web route to open, e.g. "/intervals"
+
+
+class NotificationList(BaseModel):
+    items: list[NotificationOut]
+    count: int
+
+
 # Analytics
 
 

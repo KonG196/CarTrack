@@ -5,6 +5,7 @@ import { Bell, CalendarClock, Send } from 'lucide-react';
 import { extractError } from '../api/client';
 import * as telegramApi from '../api/telegram';
 import BackLink from '../components/BackLink';
+import NotificationsPanel from '../components/NotificationsPanel';
 import Toast from '../components/Toast';
 import { Card, ErrorMessage, Toggle } from '../components/UI';
 import { useAuthStore } from '../store/authStore';
@@ -83,6 +84,8 @@ export default function Notifications() {
       <Toast message={toast} onDone={() => setToast('')} />
       <BackLink to="/garage">Сповіщення</BackLink>
 
+      <NotificationsPanel />
+
       {telegramLinked === false && (
         <Link to="/profile" className="block">
           <Card className="flex items-center gap-3 border-amber/40 transition active:scale-[0.99] motion-reduce:active:scale-100">
@@ -90,8 +93,8 @@ export default function Notifications() {
               <Send className="h-5 w-5 text-amber" />
             </span>
             <p className="flex-1 text-sm text-fg">
-              Сповіщення приходять у Telegram. Прив'яжіть бота у Профілі, щоб їх
-              отримувати.
+              Ці сповіщення також надсилаються у Telegram. Прив'яжіть бота у
+              Профілі, щоб отримувати їх без застосунку.
             </p>
           </Card>
         </Link>
