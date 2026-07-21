@@ -14,6 +14,7 @@ from app.services.fuel import (
     RefuelPoint,
     compute_fuel_stats,
     compute_stats_per_kind,
+    detect_consumption_spike,
     effective_fuel_kind,
 )
 
@@ -312,6 +313,9 @@ def compute_analytics(
     # which is what keeps the existing consumption suite green.
     fuel_stats: FuelStats = compute_fuel_stats(points, fuel_kind=car.fuel_type)
     per_kind = compute_stats_per_kind(points)
+    # The same spike the Telegram watchdog fires on — surfaced in the payload so
+    # the web Fuel tab can show it too (most users never link the bot).
+    spike = detect_consumption_spike(per_kind)
 
     return {
         "totals": {
@@ -347,6 +351,17 @@ def compute_analytics(
                 }
                 for kind, stats in per_kind.items()
             },
+            "spike": (
+                {
+                    "fuel_kind": spike.fuel_kind,
+                    "consumption_l_100km": spike.consumption_l_100km,
+                    "baseline_l_100km": spike.baseline_l_100km,
+                    "pct_over": spike.pct_over,
+                    "date": spike.date.isoformat(),
+                }
+                if spike is not None
+                else None
+            ),
         },
         "price_history": compute_price_history(logs, car),
     }

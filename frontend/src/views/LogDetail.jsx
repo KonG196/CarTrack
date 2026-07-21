@@ -10,6 +10,7 @@ import { canDo, carIsShared } from '../utils/permissions';
 import EntryForm from '../components/EntryForm';
 import { LOG_TYPE_META, AuthorChip, authorLabel } from '../components/LogTimelineItem';
 import { formatMoney, formatKm, formatDate } from '../utils/format';
+import { warrantyStatus } from '../utils/warranty';
 import { Button, Card, Spinner, ErrorMessage, Modal, ConfirmDialog } from '../components/UI';
 import Toast from '../components/Toast';
 
@@ -196,6 +197,15 @@ export default function LogDetail() {
   const meta = LOG_TYPE_META[log.type] || LOG_TYPE_META.expense;
   const Icon = meta.icon;
 
+  const warranty =
+    log.type === 'repair' && log.repair
+      ? warrantyStatus(log.repair, {
+          repairDate: log.date,
+          repairOdometer: log.odometer,
+          currentOdometer: cars.find((c) => c.id === log.car_id)?.current_odometer,
+        })
+      : null;
+
   return (
     <div className="stagger space-y-4">
       <Toast message={toast} onDone={() => setToast('')} />
@@ -326,6 +336,22 @@ export default function LogDetail() {
                   )}
                   {log.repair.warranty_km != null && (
                     <DetailRow label="Гарантія, км" value={formatKm(log.repair.warranty_km)} />
+                  )}
+                  {warranty && (
+                    <DetailRow
+                      label="Статус гарантії"
+                      value={
+                        warranty.active ? (
+                          <span className="font-medium text-ok">
+                            Діє
+                            {warranty.expiry ? ` до ${formatDate(warranty.expiry.toISOString())}` : ''}
+                            {warranty.kmLeft != null ? ` · ще ~${formatKm(warranty.kmLeft)}` : ''}
+                          </span>
+                        ) : (
+                          <span className="text-mist">Вичерпана</span>
+                        )
+                      }
+                    />
                   )}
                 </>
               )}

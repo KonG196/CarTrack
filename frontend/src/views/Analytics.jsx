@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Droplets, FileDown, Loader2, PiggyBank, Wallet, Wrench } from 'lucide-react';
+import { AlertTriangle, Droplets, FileDown, Loader2, PiggyBank, Wallet, Wrench } from 'lucide-react';
+
+// Genitive fuel word for the spike card («стрибок витрати дизелю/бензину…»).
+const FUEL_WORD = { petrol: 'бензину', diesel: 'дизелю', lpg: 'газу', electric: 'електрики' };
 import {
   ResponsiveContainer,
   BarChart,
@@ -473,6 +476,24 @@ export default function Analytics() {
 
       {tab === 'fuel' && (
         <>
+      {analytics.fuel?.spike && (
+        <Card>
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber" />
+            <div className="min-w-0 text-sm">
+              <p className="font-medium text-amber">
+                Стрибок витрати {FUEL_WORD[analytics.fuel.spike.fuel_kind] || 'пального'} на +
+                {analytics.fuel.spike.pct_over}%
+              </p>
+              <p className="mt-0.5 text-mist">
+                {analytics.fuel.spike.consumption_l_100km.toFixed(1)} л/100 км проти звичних ~
+                {analytics.fuel.spike.baseline_l_100km.toFixed(1)} ({formatDate(analytics.fuel.spike.date)}).
+                Якщо стиль їзди не змінювався — перевірте тиск у шинах, стан фільтрів чи свічок.
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
       <Card>
         <h2 className="mb-3 font-display text-sm font-semibold text-fg">Витрата пального, л/100 км</h2>
         {fuelHistory.length === 0 ? (

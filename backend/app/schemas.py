@@ -898,6 +898,16 @@ class FuelKindStats(BaseModel):
     history: list[FuelHistoryItem] = Field(default_factory=list)
 
 
+class ConsumptionSpikeOut(BaseModel):
+    """The latest full-to-full segment running over the car's own recent norm."""
+
+    fuel_kind: str
+    consumption_l_100km: float
+    baseline_l_100km: float
+    pct_over: int
+    date: dt.date
+
+
 class FuelStatsOut(BaseModel):
     avg_consumption_l_100km: Optional[float]
     last_consumption_l_100km: Optional[float]
@@ -907,6 +917,9 @@ class FuelStatsOut(BaseModel):
     # single-fuel car, two for ГБО. More than one key is what tells the UI to
     # draw a line per fuel instead of one.
     by_kind: dict[str, FuelKindStats] = Field(default_factory=dict)
+    # The most recent consumption spike over the car's own baseline, or None —
+    # the same watchdog the Telegram bot fires on, surfaced for the web tab.
+    spike: Optional[ConsumptionSpikeOut] = None
 
 
 class PriceHistoryItem(BaseModel):
