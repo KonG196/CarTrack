@@ -100,12 +100,19 @@ function IntervalRow({ interval, onComplete, canComplete, tourId }) {
   const style = STATUS_STYLES[interval.status] || STATUS_STYLES.ok;
   const pct = Math.max(0, Math.min(100, interval.health_pct ?? 0));
 
+  // An interval falls due when EITHER its distance or its time runs out, so a
+  // brake-fluid job can be overdue on time while the odometer still has slack.
+  // Showing that slack ("10 873 км залишилось") next to a «Прострочено» badge
+  // reads as a contradiction — once overdue, only surface what is overdue.
+  const overdue = interval.status === 'overdue';
   const parts = [];
   if (interval.km_left !== null && interval.km_left !== undefined) {
-    parts.push(interval.km_left >= 0 ? `${formatKm(interval.km_left)} залишилось` : `${formatKm(Math.abs(interval.km_left))} прострочено`);
+    if (interval.km_left < 0) parts.push(`прострочено на ${formatKm(Math.abs(interval.km_left))}`);
+    else if (!overdue) parts.push(`${formatKm(interval.km_left)} залишилось`);
   }
   if (interval.days_left !== null && interval.days_left !== undefined) {
-    parts.push(interval.days_left >= 0 ? `${interval.days_left} дн.` : `${Math.abs(interval.days_left)} дн. тому`);
+    if (interval.days_left < 0) parts.push(`${Math.abs(interval.days_left)} дн. тому`);
+    else if (!overdue) parts.push(`${interval.days_left} дн.`);
   }
 
   const body = (

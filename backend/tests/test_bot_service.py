@@ -5,7 +5,36 @@ import datetime as dt
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.bot import service
-from app.models import Car, User
+from app.models import Car, ServiceInterval, User
+
+
+def test_interval_line_hides_slack_axis_when_overdue() -> None:
+    # Overdue on time (596 days) while the odometer still has slack (+10 873 km):
+    # only the overdue axis is reported, never "залишилось 10 873 км".
+    line = service.format_interval_line(
+        ServiceInterval(title="Гальмівна рідина"),
+        {"km_left": 10873, "days_left": -596, "health_pct": 0.0},
+    )
+    assert "прострочено на 596 дн." in line
+    assert "залишилось" not in line
+    assert "10873" not in line
+
+
+def test_interval_line_reports_overdue_distance() -> None:
+    line = service.format_interval_line(
+        ServiceInterval(title="Колодки"),
+        {"km_left": -1000, "days_left": None, "health_pct": 0.0},
+    )
+    assert "прострочено на 1000 км" in line
+
+
+def test_interval_line_shows_both_remaining_when_on_track() -> None:
+    line = service.format_interval_line(
+        ServiceInterval(title="Олива"),
+        {"km_left": 5000, "days_left": 100, "health_pct": 60.0},
+    )
+    assert "залишилось 5000 км" in line
+    assert "залишилось 100 дн." in line
 
 
 def _make_user_with_car(

@@ -98,12 +98,23 @@ function compactHryvnia(v) {
   return String(v);
 }
 
-// Distance to a service: «через 400 км» when it is still ahead, «прострочено на
-// 1 000 км» once it is behind. Rendering a negative «через -1 000 км» read as a
-// glitch.
-function kmLeftLabel(km) {
-  if (km == null) return '—';
-  return km >= 0 ? `через ${formatKm(km)}` : `прострочено на ${formatKm(Math.abs(km))}`;
+// When a service is due: an interval falls due when EITHER its distance or its
+// time runs out, so it can be overdue on one axis while the other still has
+// slack. Once overdue, surface only what is overdue — showing «через 10 873 км»
+// (or a negative «через -1 000 км») next to a past due date read as a glitch.
+function upcomingWhen(item) {
+  const kmOverdue = item.km_left != null && item.km_left < 0;
+  const daysOverdue = item.days_left != null && item.days_left < 0;
+  if (kmOverdue || daysOverdue) {
+    const bits = [];
+    if (daysOverdue) bits.push(`${Math.abs(item.days_left)} дн. тому`);
+    if (kmOverdue) bits.push(`прострочено на ${formatKm(Math.abs(item.km_left))}`);
+    return bits.join(' · ');
+  }
+  const bits = [];
+  if (item.predicted_due_date) bits.push(formatDate(item.predicted_due_date));
+  if (item.km_left != null) bits.push(`через ${formatKm(item.km_left)}`);
+  return bits.join(' · ') || '—';
 }
 
 function ForecastSection({ forecast }) {
@@ -151,16 +162,7 @@ function ForecastSection({ forecast }) {
               >
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-fg">{item.title}</p>
-                  <p className="mt-0.5 text-xs text-mist">
-                    {item.predicted_due_date
-                      ? formatDate(item.predicted_due_date)
-                      : item.km_left != null
-                        ? kmLeftLabel(item.km_left)
-                        : '—'}
-                    {item.predicted_due_date && item.km_left != null && (
-                      <span className="text-mist/70"> · {kmLeftLabel(item.km_left)}</span>
-                    )}
-                  </p>
+                  <p className="mt-0.5 text-xs text-mist">{upcomingWhen(item)}</p>
                 </div>
                 {item.estimated_cost != null && (
                   <div className="flex-shrink-0 text-right">

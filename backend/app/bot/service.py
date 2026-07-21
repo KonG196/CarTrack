@@ -446,19 +446,24 @@ def build_report(db: Session, car: Car) -> bytes:
 
 
 def format_interval_line(interval: ServiceInterval, computed: dict) -> str:
-    remaining: list[str] = []
+    # An interval falls due when EITHER its distance or its time runs out, so it
+    # can be overdue on one axis while the other still has slack. Once overdue,
+    # only report what is overdue — "залишилось 10 873 км" beside "прострочено"
+    # read as a contradiction.
     km_left = computed["km_left"]
     days_left = computed["days_left"]
+    overdue = (km_left is not None and km_left < 0) or (days_left is not None and days_left < 0)
+    remaining: list[str] = []
     if km_left is not None:
-        remaining.append(
-            f"залишилось {km_left} км" if km_left >= 0 else f"прострочено на {-km_left} км"
-        )
+        if km_left < 0:
+            remaining.append(f"прострочено на {-km_left} км")
+        elif not overdue:
+            remaining.append(f"залишилось {km_left} км")
     if days_left is not None:
-        remaining.append(
-            f"залишилось {days_left} дн."
-            if days_left >= 0
-            else f"прострочено на {-days_left} дн."
-        )
+        if days_left < 0:
+            remaining.append(f"прострочено на {-days_left} дн.")
+        elif not overdue:
+            remaining.append(f"залишилось {days_left} дн.")
     detail = ", ".join(remaining) if remaining else "без прив'язки до пробігу чи дати"
     return f"- {interval.title}: {computed['health_pct']:.0f}% ({detail})"
 
