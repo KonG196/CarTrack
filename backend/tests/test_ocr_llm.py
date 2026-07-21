@@ -104,7 +104,7 @@ def _post_scan(client: TestClient, headers: dict):
 def test_endpoint_falls_back_to_llm_when_tesseract_fails(
     client: TestClient, auth_headers: dict, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("app.services.ocr_llm.extract_text", lambda b: "нечитабельно")
+    monkeypatch.setattr("app.services.ocr_llm.extract_text", lambda b, **kw: "нечитабельно")
     monkeypatch.setattr(ocr_llm.settings, "GEMINI_API_KEY", "test-key")
     monkeypatch.setattr(
         "app.services.ocr_llm.recognize_receipt_llm",
@@ -126,7 +126,7 @@ def test_endpoint_falls_back_to_llm_when_tesseract_fails(
 def test_endpoint_survives_llm_error(
     client: TestClient, auth_headers: dict, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("app.services.ocr_llm.extract_text", lambda b: "нечитабельно")
+    monkeypatch.setattr("app.services.ocr_llm.extract_text", lambda b, **kw: "нечитабельно")
     monkeypatch.setattr(ocr_llm.settings, "GEMINI_API_KEY", "test-key")
 
     def boom(image_bytes: bytes, content_type: str) -> ParsedReceipt:
@@ -141,7 +141,7 @@ def test_endpoint_survives_llm_error(
 def test_llm_not_called_without_key(
     client: TestClient, auth_headers: dict, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("app.services.ocr_llm.extract_text", lambda b: "нечитабельно")
+    monkeypatch.setattr("app.services.ocr_llm.extract_text", lambda b, **kw: "нечитабельно")
     monkeypatch.setattr(ocr_llm.settings, "GEMINI_API_KEY", "")
 
     def must_not_be_called(image_bytes: bytes, content_type: str) -> ParsedReceipt:
@@ -156,7 +156,7 @@ def test_llm_not_called_when_tesseract_succeeded(
 ) -> None:
     monkeypatch.setattr(
         "app.services.ocr_llm.extract_text",
-        lambda b: "45.50 Л x 54.99\nСУМА 2502.05 ГРН",
+        lambda b, **kw: "45.50 Л x 54.99\nСУМА 2502.05 ГРН",
     )
     monkeypatch.setattr(ocr_llm.settings, "GEMINI_API_KEY", "test-key")
 

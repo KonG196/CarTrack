@@ -177,7 +177,7 @@ def _downscale(image: Image.Image) -> Image.Image:
     return resized
 
 
-def extract_text(image_bytes: bytes) -> str:
+def extract_text(image_bytes: bytes, *, retries: bool = True) -> str:
     """OCR an image with tesseract, preferring Ukrainian + English.
 
     The image is grayscaled and tesseract runs with --psm 6 ("one uniform
@@ -189,6 +189,10 @@ def extract_text(image_bytes: bytes) -> str:
     denoised variants for small images) and the pass whose text parses into
     the most refuel fields wins. TesseractNotFoundError — the tesseract
     binary itself is absent — propagates to the caller.
+
+    ``retries=False`` does only the single base pass and returns: the caller has
+    a better/faster fallback (the vision model) and the extra upscale passes are
+    both slow on a weak CPU (~80s for three 2600px passes) and redundant there.
     """
     try:
         src = Image.open(io.BytesIO(image_bytes))
@@ -199,7 +203,7 @@ def extract_text(image_bytes: bytes) -> str:
     image = _downscale(image)
     best_text = _ocr(image, psm=6)
     best_score = _parse_score(best_text)
-    if best_score >= 6:  # liters, price and total all recognized
+    if best_score >= 6 or not retries:  # all fields found, or caller wants one pass
         return best_text
 
     if min(image.size) < _SMALL_IMAGE_PX:

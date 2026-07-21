@@ -272,27 +272,27 @@ def recognize_receipt(image_bytes: bytes, content_type: str = "image/jpeg") -> P
     A failure of the remote model keeps the local result: nothing may break
     because someone else's API is down.
     """
-    # Tesseract first — local, fast, free. If it already has the numbers, done.
-    tess = parse_receipt_text(extract_text(image_bytes))
-    if tess.found_in_text >= 2:
-        return tess
-
-    # When a vision model is configured, prefer it over the free remote rung:
-    # it reads angled/crumpled receipts far better AND in ~10s, whereas the demo
-    # OCR.space key can take ~45s — long enough that the whole scan blew past the
-    # client timeout and «failed» even though the model would have read it fine.
     if settings.GEMINI_API_KEY:
+        # One fast tesseract pass, then the model for whatever it missed. The
+        # model reads angled/crumpled receipts better and in ~10s, so skip both
+        # tesseract's slow multi-pass upscale (~80s on the prod CPU) and the slow
+        # demo OCR.space rung (~45s) — together those blew past the client
+        # timeout and «failed» a receipt the model reads fine.
+        quick = parse_receipt_text(extract_text(image_bytes, retries=False))
+        if quick.found_in_text >= 2:
+            return quick
         try:
             llm_parsed = recognize_receipt_llm(image_bytes, content_type)
         except Exception:
             logger.warning("Vision fallback failed, keeping the local result", exc_info=True)
             llm_parsed = None
-        if llm_parsed is not None and llm_parsed.found_in_text > tess.found_in_text:
+        if llm_parsed is not None and llm_parsed.found_in_text > quick.found_in_text:
             return llm_parsed
-        # Model missing/rate-limited/short: fall through to the free remote rung.
+        # Model missing/rate-limited/short: fall through to the full free rungs.
 
-    remote = parse_receipt_text(read_text(image_bytes, content_type, _receipt_score, 2))
-    return remote if remote.found_in_text > tess.found_in_text else tess
+    # No model (or it came up short): the full free rungs — multi-pass tesseract
+    # then OCR.space. Slower, but only reached without a working vision model.
+    return parse_receipt_text(read_text(image_bytes, content_type, _receipt_score, 2))
 
 
 def _score_of(parsed: ParsedWorkOrder) -> int:
@@ -399,15 +399,13 @@ def recognize_work_order(
     only when the free rungs came up short, because it is the only rung that
     costs money.
     """
-    # Tesseract first — fast and free.
-    tess = parse_work_order(extract_text(image_bytes))
-    if _score_of(tess) >= _ORDER_ENOUGH:
-        return tess
-
-    # Prefer the model over the slow demo OCR.space rung when configured (same
-    # reasoning as receipts: it reads the table better and in a fraction of the
-    # time, so the scan finishes inside the client timeout).
     if settings.GEMINI_API_KEY:
+        # One fast tesseract pass, then the model (same reasoning as receipts:
+        # it reads the table better, and the slow multi-pass + OCR.space rungs
+        # pushed the scan past the client timeout).
+        quick = parse_work_order(extract_text(image_bytes, retries=False))
+        if _score_of(quick) >= _ORDER_ENOUGH:
+            return quick
         try:
             data = _ask_gemini(_ORDER_PROMPT, image_bytes, content_type)
         except Exception:
@@ -417,14 +415,14 @@ def recognize_work_order(
             llm_parsed = parsed_work_order_from_llm(data)
             if llm_parsed is not None:
                 # Keep the tesseract text: a wrong answer is diagnosed from it.
-                llm_parsed.raw_text = tess.raw_text
-                if _score_of(llm_parsed) > _score_of(tess):
+                llm_parsed.raw_text = quick.raw_text
+                if _score_of(llm_parsed) > _score_of(quick):
                     return llm_parsed
+        # Model missing/short: fall through to the full free rungs.
 
-    remote = parse_work_order(
+    return parse_work_order(
         read_text(image_bytes, content_type, _work_order_score, _ORDER_ENOUGH, is_table=True)
     )
-    return remote if _score_of(remote) > _score_of(tess) else tess
 
 
 

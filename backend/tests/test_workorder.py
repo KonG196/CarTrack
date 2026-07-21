@@ -210,7 +210,7 @@ def test_a_fuel_receipt_is_not_a_work_order() -> None:
 def test_classifier_calls_a_receipt_a_receipt(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "app.services.ocr_llm.extract_text",
-        lambda image_bytes: "А-95 Energy\n45.50 Л x 54.99\nСУМА 2502.05 ГРН",
+        lambda image_bytes, **kw: "А-95 Energy\n45.50 Л x 54.99\nСУМА 2502.05 ГРН",
     )
     reading = recognize_photo(b"img")
     assert reading.kind == "refuel"
@@ -218,14 +218,14 @@ def test_classifier_calls_a_receipt_a_receipt(monkeypatch: pytest.MonkeyPatch) -
 
 
 def test_classifier_calls_an_order_an_order(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("app.services.ocr_llm.extract_text", lambda image_bytes: ALEX_SO)
+    monkeypatch.setattr("app.services.ocr_llm.extract_text", lambda image_bytes, **kw: ALEX_SO)
     reading = recognize_photo(b"img")
     assert reading.kind == "work_order"
     assert reading.work_order.total_cost == 8223.38
 
 
 def test_classifier_admits_when_it_cannot_tell(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("app.services.ocr_llm.extract_text", lambda image_bytes: "щощо")
+    monkeypatch.setattr("app.services.ocr_llm.extract_text", lambda image_bytes, **kw: "щощо")
     assert recognize_photo(b"img").kind == "unreadable"
 
 
@@ -237,7 +237,7 @@ def test_the_photo_is_read_once_not_once_per_parser(
     calls = []
     monkeypatch.setattr(
         "app.services.ocr_llm.extract_text",
-        lambda image_bytes: calls.append(1) or ALEX_SO,
+        lambda image_bytes, **kw: calls.append(1) or ALEX_SO,
     )
     recognize_photo(b"img")
     assert len(calls) == 1
@@ -254,7 +254,7 @@ def _post_order(client: TestClient, headers: dict, content: bytes = b"fake-image
 def test_endpoint_returns_a_card_ready_to_save(
     client: TestClient, auth_headers: dict, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("app.services.ocr_llm.extract_text", lambda image_bytes: ALEX_SO)
+    monkeypatch.setattr("app.services.ocr_llm.extract_text", lambda image_bytes, **kw: ALEX_SO)
     response = _post_order(client, auth_headers)
     assert response.status_code == 200, response.text
     body = response.json()
@@ -269,7 +269,7 @@ def test_endpoint_returns_a_card_ready_to_save(
 def test_endpoint_admits_an_unreadable_photo_instead_of_inventing_one(
     client: TestClient, auth_headers: dict, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("app.services.ocr_llm.extract_text", lambda image_bytes: "щощо")
+    monkeypatch.setattr("app.services.ocr_llm.extract_text", lambda image_bytes, **kw: "щощо")
     response = _post_order(client, auth_headers)
     assert response.status_code == 200
     body = response.json()
@@ -284,7 +284,7 @@ def test_endpoint_drops_a_date_from_the_future(
     """No shop invoices work it has not done: «03.12.2099» is a misread year."""
     monkeypatch.setattr(
         "app.services.ocr_llm.extract_text",
-        lambda image_bytes: "Заміна оливи 500,00\nвід 03.12.2099\nРазом: 500,00",
+        lambda image_bytes, **kw: "Заміна оливи 500,00\nвід 03.12.2099\nРазом: 500,00",
     )
     response = _post_order(client, auth_headers)
     assert response.status_code == 200
@@ -318,7 +318,7 @@ def test_endpoint_requires_auth(client: TestClient) -> None:
 def test_the_model_reads_the_order_when_the_free_rungs_cannot(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("app.services.ocr_llm.extract_text", lambda image_bytes: "розмито")
+    monkeypatch.setattr("app.services.ocr_llm.extract_text", lambda image_bytes, **kw: "розмито")
     monkeypatch.setattr(ocr_llm.settings, "GEMINI_API_KEY", "test-key")
     monkeypatch.setattr(
         "app.services.ocr_llm._ask_gemini",
@@ -343,7 +343,7 @@ def test_the_model_is_not_asked_when_the_free_rungs_succeeded(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """It is the only rung that costs money."""
-    monkeypatch.setattr("app.services.ocr_llm.extract_text", lambda image_bytes: ALEX_SO)
+    monkeypatch.setattr("app.services.ocr_llm.extract_text", lambda image_bytes, **kw: ALEX_SO)
     monkeypatch.setattr(ocr_llm.settings, "GEMINI_API_KEY", "test-key")
 
     def must_not_be_called(*args, **kwargs):
@@ -354,7 +354,7 @@ def test_the_model_is_not_asked_when_the_free_rungs_succeeded(
 
 
 def test_the_model_is_not_asked_without_a_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("app.services.ocr_llm.extract_text", lambda image_bytes: "розмито")
+    monkeypatch.setattr("app.services.ocr_llm.extract_text", lambda image_bytes, **kw: "розмито")
     monkeypatch.setattr(ocr_llm.settings, "GEMINI_API_KEY", "")
 
     def must_not_be_called(*args, **kwargs):
@@ -390,7 +390,7 @@ def test_a_model_date_from_the_future_is_refused() -> None:
 
 def test_the_model_survives_a_dead_key(monkeypatch: pytest.MonkeyPatch) -> None:
     """A depleted balance must not cost the user their local reading."""
-    monkeypatch.setattr("app.services.ocr_llm.extract_text", lambda image_bytes: "розмито")
+    monkeypatch.setattr("app.services.ocr_llm.extract_text", lambda image_bytes, **kw: "розмито")
     monkeypatch.setattr(ocr_llm.settings, "GEMINI_API_KEY", "dead-key")
 
     def boom(*args, **kwargs):
