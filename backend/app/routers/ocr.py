@@ -1,5 +1,6 @@
 """Photo upload -> recognized fields: fuel receipts and service orders."""
 
+import asyncio
 import datetime as dt
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
@@ -51,7 +52,11 @@ async def scan_receipt(
 ) -> OcrScanResult:
     image_bytes = await _read_image(file)
     try:
-        parsed = recognize_receipt(image_bytes, file.content_type or "image/jpeg")
+        # Off the event loop: OCR is CPU + a remote call, and running it inline
+        # froze every other request until the scan finished.
+        parsed = await asyncio.to_thread(
+            recognize_receipt, image_bytes, file.content_type or "image/jpeg"
+        )
     except TesseractNotFoundError:
         raise _NO_TESSERACT
 
@@ -72,7 +77,9 @@ async def scan_work_order(
 ) -> OcrWorkOrderResult:
     image_bytes = await _read_image(file)
     try:
-        parsed = recognize_work_order(image_bytes, file.content_type or "image/jpeg")
+        parsed = await asyncio.to_thread(
+            recognize_work_order, image_bytes, file.content_type or "image/jpeg"
+        )
     except TesseractNotFoundError:
         raise _NO_TESSERACT
 
