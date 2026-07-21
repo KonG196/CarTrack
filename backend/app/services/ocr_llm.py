@@ -288,10 +288,13 @@ def recognize_receipt(image_bytes: bytes, content_type: str = "image/jpeg") -> P
             llm_parsed = None
         if llm_parsed is not None and llm_parsed.found_in_text > quick.found_in_text:
             return llm_parsed
-        # Model missing/rate-limited/short: fall through to the full free rungs.
+        # Model down/rate-limited/short: return the fast tesseract read rather
+        # than spin on the slow multi-pass + OCR.space rungs. A hard photo won't
+        # read there either, and the user types it in seconds instead of waiting
+        # a minute — the scan must never hang, even when the model is unavailable.
+        return quick
 
-    # No model (or it came up short): the full free rungs — multi-pass tesseract
-    # then OCR.space. Slower, but only reached without a working vision model.
+    # No vision model configured at all: the full free rungs are the only option.
     return parse_receipt_text(read_text(image_bytes, content_type, _receipt_score, 2))
 
 
@@ -418,8 +421,11 @@ def recognize_work_order(
                 llm_parsed.raw_text = quick.raw_text
                 if _score_of(llm_parsed) > _score_of(quick):
                     return llm_parsed
-        # Model missing/short: fall through to the full free rungs.
+        # Model down/short: return the fast tesseract read rather than spin on
+        # the slow multi-pass + OCR.space rungs (the scan must never hang).
+        return quick
 
+    # No vision model configured at all: the full free rungs are the only option.
     return parse_work_order(
         read_text(image_bytes, content_type, _work_order_score, _ORDER_ENOUGH, is_table=True)
     )
