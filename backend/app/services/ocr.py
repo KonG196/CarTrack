@@ -164,6 +164,9 @@ def _parse_score(text: str) -> int:
 # tesseract's cost scales with pixels. On the one core this runs on, the
 # difference is tens of seconds per photo.
 _MAX_OCR_EDGE = 1600
+# Cap the upscaled edge so a retry pass can't blow the container's memory limit:
+# a fixed ×4 on a 1600px photo made a 6400px bitmap that OOM-killed the backend.
+_UPSCALE_MAX_EDGE = 2600
 
 
 def _downscale(image: Image.Image) -> Image.Image:
@@ -200,15 +203,26 @@ def extract_text(image_bytes: bytes) -> str:
         return best_text
 
     if min(image.size) < _SMALL_IMAGE_PX:
-        up4 = image.resize((image.width * 4, image.height * 4), Image.LANCZOS)
-        up3 = image.resize((image.width * 3, image.height * 3), Image.LANCZOS)
-        retries = [
-            (ImageOps.autocontrast(up4.filter(ImageFilter.MedianFilter(3)), cutoff=2), 6),
-            (ImageOps.autocontrast(up3, cutoff=2), 4),
-        ]
+        # Upscale toward legibility, but cap the result edge and build each
+        # variant just before use — so two big bitmaps never coexist and the
+        # factor can't explode memory on a portrait receipt.
+        cap = max(1.0, _UPSCALE_MAX_EDGE / max(image.size))
+        # (factor, psm, denoise): the sharpened pass first, then a plain one.
+        passes = [(min(4.0, cap), 6, True), (min(3.0, cap), 4, False)]
     else:
-        retries = [(image, 4)]
-    for variant, psm in retries:
+        passes = [(1.0, 4, False)]
+
+    for factor, psm, denoise in passes:
+        if factor <= 1.0:
+            variant = image
+        else:
+            up = image.resize(
+                (round(image.width * factor), round(image.height * factor)), Image.LANCZOS
+            )
+            variant = ImageOps.autocontrast(
+                up.filter(ImageFilter.MedianFilter(3)) if denoise else up, cutoff=2
+            )
+            del up
         text = _ocr(variant, psm=psm)
         score = _parse_score(text)
         if score > best_score:
