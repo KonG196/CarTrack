@@ -38,10 +38,11 @@ function ScanButton({ scanning, onFile, idle, busy }) {
           : 'cursor-pointer border-edge-soft text-mist hover:border-amber hover:text-amber'
       }`}
     >
+      {/* No `capture`: on iOS that forced the camera. Without it Safari offers
+          «Photo Library / Take Photo / Choose File», so a gallery photo works. */}
       <input
         type="file"
         accept="image/*"
-        capture="environment"
         className="hidden"
         disabled={scanning}
         onChange={onFile}
@@ -550,6 +551,17 @@ export default function EntryForm({
                 onBlur={onRefuelBlur}
               />
             </div>
+            <TextField
+              label="Загальна вартість, ₴"
+              type="text"
+              inputMode="decimal"
+              enterKeyHint="next"
+              numeric
+              required
+              value={totalCost}
+              onChange={(e) => onTotalChange(e.target.value)}
+              onBlur={onRefuelBlur}
+            />
             {showFuelKind && (
               <SelectField
                 label="Тип пального"
@@ -752,17 +764,20 @@ export default function EntryForm({
           </div>
         )}
 
-        <TextField
-          label="Загальна вартість, ₴"
-          type="text"
-          inputMode="decimal"
-          enterKeyHint="next"
-          numeric
-          required
-          value={totalCost}
-          onChange={(e) => onTotalChange(e.target.value)}
-          onBlur={type === 'refuel' ? onRefuelBlur : undefined}
-        />
+        {/* Refuel shows it above «Повний бак» (inside the refuel block); the
+            other types keep it here in the shared position. */}
+        {type !== 'refuel' && (
+          <TextField
+            label="Загальна вартість, ₴"
+            type="text"
+            inputMode="decimal"
+            enterKeyHint="next"
+            numeric
+            required
+            value={totalCost}
+            onChange={(e) => onTotalChange(e.target.value)}
+          />
+        )}
 
         <TextField
           label="Нотатки (необов'язково)"

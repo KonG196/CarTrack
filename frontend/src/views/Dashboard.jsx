@@ -297,10 +297,10 @@ export default function Dashboard() {
             />
             <StatCard
               icon={Route}
-              label="₴/100 км"
+              label="на 100 км"
               value={
                 analytics.tco?.cost_per_km != null
-                  ? Math.round(analytics.tco.cost_per_km * 100).toString()
+                  ? `${Math.round(analytics.tco.cost_per_km * 100)} ₴`
                   : '—'
               }
             />
