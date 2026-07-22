@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Check, Copy } from 'lucide-react';
 
 import useCarSpecsCopy from '../hooks/useCarSpecsCopy';
@@ -11,6 +12,7 @@ import useCarSpecsCopy from '../hooks/useCarSpecsCopy';
 // `active:opacity-60` is the press feedback: a tap that copies but shows nothing
 // leaves the user unsure it registered.
 export default function CopyCarName({ car, onCopied, children, className = '' }) {
+  const { t } = useTranslation();
   const { copy, copied, canCopy, previewCopied } = useCarSpecsCopy(car, onCopied);
   const btnRef = useRef(null);
 
@@ -32,7 +34,7 @@ export default function CopyCarName({ car, onCopied, children, className = '' })
       type="button"
       onClick={copy}
       data-tour-demo="copy"
-      title="Скопіювати дані для магазину запчастин"
+      title={t('copyCarName.copyTitle')}
       className={`inline text-left transition-opacity active:opacity-60 ${className}`}
     >
       {children}

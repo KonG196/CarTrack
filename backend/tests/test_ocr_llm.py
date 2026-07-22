@@ -108,7 +108,7 @@ def test_endpoint_falls_back_to_llm_when_tesseract_fails(
     monkeypatch.setattr(ocr_llm.settings, "GEMINI_API_KEY", "test-key")
     monkeypatch.setattr(
         "app.services.ocr_llm.recognize_receipt_llm",
-        lambda image_bytes, content_type: ParsedReceipt(
+        lambda image_bytes, content_type, lang="en": ParsedReceipt(
             liters=43.06,
             price_per_liter=15.99,
             total_cost=688.53,
@@ -130,14 +130,14 @@ def test_endpoint_returns_503_when_the_model_is_unavailable(
     # app maps 503 to «спробуйте пізніше» rather than «не вдалося розпізнати».
     monkeypatch.setattr(ocr_llm.settings, "GEMINI_API_KEY", "test-key")
 
-    def boom(image_bytes: bytes, content_type: str) -> ParsedReceipt:
+    def boom(image_bytes: bytes, content_type: str, lang: str = "en") -> ParsedReceipt:
         raise RuntimeError("gemini down")
 
     monkeypatch.setattr("app.services.ocr_llm.recognize_receipt_llm", boom)
     assert _post_scan(client, auth_headers).status_code == 503
 
     # Same when the model simply returns no answer (rate-limited / dead key).
-    monkeypatch.setattr("app.services.ocr_llm.recognize_receipt_llm", lambda b, c: None)
+    monkeypatch.setattr("app.services.ocr_llm.recognize_receipt_llm", lambda b, c, lang="en": None)
     assert _post_scan(client, auth_headers).status_code == 503
 
 
@@ -147,7 +147,7 @@ def test_llm_not_called_without_key(
     monkeypatch.setattr("app.services.ocr_llm.extract_text", lambda b, **kw: "нечитабельно")
     monkeypatch.setattr(ocr_llm.settings, "GEMINI_API_KEY", "")
 
-    def must_not_be_called(image_bytes: bytes, content_type: str) -> ParsedReceipt:
+    def must_not_be_called(image_bytes: bytes, content_type: str, lang: str = "en") -> ParsedReceipt:
         raise AssertionError("LLM fallback must stay disabled without a key")
 
     monkeypatch.setattr("app.services.ocr_llm.recognize_receipt_llm", must_not_be_called)
@@ -166,7 +166,7 @@ def test_model_reads_the_receipt_and_tesseract_is_skipped(
     monkeypatch.setattr(ocr_llm.settings, "GEMINI_API_KEY", "test-key")
     monkeypatch.setattr(
         "app.services.ocr_llm.recognize_receipt_llm",
-        lambda image_bytes, content_type: ocr_llm.parse_receipt_text(
+        lambda image_bytes, content_type, lang="en": ocr_llm.parse_receipt_text(
             "45.50 Л x 54.99\nСУМА 2502.05 ГРН"
         ),
     )

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Share2, Fuel, Route, Gauge, Wallet, MapPin, TrendingUp, CalendarDays } from 'lucide-react';
 import { useCarStore } from '../store/carStore';
 import { getYearReview } from '../api/yearReview';
@@ -7,11 +8,6 @@ import { formatMoney, formatKm } from '../utils/format';
 import BackLink from '../components/BackLink';
 import Toast from '../components/Toast';
 import { Button, Card, Spinner, ErrorMessage } from '../components/UI';
-
-const MONTHS = [
-  'Січень', 'Лютий', 'Березень', 'Квітень', 'Травень', 'Червень',
-  'Липень', 'Серпень', 'Вересень', 'Жовтень', 'Листопад', 'Грудень',
-];
 
 function Stat({ icon: Icon, label, value }) {
   return (
@@ -28,6 +24,8 @@ function Stat({ icon: Icon, label, value }) {
 }
 
 export default function YearReview() {
+  const { t } = useTranslation();
+  const MONTHS = t('yearReview.months', { returnObjects: true });
   const cars = useCarStore((s) => s.cars);
   const carsLoaded = useCarStore((s) => s.carsLoaded);
   const activeCarId = useCarStore((s) => s.activeCarId);
@@ -54,7 +52,7 @@ export default function YearReview() {
         // refetch (and could skip a later car switch).
       })
       .catch(() => {
-        if (!cancelled) setError('Не вдалося завантажити підсумок року');
+        if (!cancelled) setError(t('yearReview.loadError'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -68,14 +66,14 @@ export default function YearReview() {
   const share = async () => {
     if (!review?.has_data) return;
     const result = await shareYearImage(review, `${car.brand} ${car.model}`);
-    if (result === 'downloaded') setToast('Картку збережено');
-    else if (result === 'error') setToast('Не вдалося створити картку');
+    if (result === 'downloaded') setToast(t('yearReview.cardSaved'));
+    else if (result === 'error') setToast(t('yearReview.cardError'));
   };
 
   if (!carsLoaded) {
     return (
       <div className="stagger space-y-4">
-        <BackLink to="/analytics">Ваш рік</BackLink>
+        <BackLink to="/analytics">{t('yearReview.backTitle')}</BackLink>
         <Spinner />
       </div>
     );
@@ -84,9 +82,9 @@ export default function YearReview() {
   if (!car) {
     return (
       <div className="stagger space-y-4">
-        <BackLink to="/analytics">Ваш рік</BackLink>
+        <BackLink to="/analytics">{t('yearReview.backTitle')}</BackLink>
         <Card>
-          <p className="text-sm text-mist">Спочатку додайте авто.</p>
+          <p className="text-sm text-mist">{t('yearReview.addCarFirst')}</p>
         </Card>
       </div>
     );
@@ -95,7 +93,7 @@ export default function YearReview() {
   return (
     <div className="stagger space-y-4">
       <Toast message={toast} onDone={() => setToast('')} />
-      <BackLink to="/analytics">Ваш рік</BackLink>
+      <BackLink to="/analytics">{t('yearReview.backTitle')}</BackLink>
 
       {review?.available_years?.length > 1 && (
         <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1">
@@ -121,8 +119,7 @@ export default function YearReview() {
       ) : review && !review.has_data ? (
         <Card>
           <p className="py-2 text-sm text-mist">
-            За {review.year} рік ще немає записів. Ведіть журнал — і наприкінці року отримаєте
-            підсумок.
+            {t('yearReview.noEntries', { year: review.year })}
           </p>
         </Card>
       ) : (
@@ -130,34 +127,48 @@ export default function YearReview() {
           <>
             <Card className="overflow-hidden">
               <p className="font-display text-xs font-semibold uppercase tracking-wide text-amber">
-                Ваш рік {review.year}
+                {t('yearReview.yourYear', { year: review.year })}
               </p>
-              <p className="mt-2 text-xs text-mist">Витрачено за рік</p>
+              <p className="mt-2 text-xs text-mist">{t('yearReview.spentThisYear')}</p>
               <p className="font-mono text-4xl font-bold leading-none tabular-nums text-fg">
                 {formatMoney(review.total_spent)}
               </p>
               <p className="mt-2 text-xs text-mist">
-                {review.entries_count} записів · {review.refuels_count} заправок
-                {review.busiest_month != null && ` · найактивніший ${MONTHS[review.busiest_month - 1]}`}
+                {t('yearReview.entriesRefuels', {
+                  entries: review.entries_count,
+                  refuels: review.refuels_count,
+                })}
+                {review.busiest_month != null &&
+                  t('yearReview.busiestMonth', { month: MONTHS[review.busiest_month - 1] })}
               </p>
             </Card>
 
             <div className="grid grid-cols-2 gap-2.5">
-              <Stat icon={Route} label="Пробіг" value={formatKm(review.km_driven)} />
-              <Stat icon={Fuel} label="Заправлено" value={review.liters != null ? `${review.liters} л` : '—'} />
+              <Stat icon={Route} label={t('yearReview.distance')} value={formatKm(review.km_driven)} />
+              <Stat
+                icon={Fuel}
+                label={t('yearReview.fuelAdded')}
+                value={review.liters != null ? t('yearReview.litersValue', { value: review.liters }) : '—'}
+              />
               <Stat
                 icon={Gauge}
-                label="Витрата"
+                label={t('yearReview.consumption')}
                 value={
                   review.avg_consumption_l_100km != null
-                    ? `${review.avg_consumption_l_100km.toFixed(1)} л/100`
+                    ? t('yearReview.consumptionValue', {
+                        value: review.avg_consumption_l_100km.toFixed(1),
+                      })
                     : '—'
                 }
               />
               <Stat
                 icon={Wallet}
-                label="на 100 км"
-                value={review.cost_per_km != null ? `${Math.round(review.cost_per_km * 100)} ₴` : '—'}
+                label={t('yearReview.per100km')}
+                value={
+                  review.cost_per_km != null
+                    ? t('yearReview.costPerKmValue', { value: Math.round(review.cost_per_km * 100) })
+                    : '—'
+                }
               />
             </div>
 
@@ -165,13 +176,13 @@ export default function YearReview() {
               <Card className="flex items-center gap-3 p-3.5">
                 <MapPin className="h-4 w-4 flex-shrink-0 text-ok" />
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs text-mist">Найдешевша АЗС</p>
+                  <p className="text-xs text-mist">{t('yearReview.cheapestStation')}</p>
                   <p className="truncate text-sm font-medium text-fg">
                     {review.cheapest_station.name}
                   </p>
                 </div>
                 <span className="flex-shrink-0 font-mono text-sm font-medium tabular-nums text-fg">
-                  {review.cheapest_station.avg_price_per_liter} ₴/л
+                  {t('yearReview.pricePerLiter', { value: review.cheapest_station.avg_price_per_liter })}
                 </span>
               </Card>
             )}
@@ -180,7 +191,7 @@ export default function YearReview() {
               <Card className="flex items-center gap-3 p-3.5">
                 <TrendingUp className="h-4 w-4 flex-shrink-0 text-amber" />
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs text-mist">Найбільша витрата</p>
+                  <p className="text-xs text-mist">{t('yearReview.biggestExpense')}</p>
                   <p className="truncate text-sm font-medium text-fg">
                     {review.biggest_expense.title}
                   </p>
@@ -193,7 +204,7 @@ export default function YearReview() {
 
             <Button onClick={share} className="w-full">
               <Share2 className="h-4 w-4" />
-              Поділитися карткою
+              {t('yearReview.shareCard')}
             </Button>
           </>
         )

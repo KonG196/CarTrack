@@ -40,7 +40,7 @@ def issue_verification(db: Session, user: User) -> str | None:
     )
     user.verify_code_attempts = 0  # fresh code, fresh attempt budget
     db.flush()
-    sent = send_verification(user.email, code)
+    sent = send_verification(user.email, code, user.language)
     return None if sent else code
 
 
@@ -95,7 +95,7 @@ def issue_email_change(db: Session, user: User, new_email: str) -> str | None:
     )
     user.verify_code_attempts = 0  # fresh code, fresh attempt budget
     db.flush()
-    sent = send_email_change(user.pending_email, code)
+    sent = send_email_change(user.pending_email, code, user.language)
     return None if sent else code
 
 

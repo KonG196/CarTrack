@@ -1,4 +1,5 @@
 import axios from 'axios';
+import i18n from '../i18n';
 
 export const TOKEN_KEY = 'kapot_tracker_token';
 export const REFRESH_KEY = 'kapot_tracker_refresh';
@@ -95,7 +96,7 @@ export function isNetworkError(error) {
   return Boolean(error) && !error.response;
 }
 
-export function extractError(error, fallback = 'Сталася помилка. Спробуйте ще раз.') {
+export function extractError(error, fallback = i18n.t('apiClient.genericError')) {
   const detail = error?.response?.data?.detail;
   if (typeof detail === 'string') return detail;
   if (Array.isArray(detail) && detail.length > 0) {

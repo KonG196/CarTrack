@@ -12,8 +12,6 @@ import {
   Wrench,
 } from 'lucide-react';
 
-// Genitive fuel word for the spike card («стрибок витрати дизелю/бензину…»).
-const FUEL_WORD = { petrol: 'бензину', diesel: 'дизелю', lpg: 'газу', electric: 'електрики' };
 import {
   ResponsiveContainer,
   BarChart,
@@ -27,7 +25,9 @@ import {
   Legend,
   ReferenceLine,
 } from 'recharts';
+import { useTranslation, Trans } from 'react-i18next';
 import { useCarStore } from '../store/carStore';
+import { expenseCategoryLabel } from '../i18n/domain';
 import { extractError } from '../api/client';
 import { downloadCarReport } from '../api/reports';
 import { formatMoney, formatMoneyCompact, formatKm, formatDate, monthLabel } from '../utils/format';
@@ -49,10 +49,10 @@ import TripCostCard from '../components/TripCostCard';
 // the panel background (#121A26) for lightness banding, saturation floor,
 // colourblind separation (worst adjacent pair ΔE 41.3 protan) and contrast >= 3:1.
 const SERIES = [
-  { key: 'refuel', label: 'Заправки', color: '#3987e5' },
-  { key: 'maintenance', label: 'ТО', color: '#199e70' },
-  { key: 'repair', label: 'Ремонт', color: '#c98500' },
-  { key: 'expense', label: 'Інше', color: '#9085e9' },
+  { key: 'refuel', color: '#3987e5' },
+  { key: 'maintenance', color: '#199e70' },
+  { key: 'repair', color: '#c98500' },
+  { key: 'expense', color: '#9085e9' },
 ];
 
 const FUEL_KIND_COLORS = {
@@ -85,6 +85,7 @@ function ChartTooltip({ active, payload, label, valueFormatter }) {
 }
 
 function PriceTooltip({ active, payload, label }) {
+  const { t } = useTranslation();
   const entries = (payload || []).filter((entry) => entry.value != null);
   if (!active || entries.length === 0) return null;
   return (
@@ -96,7 +97,7 @@ function PriceTooltip({ active, payload, label }) {
             className="inline-block h-2 w-2 rounded-full"
             style={{ backgroundColor: entry.color || entry.stroke }}
           />
-          {entry.name}: {Number(entry.value).toFixed(2)} ₴/л
+          {entry.name}: {Number(entry.value).toFixed(2)} {t('analytics.unitUahPerL')}
           {entry.payload?.[`${entry.dataKey}__station`] && (
             <span className="text-mist">· {entry.payload[`${entry.dataKey}__station`]}</span>
           )}
@@ -106,31 +107,27 @@ function PriceTooltip({ active, payload, label }) {
   );
 }
 
-function compactHryvnia(v) {
-  if (Math.abs(v) >= 1000) return `${Math.round(v / 1000)}к`;
-  return String(v);
-}
-
 // When a service is due: an interval falls due when EITHER its distance or its
 // time runs out, so it can be overdue on one axis while the other still has
 // slack. Once overdue, surface only what is overdue — showing «через 10 873 км»
 // (or a negative «через -1 000 км») next to a past due date read as a glitch.
-function upcomingWhen(item) {
+function upcomingWhen(item, t) {
   const kmOverdue = item.km_left != null && item.km_left < 0;
   const daysOverdue = item.days_left != null && item.days_left < 0;
   if (kmOverdue || daysOverdue) {
     const bits = [];
-    if (daysOverdue) bits.push(`${Math.abs(item.days_left)} дн. тому`);
-    if (kmOverdue) bits.push(`прострочено на ${formatKm(Math.abs(item.km_left))}`);
+    if (daysOverdue) bits.push(t('analytics.daysAgo', { n: Math.abs(item.days_left) }));
+    if (kmOverdue) bits.push(t('analytics.overdueByKm', { km: formatKm(Math.abs(item.km_left)) }));
     return bits.join(' · ');
   }
   const bits = [];
   if (item.predicted_due_date) bits.push(formatDate(item.predicted_due_date));
-  if (item.km_left != null) bits.push(`через ${formatKm(item.km_left)}`);
+  if (item.km_left != null) bits.push(t('analytics.inKm', { km: formatKm(item.km_left) }));
   return bits.join(' · ') || '—';
 }
 
 function ForecastSection({ forecast }) {
+  const { t } = useTranslation();
   const upcoming = forecast?.upcoming || [];
 
   return (
@@ -138,19 +135,19 @@ function ForecastSection({ forecast }) {
 
       <div className="grid grid-cols-3 gap-2.5">
         <Card className="p-3">
-          <p className="text-xs text-mist">Середні витрати/міс</p>
+          <p className="text-xs text-mist">{t('analytics.avgSpendPerMonth')}</p>
           <p className="mt-1 font-mono text-sm font-semibold tabular-nums text-fg">
             {formatMoney(forecast?.avg_monthly_spend)}
           </p>
         </Card>
         <Card className="p-3">
-          <p className="text-xs text-mist">Прогноз на цей місяць</p>
+          <p className="text-xs text-mist">{t('analytics.projectedThisMonth')}</p>
           <p className="mt-1 font-mono text-sm font-semibold tabular-nums text-fg">
             {formatMoney(forecast?.projected_month_total)}
           </p>
         </Card>
         <Card className="p-3">
-          <p className="text-xs text-mist">Пробіг км/міс</p>
+          <p className="text-xs text-mist">{t('analytics.distancePerMonth')}</p>
           <p className="mt-1 font-mono text-sm font-semibold tabular-nums text-fg">
             {formatKm(forecast?.monthly_km_rate)}
           </p>
@@ -160,11 +157,11 @@ function ForecastSection({ forecast }) {
       <Card>
         <h3 className="mb-1 flex items-center gap-2 text-sm font-semibold text-fg">
           <Wrench className="h-4 w-4 text-amber" />
-          Найближчі ТО
+          {t('analytics.upcomingMaintenance')}
         </h3>
         {upcoming.length === 0 ? (
           <p className="py-3 text-sm text-mist">
-            У найближчі 90 днів планових робіт не передбачається.
+            {t('analytics.noUpcoming')}
           </p>
         ) : (
           <div className="divide-y divide-edge">
@@ -175,7 +172,7 @@ function ForecastSection({ forecast }) {
               >
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-fg">{item.title}</p>
-                  <p className="mt-0.5 text-xs text-mist">{upcomingWhen(item)}</p>
+                  <p className="mt-0.5 text-xs text-mist">{upcomingWhen(item, t)}</p>
                 </div>
                 {item.estimated_cost != null && (
                   <div className="flex-shrink-0 text-right">
@@ -186,7 +183,9 @@ function ForecastSection({ forecast }) {
                         is a guess that has never seen the car. Labelling both
                         «орієнтовно» would hide which is which. */}
                     <p className="text-[10px] text-mist/70">
-                      {item.estimated_cost_source === 'history' ? 'ваша ціна' : 'по ринку'}
+                      {item.estimated_cost_source === 'history'
+                        ? t('analytics.costFromHistory')
+                        : t('analytics.costFromMarket')}
                     </p>
                   </div>
                 )}
@@ -200,16 +199,17 @@ function ForecastSection({ forecast }) {
 }
 
 const TABS = [
-  { key: 'costs', label: 'Витрати', icon: Wallet },
-  { key: 'fuel', label: 'Паливо', icon: Droplets },
-  { key: 'tco', label: 'Ефективність', icon: PiggyBank },
+  { key: 'costs', icon: Wallet },
+  { key: 'fuel', icon: Droplets },
+  { key: 'tco', icon: PiggyBank },
 ];
 const TAB_KEYS = TABS.map((t) => t.key);
 
 function TabBar({ tab, onTab }) {
+  const { t } = useTranslation();
   return (
     <div className="grid grid-cols-3 gap-1 rounded-2xl border border-edge bg-panel p-1">
-      {TABS.map(({ key, label, icon: Icon }) => (
+      {TABS.map(({ key, icon: Icon }) => (
         <button
           key={key}
           type="button"
@@ -220,7 +220,7 @@ function TabBar({ tab, onTab }) {
           }`}
         >
           <Icon className="h-4 w-4 flex-shrink-0" />
-          {label}
+          {t(`analytics.tab.${key}`)}
         </button>
       ))}
     </div>
@@ -242,6 +242,9 @@ function TcoTile({ label, value, unit, hint }) {
 }
 
 export default function Analytics() {
+  const { t } = useTranslation();
+  const compactHryvnia = (v) =>
+    Math.abs(v) >= 1000 ? `${Math.round(v / 1000)}${t('analytics.thousandsSuffix')}` : String(v);
   const activeCarId = useCarStore((s) => s.activeCarId);
   const cars = useCarStore((s) => s.cars);
   const carsLoaded = useCarStore((s) => s.carsLoaded);
@@ -280,7 +283,7 @@ export default function Analytics() {
   if (carsLoaded && !activeCarId) {
     return (
       <Card className="rise-in mt-8 p-8 text-center">
-        <p className="text-sm text-mist">Додайте авто, щоб побачити аналітику.</p>
+        <p className="text-sm text-mist">{t('analytics.noActiveCar')}</p>
       </Card>
     );
   }
@@ -292,7 +295,7 @@ export default function Analytics() {
     try {
       await downloadCarReport(activeCarId);
     } catch (err) {
-      setReportError(extractError(err, 'Не вдалося сформувати PDF-звіт'));
+      setReportError(extractError(err, t('analytics.reportError')));
     } finally {
       setReportLoading(false);
     }
@@ -300,7 +303,7 @@ export default function Analytics() {
 
   const header = (
     <div className="flex items-center justify-between px-1">
-      <h1 className="font-display text-lg font-semibold text-fg">Аналітика</h1>
+      <h1 className="font-display text-lg font-semibold text-fg">{t('analytics.title')}</h1>
       <Button
         variant="secondary"
         data-tour="analytics-report"
@@ -313,7 +316,7 @@ export default function Analytics() {
         ) : (
           <FileDown className="h-4 w-4" />
         )}
-        {reportLoading ? 'Формування…' : 'Звіт PDF'}
+        {reportLoading ? t('analytics.generating') : t('analytics.reportPdf')}
       </Button>
     </div>
   );
@@ -374,7 +377,7 @@ export default function Analytics() {
           <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-amber/15">
             <Sparkles className="h-4 w-4 text-amber" />
           </span>
-          <p className="flex-1 text-sm font-medium text-fg">Ваш рік з Kapot</p>
+          <p className="flex-1 text-sm font-medium text-fg">{t('analytics.yourYear')}</p>
           <ChevronRight className="h-4 w-4 flex-shrink-0 text-mist" />
         </Card>
       </Link>
@@ -389,13 +392,13 @@ export default function Analytics() {
 
       <div className="grid grid-cols-2 gap-2.5">
         <Card className="p-3.5">
-          <p className="text-xs text-mist">Всього витрачено</p>
+          <p className="text-xs text-mist">{t('analytics.totalSpent')}</p>
           <p className="mt-1 font-mono text-lg font-semibold tabular-nums text-fg">
             {formatMoney(analytics.totals.all_time)}
           </p>
         </Card>
         <Card className="p-3.5">
-          <p className="text-xs text-mist">Цей місяць</p>
+          <p className="text-xs text-mist">{t('analytics.thisMonth')}</p>
           <p className="mt-1 font-mono text-lg font-semibold tabular-nums text-fg">
             {formatMoney(analytics.totals.this_month)}
           </p>
@@ -403,16 +406,16 @@ export default function Analytics() {
       </div>
 
       <Card className="p-3.5">
-        <p className="mb-2 text-xs text-mist">За категоріями (весь час)</p>
+        <p className="mb-2 text-xs text-mist">{t('analytics.byCategoryAllTime')}</p>
         <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
-          {SERIES.map(({ key, label, color }) => (
+          {SERIES.map(({ key, color }) => (
             <div key={key} className="flex min-w-0 items-center justify-between gap-2 text-sm">
               <span className="flex min-w-0 items-center gap-1.5 text-mist">
                 <span
                   className="h-2 w-2 flex-shrink-0 rounded-full"
                   style={{ backgroundColor: color }}
                 />
-                <span className="truncate">{label}</span>
+                <span className="truncate">{t(`analytics.series.${key}`)}</span>
               </span>
               <span className="flex-shrink-0 whitespace-nowrap font-mono font-medium tabular-nums text-fg">
                 {formatMoneyCompact(analytics.totals.by_type?.[key] ?? 0)}
@@ -423,12 +426,12 @@ export default function Analytics() {
         {expenseRows.length > 0 && (
           <div className="mt-3 border-t border-edge pt-3">
             <p className="mb-2 text-xs text-mist">
-              «Інше» за категоріями
+              {t('analytics.otherByCategory')}
             </p>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
               {expenseRows.map(({ name, total }) => (
                 <div key={name} className="flex min-w-0 items-center justify-between gap-2 text-sm">
-                  <span className="truncate text-mist">{name}</span>
+                  <span className="truncate text-mist">{expenseCategoryLabel(name)}</span>
                   <span className="flex-shrink-0 whitespace-nowrap font-mono font-medium tabular-nums text-fg">
                     {formatMoneyCompact(total)}
                   </span>
@@ -440,10 +443,10 @@ export default function Analytics() {
       </Card>
 
       <Card data-tour="analytics-charts">
-        <h2 className="mb-3 font-display text-sm font-semibold text-fg">Витрати за місяцями, ₴</h2>
+        <h2 className="mb-3 font-display text-sm font-semibold text-fg">{t('analytics.monthlySpending')}</h2>
         {!hasSpending ? (
           <p className="py-6 text-center text-sm text-mist">
-            Ще немає витрат — додайте записи в журнал.
+            {t('analytics.noSpendingYet')}
           </p>
         ) : (
           <div className="h-64">
@@ -473,11 +476,11 @@ export default function Analytics() {
                   iconSize={8}
                   wrapperStyle={{ fontSize: 11, color: MUTED, paddingTop: 6 }}
                 />
-                {SERIES.map(({ key, label, color }, idx) => (
+                {SERIES.map(({ key, color }, idx) => (
                   <Bar
                     key={key}
                     dataKey={key}
-                    name={label}
+                    name={t(`analytics.series.${key}`)}
                     stackId="spend"
                     fill={color}
                     stroke={SURFACE}
@@ -502,23 +505,29 @@ export default function Analytics() {
             <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber" />
             <div className="min-w-0 text-sm">
               <p className="font-medium text-amber">
-                Стрибок витрати {FUEL_WORD[analytics.fuel.spike.fuel_kind] || 'пального'} на +
-                {analytics.fuel.spike.pct_over}%
+                {t('analytics.fuelSpikeTitle', {
+                  fuel: t(`analytics.fuelWord.${analytics.fuel.spike.fuel_kind}`, {
+                    defaultValue: t('analytics.fuelWord.fallback'),
+                  }),
+                  pct: analytics.fuel.spike.pct_over,
+                })}
               </p>
               <p className="mt-0.5 text-mist">
-                {analytics.fuel.spike.consumption_l_100km.toFixed(1)} л/100 км проти звичних ~
-                {analytics.fuel.spike.baseline_l_100km.toFixed(1)} ({formatDate(analytics.fuel.spike.date)}).
-                Якщо стиль їзди не змінювався — перевірте тиск у шинах, стан фільтрів чи свічок.
+                {t('analytics.fuelSpikeBody', {
+                  consumption: analytics.fuel.spike.consumption_l_100km.toFixed(1),
+                  baseline: analytics.fuel.spike.baseline_l_100km.toFixed(1),
+                  date: formatDate(analytics.fuel.spike.date),
+                })}
               </p>
             </div>
           </div>
         </Card>
       )}
       <Card>
-        <h2 className="mb-3 font-display text-sm font-semibold text-fg">Витрата пального, л/100 км</h2>
+        <h2 className="mb-3 font-display text-sm font-semibold text-fg">{t('analytics.fuelConsumptionTitle')}</h2>
         {fuelHistory.length === 0 ? (
           <p className="py-6 text-center text-sm text-mist">
-            Замало даних. Додайте щонайменше дві заправки «до повного», щоб побачити витрату.
+            {t('analytics.notEnoughData')}
           </p>
         ) : (
           <div className="h-56">
@@ -542,7 +551,9 @@ export default function Analytics() {
                 />
                 <Tooltip
                   content={
-                    <ChartTooltip valueFormatter={(v) => `${Number(v).toFixed(2)} л/100 км`} />
+                    <ChartTooltip
+                      valueFormatter={(v) => `${Number(v).toFixed(2)} ${t('analytics.unitLPer100km')}`}
+                    />
                   }
                 />
                 {avgConsumption != null && !mixedKinds && (
@@ -551,7 +562,7 @@ export default function Analytics() {
                     stroke={MUTED}
                     strokeDasharray="4 4"
                     label={{
-                      value: `середнє ${avgConsumption.toFixed(1)}`,
+                      value: t('analytics.avgReferenceLabel', { value: avgConsumption.toFixed(1) }),
                       fill: MUTED,
                       fontSize: 10,
                       position: 'insideTopRight',
@@ -586,7 +597,7 @@ export default function Analytics() {
                   <Line
                     type="monotone"
                     dataKey="consumption_l_100km"
-                    name="Витрата"
+                    name={t('analytics.consumptionLine')}
                     stroke="#3987e5"
                     strokeWidth={2}
                     dot={{ r: 3, fill: '#3987e5', stroke: SURFACE, strokeWidth: 2 }}
@@ -610,11 +621,11 @@ export default function Analytics() {
                 </span>
                 <span className="font-mono text-xs tabular-nums text-fg">
                   {byKind[kind].avg_consumption_l_100km != null
-                    ? `${byKind[kind].avg_consumption_l_100km.toFixed(2)} л/100 км`
+                    ? `${byKind[kind].avg_consumption_l_100km.toFixed(2)} ${t('analytics.unitLPer100km')}`
                     : '—'}
                   <span className="text-mist/70">
                     {' '}
-                    · {byKind[kind].total_liters.toFixed(0)} л ·{' '}
+                    · {byKind[kind].total_liters.toFixed(0)} {t('analytics.unitLiters')} ·{' '}
                     {formatMoney(byKind[kind].total_cost)}
                   </span>
                 </span>
@@ -624,7 +635,9 @@ export default function Analytics() {
         ) : (
           analytics.fuel?.last_consumption_l_100km != null && (
             <p className="mt-2 text-xs text-mist">
-              Остання виміряна витрата: {analytics.fuel.last_consumption_l_100km.toFixed(2)} л/100 км
+              {t('analytics.lastConsumption', {
+                value: analytics.fuel.last_consumption_l_100km.toFixed(2),
+              })}
             </p>
           )
         )}
@@ -632,7 +645,7 @@ export default function Analytics() {
 
       {showPriceChart && (
         <Card>
-          <h2 className="mb-3 font-display text-sm font-semibold text-fg">Ціна за літр, ₴</h2>
+          <h2 className="mb-3 font-display text-sm font-semibold text-fg">{t('analytics.pricePerLiterTitle')}</h2>
           <div className="h-56">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={priceRows} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
@@ -684,9 +697,9 @@ export default function Analytics() {
 
       {showStations && (
         <Card>
-          <h2 className="mb-1 font-display text-sm font-semibold text-fg">Мої АЗС</h2>
+          <h2 className="mb-1 font-display text-sm font-semibold text-fg">{t('analytics.myStations')}</h2>
           <p className="mb-2 text-xs text-mist">
-            Витрата рахується по відрізках, що починаються на цій АЗС.
+            {t('analytics.stationsHint')}
           </p>
           <div className="divide-y divide-edge">
             {stations.map((station) => (
@@ -697,11 +710,12 @@ export default function Analytics() {
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-fg">{station.name}</p>
                   <p className="mt-0.5 text-xs text-mist">
-                    {station.refuels} запр. · {station.total_liters.toFixed(1)} л
+                    {station.refuels} {t('analytics.unitRefuels')} · {station.total_liters.toFixed(1)}{' '}
+                    {t('analytics.unitLiters')}
                     {station.avg_price_per_liter != null && (
                       <span className="text-mist/70">
                         {' '}
-                        · {station.avg_price_per_liter.toFixed(2)} ₴/л
+                        · {station.avg_price_per_liter.toFixed(2)} {t('analytics.unitUahPerL')}
                       </span>
                     )}
                   </p>
@@ -712,7 +726,7 @@ export default function Analytics() {
                   </p>
                   <p className="text-[10px] text-mist/70">
                     {station.avg_consumption_l_100km != null
-                      ? `${station.avg_consumption_l_100km.toFixed(1)} л/100 км`
+                      ? `${station.avg_consumption_l_100km.toFixed(1)} ${t('analytics.unitLPer100km')}`
                       : '—'}
                   </p>
                 </div>
@@ -737,47 +751,49 @@ export default function Analytics() {
               </span>
               <div className="min-w-0">
                 <p className="text-sm font-medium text-fg">
-                  Завдяки ГБО ви зберегли{' '}
+                  {t('analytics.lpgSaved')}{' '}
                   <span className="font-semibold text-ok">
                     {formatMoney(analytics.lpg_savings.saved_total)}
                   </span>
                 </p>
                 <p className="mt-0.5 text-xs text-mist">
-                  Чиста економія {analytics.lpg_savings.saved_per_km.toFixed(2)} ₴ на кожному
-                  кілометрі · {formatKm(analytics.lpg_savings.gas_distance_km)} на газу
+                  {t('analytics.lpgSavingsDetail', {
+                    perKm: analytics.lpg_savings.saved_per_km.toFixed(2),
+                    distance: formatKm(analytics.lpg_savings.gas_distance_km),
+                  })}
                 </p>
               </div>
             </Card>
           )}
           <div className="grid grid-cols-2 gap-2.5">
             <TcoTile
-              label="Вартість, ₴/км"
+              label={t('analytics.tcoCostPerKm')}
               value={
                 analytics.tco?.cost_per_km != null ? analytics.tco.cost_per_km.toFixed(2) : '—'
               }
               unit="₴"
-              hint="Усі витрати на пробіг"
+              hint={t('analytics.tcoCostPerKmHint')}
             />
             <TcoTile
-              label="Вартість, ₴/день"
+              label={t('analytics.tcoCostPerDay')}
               value={
                 analytics.tco?.cost_per_day != null
                   ? formatMoney(analytics.tco.cost_per_day)
                   : '—'
               }
-              hint="Усі витрати на дні володіння"
+              hint={t('analytics.tcoCostPerDayHint')}
             />
             <TcoTile
-              label="Розхід"
+              label={t('analytics.tcoConsumption')}
               value={
                 analytics.fuel?.avg_consumption_l_100km != null
                   ? analytics.fuel.avg_consumption_l_100km.toFixed(1)
                   : '—'
               }
-              unit="л/100 км"
+              unit={t('analytics.unitLPer100km')}
             />
             <TcoTile
-              label="Витрати / місяць"
+              label={t('analytics.tcoSpendPerMonth')}
               value={
                 analytics.forecast?.avg_monthly_spend != null
                   ? formatMoney(analytics.forecast.avg_monthly_spend)
@@ -787,10 +803,16 @@ export default function Analytics() {
           </div>
           <Card className="p-4">
             <p className="text-xs leading-relaxed text-mist">
-              ₴/км і ₴/день рахуються з <span className="text-fg">усіх</span> витрат — пальне, ТО,
-              ремонти, інше — поділених на пройдений пробіг
-              {analytics.tco?.distance_km != null ? ` (${formatKm(analytics.tco.distance_km)})` : ''}{' '}
-              і дні володіння. Це чесна вартість, а не лише пальне.
+              <Trans
+                i18nKey="analytics.tcoExplainer"
+                components={{ b: <span className="text-fg" /> }}
+                values={{
+                  distance:
+                    analytics.tco?.distance_km != null
+                      ? ` (${formatKm(analytics.tco.distance_km)})`
+                      : '',
+                }}
+              />
             </p>
           </Card>
         </>

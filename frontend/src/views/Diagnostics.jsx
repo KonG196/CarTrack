@@ -9,6 +9,7 @@ import {
   Tooltip,
 } from 'recharts';
 import { Loader2, Trash2, Upload, Activity, FileText } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useCarStore } from '../store/carStore';
 import { extractError } from '../api/client';
 import { importObdCsv, getObdSessions, getObdSession, deleteObdSession } from '../api/obd';
@@ -41,6 +42,7 @@ function VerdictCard({ verdict }) {
 }
 
 function MetricChart({ metric }) {
+  const { t } = useTranslation();
   const points = chartPoints(metric.series);
   const unit = metric.unit ? ` ${metric.unit}` : '';
 
@@ -49,9 +51,12 @@ function MetricChart({ metric }) {
       <div className="mb-2 flex items-baseline justify-between gap-2">
         <h3 className="font-display text-sm font-semibold text-fg">{metricLabel(metric.key)}</h3>
         <span className="font-mono text-xs tabular-nums text-mist">
-          min {metric.min.toFixed(1)} · max {metric.max.toFixed(1)} · зараз{' '}
-          {metric.last.toFixed(1)}
-          {unit}
+          {t('diagnostics.metricStats', {
+            min: metric.min.toFixed(1),
+            max: metric.max.toFixed(1),
+            last: metric.last.toFixed(1),
+            unit,
+          })}
         </span>
       </div>
       <div className="h-40">
@@ -65,7 +70,7 @@ function MetricChart({ metric }) {
               tick={{ fill: MUTED, fontSize: 10 }}
               axisLine={{ stroke: GRID }}
               tickLine={false}
-              tickFormatter={(t) => `${Math.round(t)}с`}
+              tickFormatter={(sec) => `${Math.round(sec)}${t('diagnostics.secondsShort')}`}
               interval="preserveStartEnd"
             />
             <YAxis
@@ -85,7 +90,7 @@ function MetricChart({ metric }) {
               }}
               labelStyle={{ color: MUTED }}
               itemStyle={{ color: '#E9EEF6' }}
-              labelFormatter={(t) => `${Math.round(t)} с від початку`}
+              labelFormatter={(sec) => t('diagnostics.chartLabelFromStart', { sec: Math.round(sec) })}
               formatter={(v) => [`${v}${unit}`, metricLabel(metric.key)]}
             />
             <Line
@@ -105,23 +110,21 @@ function MetricChart({ metric }) {
 }
 
 function EmptyState({ canImport }) {
+  const { t } = useTranslation();
   return (
     <Card className="flex flex-col items-center gap-3 p-8 text-center">
       <Activity className="h-8 w-8 text-mist/70" />
-      <p className="text-sm text-mist">Ще немає жодного логу OBD.</p>
+      <p className="text-sm text-mist">{t('diagnostics.emptyTitle')}</p>
       {canImport && (
       <div className="text-left text-xs text-mist/80">
-        <p className="mb-1.5 font-medium text-mist">Як зняти лог у Car Scanner:</p>
+        <p className="mb-1.5 font-medium text-mist">{t('diagnostics.howToTitle')}</p>
         <ol className="list-decimal space-y-1 pl-4">
-          <li>Підключіть ELM327 і запустіть запис під час поїздки.</li>
-          <li>Відкрийте «Налаштування» → «Записи».</li>
-          <li>Оберіть потрібний запис і натисніть «Експорт CSV».</li>
-          <li>Перетягніть отриманий файл сюди.</li>
+          <li>{t('diagnostics.howStep1')}</li>
+          <li>{t('diagnostics.howStep2')}</li>
+          <li>{t('diagnostics.howStep3')}</li>
+          <li>{t('diagnostics.howStep4')}</li>
         </ol>
-        <p className="mt-2">
-          Чим більше PID у профілі запису (сажа DPF, корекції форсунок, напруга) — тим більше
-          висновків тут буде.
-        </p>
+        <p className="mt-2">{t('diagnostics.howNote')}</p>
       </div>
       )}
     </Card>
@@ -129,6 +132,7 @@ function EmptyState({ canImport }) {
 }
 
 export default function Diagnostics() {
+  const { t } = useTranslation();
   const cars = useCarStore((s) => s.cars);
   const activeCarId = useCarStore((s) => s.activeCarId);
   const carsLoaded = useCarStore((s) => s.carsLoaded);
@@ -154,7 +158,7 @@ export default function Diagnostics() {
       setSessions(list);
       setDetail(list.length > 0 ? await getObdSession(list[0].id) : null);
     } catch (err) {
-      setError(extractError(err, 'Не вдалося завантажити логи OBD'));
+      setError(extractError(err, t('diagnostics.errLoad')));
     } finally {
       setLoading(false);
     }
@@ -173,7 +177,7 @@ export default function Diagnostics() {
       setDetail(imported);
       setSessions(await getObdSessions(activeCarId));
     } catch (err) {
-      setError(extractError(err, 'Не вдалося імпортувати CSV'));
+      setError(extractError(err, t('diagnostics.errImport')));
     } finally {
       setUploading(false);
     }
@@ -190,7 +194,7 @@ export default function Diagnostics() {
     try {
       setDetail(await getObdSession(session.id));
     } catch (err) {
-      setError(extractError(err, 'Не вдалося відкрити сесію'));
+      setError(extractError(err, t('diagnostics.errOpenSession')));
     }
   };
 
@@ -202,14 +206,14 @@ export default function Diagnostics() {
       await deleteObdSession(session.id);
       await load();
     } catch (err) {
-      setError(extractError(err, 'Не вдалося видалити сесію'));
+      setError(extractError(err, t('diagnostics.errDeleteSession')));
     }
   };
 
   if (carsLoaded && !activeCarId) {
     return (
       <Card className="rise-in mt-8 p-8 text-center">
-        <p className="text-sm text-mist">Додайте авто, щоб імпортувати логи OBD.</p>
+        <p className="text-sm text-mist">{t('diagnostics.noCarPrompt')}</p>
       </Card>
     );
   }
@@ -220,7 +224,7 @@ export default function Diagnostics() {
   return (
     <div className="stagger space-y-4">
       <div className="flex items-center justify-between px-1">
-        <h1 className="font-display text-lg font-semibold text-fg">Діагностика</h1>
+        <h1 className="font-display text-lg font-semibold text-fg">{t('diagnostics.title')}</h1>
       </div>
 
       {error && <ErrorMessage>{error}</ErrorMessage>}
@@ -239,7 +243,7 @@ export default function Diagnostics() {
           onKeyDown={(event) => {
             if (event.key === 'Enter' || event.key === ' ') fileInputRef.current?.click();
           }}
-          aria-label="Завантажити CSV-лог Car Scanner"
+          aria-label={t('diagnostics.uploadAria')}
           className={`flex cursor-pointer flex-col items-center gap-2 rounded-2xl border border-dashed p-6 text-center transition-colors ${
             dragging ? 'border-amber bg-amber/5' : 'border-edge-soft bg-panel hover:border-amber/50'
           }`}
@@ -250,9 +254,9 @@ export default function Diagnostics() {
             <Upload className="h-6 w-6 text-mist" />
           )}
           <p className="text-sm text-fg">
-            {uploading ? 'Розбираємо лог…' : 'Перетягніть CSV з Car Scanner або натисніть'}
+            {uploading ? t('diagnostics.parsing') : t('diagnostics.dropHint')}
           </p>
-          <p className="text-xs text-mist/70">CSV до 20 МБ · сам файл не зберігається</p>
+          <p className="text-xs text-mist/70">{t('diagnostics.fileLimit')}</p>
           <input
             ref={fileInputRef}
             type="file"
@@ -274,7 +278,7 @@ export default function Diagnostics() {
         <>
           {detail.verdicts.length > 0 && (
             <div className="space-y-2">
-              <h2 className="px-1 font-display text-sm font-semibold text-fg">Висновки</h2>
+              <h2 className="px-1 font-display text-sm font-semibold text-fg">{t('diagnostics.findingsHeading')}</h2>
               {detail.verdicts.map((verdict) => (
                 <VerdictCard key={verdict.key} verdict={verdict} />
               ))}
@@ -283,16 +287,21 @@ export default function Diagnostics() {
 
           {unmapped.length > 0 && (
             <p className="px-1 text-xs text-mist/70">
-              Не розпізнано: {unmapped.length}{' '}
-              {unmapped.length === 1 ? 'колонка' : 'колонок'} — {unmapped.slice(0, 3).join(', ')}
-              {unmapped.length > 3 ? '…' : ''}
+              {t('diagnostics.unmapped', {
+                count: unmapped.length,
+                word: t(unmapped.length === 1 ? 'diagnostics.columnOne' : 'diagnostics.columnMany'),
+                cols: unmapped.slice(0, 3).join(', '),
+                ellipsis: unmapped.length > 3 ? '…' : '',
+              })}
             </p>
           )}
 
           {metrics.length > 0 && (
             <div className="space-y-2.5">
               <h2 className="px-1 font-display text-sm font-semibold text-fg">
-                Показники · {formatDuration(detail.session.duration_s)}
+                {t('diagnostics.metricsHeading', {
+                  duration: formatDuration(detail.session.duration_s),
+                })}
               </h2>
               {metrics.map((metric) => (
                 <MetricChart key={metric.key} metric={metric} />
@@ -304,7 +313,7 @@ export default function Diagnostics() {
 
       {sessions.length > 0 && (
         <Card>
-          <h2 className="mb-2 font-display text-sm font-semibold text-fg">Сесії</h2>
+          <h2 className="mb-2 font-display text-sm font-semibold text-fg">{t('diagnostics.sessionsHeading')}</h2>
           <div className="divide-y divide-edge">
             {sessions.map((session) => {
               const isOpen = detail?.session?.id === session.id;
@@ -325,8 +334,11 @@ export default function Diagnostics() {
                         {session.filename}
                       </span>
                       <span className="mt-0.5 block text-xs text-mist/70">
-                        {formatDate(session.recorded_at || session.created_at)} ·{' '}
-                        {formatDuration(session.duration_s)} · {session.sample_count} точок
+                        {t('diagnostics.sessionMeta', {
+                          date: formatDate(session.recorded_at || session.created_at),
+                          duration: formatDuration(session.duration_s),
+                          count: session.sample_count,
+                        })}
                       </span>
                     </span>
                   </button>
@@ -334,7 +346,7 @@ export default function Diagnostics() {
                     <Button
                       variant="ghost"
                       onClick={() => setDeleting(session)}
-                      aria-label={`Видалити сесію ${session.filename}`}
+                      aria-label={t('diagnostics.deleteSessionAria', { filename: session.filename })}
                       className="px-2.5 py-1.5"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -349,8 +361,8 @@ export default function Diagnostics() {
 
       <ConfirmDialog
         open={Boolean(deleting)}
-        title="Видалити сесію?"
-        message={`Лог «${deleting?.filename || ''}» і його показники буде видалено. Скасувати це не вийде.`}
+        title={t('diagnostics.deleteConfirmTitle')}
+        message={t('diagnostics.deleteConfirmMessage', { filename: deleting?.filename || '' })}
         onConfirm={handleDelete}
         onCancel={() => setDeleting(null)}
       />

@@ -34,6 +34,7 @@ from app.bot.parsers import (
 from app import backup
 from app.config import settings
 from app.database import SessionLocal
+from app.i18n import normalize_lang, t
 from app.models import User
 from app.routers.telegram import InvalidLinkCodeError
 
@@ -85,106 +86,52 @@ _pending_expenses: dict[int, PendingExpense] = {}
 _pending_refuels: dict[int, PendingRefuel] = {}
 _pending_maintenance: dict[int, PendingMaintenance] = {}
 
-SAVE_BUTTON = "Зберегти"
-CANCEL_BUTTON = "Скасувати"
-
-LINK_HINT = (
-    "Щоб прив'язати акаунт, відкрийте веб-додаток Kapot Tracker, розділ «Гараж», "
-    "згенеруйте код і надішліть його сюди командою:\n/start <код>"
-)
-
-NOT_LINKED_TEXT = "Ваш Telegram ще не прив'язано до акаунта Kapot Tracker.\n\n" + LINK_HINT
-
 # Persistent keys under the input field. Commands still work, but nothing has
 # to be remembered or typed: the two everyday actions sit one tap away and the
-# rest hide behind a menu so the keyboard stays two rows tall.
-MAIN_KEYBOARD = ReplyKeyboardMarkup(
-    keyboard=[
-        [
-            KeyboardButton(text="⛽ Заправка"),
-            KeyboardButton(text="🛣 Пробіг"),
-            KeyboardButton(text="💸 Витрата"),
+# rest hide behind a menu so the keyboard stays two rows tall. Labels are a
+# function of language, and each label also fires its handler — so the matcher
+# accepts either language's label (a user can switch UI language mid-chat and
+# the keyboard already on screen must still work).
+_BTN = {
+    name: {t(key, "en"), t(key, "uk")}
+    for name, key in {
+        "refuel": "bot.h.btnRefuel",
+        "odometer": "bot.h.btnOdometer",
+        "expense": "bot.h.btnExpense",
+        "status": "bot.h.btnStatus",
+        "report": "bot.h.btnReport",
+        "help": "bot.h.btnHelp",
+    }.items()
+}
+
+
+def main_keyboard(lang: str) -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [
+                KeyboardButton(text=t("bot.h.btnRefuel", lang)),
+                KeyboardButton(text=t("bot.h.btnOdometer", lang)),
+                KeyboardButton(text=t("bot.h.btnExpense", lang)),
+            ],
+            [
+                KeyboardButton(text=t("bot.h.btnStatus", lang)),
+                KeyboardButton(text=t("bot.h.btnReport", lang)),
+                KeyboardButton(text=t("bot.h.btnHelp", lang)),
+            ],
         ],
-        [
-            KeyboardButton(text="📊 Стан"),
-            KeyboardButton(text="📄 Звіт"),
-            KeyboardButton(text="❓ Довідка"),
-        ],
-    ],
-    resize_keyboard=True,
-    is_persistent=True,
-)
+        resize_keyboard=True,
+        is_persistent=True,
+    )
 
-ASK_ODOMETER = "Надішліть поточний пробіг — просто числом, напр. 240054."
-ASK_REFUEL = "Надішліть заправку: «заправка 45л 2500» або фото чека."
-ASK_EXPENSE = "Надішліть витрату: «мийка 300»."
 
-HELP_TEXT = (
-    "Доступні команди:\n"
-    "/start <код> — прив'язати акаунт Kapot Tracker\n"
-    "/status — стан авто та найближчі ТО\n"
-    "/report — PDF-звіт по авто\n"
-    "/digest on|off — тижневий підсумок у неділю\n"
-    "/help — ця довідка\n\n"
-    "Також можна просто надіслати:\n"
-    "- «пробіг 240054» — оновити пробіг;\n"
-    "- «мийка 300» — швидка витрата;\n"
-    "- «заправка 45л 2500» — запис про заправку;\n"
-    "- фото чека — розпізнаю заправку автоматично."
-)
+def _not_linked(message: Message) -> str:
+    """The «not linked yet» reply, in the Telegram client's language.
 
-UNKNOWN_TEXT = (
-    "Не зрозумів повідомлення. Ось що я вмію:\n"
-    "- «пробіг 240054» — оновити пробіг;\n"
-    "- «мийка 300» — швидка витрата;\n"
-    "- «заправка 45л 2500» — запис про заправку;\n"
-    "- фото чека — розпізнаю заправку автоматично;\n"
-    "- /status — стан авто та найближчі ТО;\n"
-    "- /report — PDF-звіт по авто;\n"
-    "- /help — довідка."
-)
-
-NO_CARS_TEXT = "У гаражі поки немає авто. Додайте перше авто у веб-додатку Kapot Tracker."
-
-# A viewer is not doing anything wrong — they were invited, they just were not
-# given the pen. The refusal says who can change that, so it ends the matter
-# instead of leaving them wondering whether the bot is broken.
-VIEW_ONLY_TEXT = (
-    "До цього авто у вас доступ лише для перегляду, тому я не можу зберегти "
-    "запис. Стан авто і найближчі ТО завжди можна подивитися: /status.\n\n"
-    "Якщо потрібно вести записи — попросіть власника авто змінити вашу роль "
-    "на «Редактор» у веб-додатку Kapot Tracker."
-)
-
-CANCELLED_TEXT = "Скасовано. Нічого не збережено."
-
-EXPIRED_TEXT = "Запис застарів. Надішліть його ще раз."
-
-DIGEST_ON_TEXT = (
-    "Тижневий дайджест увімкнено. Щонеділі надсилатиму підсумок тижня по "
-    "кожному авто — витрати, пробіг, розхід і найближче ТО. За тиждень без "
-    "записів дайджесту не буде."
-)
-
-DIGEST_OFF_TEXT = "Тижневий дайджест вимкнено. Увімкнути назад: /digest on"
-
-# The bare «/digest» is a question, not a command: it answers with the state
-# and how to change it, and toggles nothing. Guessing that a user who typed
-# «/digest» meant «switch it» is how a setting gets flipped by accident.
-DIGEST_STATE_TEMPLATE = (
-    "Тижневий дайджест: {state}.\nЗмінити: /digest on або /digest off"
-)
-
-OCR_UNAVAILABLE_TEXT = (
-    "Не вдалося розпізнати чек: на сервері не встановлено tesseract. "
-    "Надішліть заправку текстом, наприклад: заправка 45л 2500"
-)
-
-OCR_FAILED_TEXT = (
-    "Не вдалося розпізнати дані на фото. Спробуйте зняти чек рівніше і "
-    "при кращому світлі або надішліть заправку текстом, наприклад: "
-    "заправка 45л 2500"
-)
+    Shown only when there is no linked User, so the app language is unknown —
+    fall back to the language the Telegram client reports.
+    """
+    lang = normalize_lang(getattr(message.from_user, "language_code", None))
+    return t("bot.h.notLinkedIntro", lang) + "\n\n" + t("bot.h.linkHint", lang)
 
 
 def _car_label(car, user: Optional[User] = None) -> str:
@@ -198,18 +145,25 @@ async def _refuse_write(message: Message, db: Session, user: User) -> None:
     never reaches this at all — they are told «Авто не знайдено», the same
     thing they hear about a car that does not exist.
     """
+    lang = normalize_lang(user.language)
     if service.list_cars(db, user):
-        await message.answer(VIEW_ONLY_TEXT)
+        await message.answer(t("bot.h.viewOnly", lang))
     else:
-        await message.answer(NO_CARS_TEXT)
+        await message.answer(t("bot.h.noCars", lang))
 
 
-def _confirm_keyboard(confirm_data: str, cancel_data: str) -> InlineKeyboardMarkup:
+def _confirm_keyboard(
+    confirm_data: str, cancel_data: str, lang: str
+) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text=SAVE_BUTTON, callback_data=confirm_data),
-                InlineKeyboardButton(text=CANCEL_BUTTON, callback_data=cancel_data),
+                InlineKeyboardButton(
+                    text=t("bot.h.saveButton", lang), callback_data=confirm_data
+                ),
+                InlineKeyboardButton(
+                    text=t("bot.h.cancelButton", lang), callback_data=cancel_data
+                ),
             ]
         ]
     )
@@ -294,70 +248,88 @@ async def cmd_start(message: Message, command: CommandObject) -> None:
     """Link the chat when a code is supplied, otherwise explain how to."""
     code = (command.args or "").strip()
     if not code:
-        await message.answer(LINK_HINT)
+        lang = normalize_lang(getattr(message.from_user, "language_code", None))
+        await message.answer(t("bot.h.linkHint", lang))
         return
     with SessionLocal() as db:
         try:
             user = service.link_user_by_code(db, code, str(message.chat.id))
         except InvalidLinkCodeError:
-            await message.answer(
-                "Код недійсний або прострочений. Згенеруйте новий у веб-додатку "
-                "Kapot Tracker (розділ «Гараж») і надішліть /start <код> ще раз."
-            )
+            lang = normalize_lang(getattr(message.from_user, "language_code", None))
+            await message.answer(t("bot.h.invalidCode", lang))
             return
+        lang = normalize_lang(user.language)
         cars = service.list_cars(db, user)
         if cars:
             car_lines = "\n".join(
-                f"- {_car_label(car, user)}, {car.current_odometer} км" for car in cars
+                t("bot.h.carLine", lang, label=_car_label(car, user), odometer=car.current_odometer)
+                for car in cars
             )
             await message.answer(
-                "Акаунт прив'язано! Ваші авто:\n"
-                f"{car_lines}\n\n"
-                "Користуйтеся кнопками нижче або надішліть /help.",
-                reply_markup=MAIN_KEYBOARD,
+                t("bot.h.linkedWithCars", lang, cars=car_lines),
+                reply_markup=main_keyboard(lang),
             )
         else:
             await message.answer(
-                "Акаунт прив'язано! У гаражі поки немає авто — додайте перше "
-                "у веб-додатку Kapot Tracker.",
-                reply_markup=MAIN_KEYBOARD,
+                t("bot.h.linkedNoCars", lang),
+                reply_markup=main_keyboard(lang),
             )
 
 
-@router.message(F.text == "⛽ Заправка")
+@router.message(F.text.in_(_BTN["refuel"]))
 async def key_refuel(message: Message) -> None:
-    await message.answer(ASK_REFUEL)
+    with SessionLocal() as db:
+        user = service.get_user_by_chat(db, str(message.chat.id))
+    lang = normalize_lang(user.language) if user else normalize_lang(
+        getattr(message.from_user, "language_code", None)
+    )
+    await message.answer(t("bot.h.askRefuel", lang))
 
 
-@router.message(F.text == "🛣 Пробіг")
+@router.message(F.text.in_(_BTN["odometer"]))
 async def key_odometer(message: Message) -> None:
     _awaiting_odometer[message.chat.id] = time.monotonic()
-    await message.answer(ASK_ODOMETER)
+    with SessionLocal() as db:
+        user = service.get_user_by_chat(db, str(message.chat.id))
+    lang = normalize_lang(user.language) if user else normalize_lang(
+        getattr(message.from_user, "language_code", None)
+    )
+    await message.answer(t("bot.h.askOdometer", lang))
 
 
-@router.message(F.text == "📊 Стан")
+@router.message(F.text.in_(_BTN["status"]))
 async def key_status(message: Message) -> None:
     await cmd_status(message)
 
 
-@router.message(F.text == "💸 Витрата")
+@router.message(F.text.in_(_BTN["expense"]))
 async def key_expense(message: Message) -> None:
-    await message.answer(ASK_EXPENSE)
+    with SessionLocal() as db:
+        user = service.get_user_by_chat(db, str(message.chat.id))
+    lang = normalize_lang(user.language) if user else normalize_lang(
+        getattr(message.from_user, "language_code", None)
+    )
+    await message.answer(t("bot.h.askExpense", lang))
 
 
-@router.message(F.text == "📄 Звіт")
+@router.message(F.text.in_(_BTN["report"]))
 async def key_report(message: Message) -> None:
     await cmd_report(message)
 
 
-@router.message(F.text == "❓ Довідка")
+@router.message(F.text.in_(_BTN["help"]))
 async def key_help(message: Message) -> None:
     await cmd_help(message)
 
 
 @router.message(Command("help"))
 async def cmd_help(message: Message) -> None:
-    await message.answer(HELP_TEXT, reply_markup=MAIN_KEYBOARD)
+    with SessionLocal() as db:
+        user = service.get_user_by_chat(db, str(message.chat.id))
+    lang = normalize_lang(user.language) if user else normalize_lang(
+        getattr(message.from_user, "language_code", None)
+    )
+    await message.answer(t("bot.h.help", lang), reply_markup=main_keyboard(lang))
 
 
 @router.message(Command("status"))
@@ -365,9 +337,12 @@ async def cmd_status(message: Message) -> None:
     with SessionLocal() as db:
         user = service.get_user_by_chat(db, str(message.chat.id))
         if user is None:
-            await message.answer(NOT_LINKED_TEXT)
+            await message.answer(_not_linked(message))
             return
-        await message.answer(service.status_summary(db, user), reply_markup=MAIN_KEYBOARD)
+        lang = normalize_lang(user.language)
+        await message.answer(
+            service.status_summary(db, user), reply_markup=main_keyboard(lang)
+        )
 
 
 @router.message(Command("digest"))
@@ -376,15 +351,21 @@ async def cmd_digest(message: Message, command: CommandObject) -> None:
     with SessionLocal() as db:
         user = service.get_user_by_chat(db, str(message.chat.id))
         if user is None:
-            await message.answer(NOT_LINKED_TEXT)
+            await message.answer(_not_linked(message))
             return
+        lang = normalize_lang(user.language)
         if argument in ("on", "off"):
             enabled = argument == "on"
             service.set_digest_enabled(db, user, enabled)
-            await message.answer(DIGEST_ON_TEXT if enabled else DIGEST_OFF_TEXT)
+            await message.answer(
+                t("bot.h.digestOn", lang) if enabled else t("bot.h.digestOff", lang)
+            )
             return
-        state = "увімкнено" if user.digest_enabled else "вимкнено"
-        await message.answer(DIGEST_STATE_TEMPLATE.format(state=state))
+        state = t(
+            "bot.h.digestStateOn" if user.digest_enabled else "bot.h.digestStateOff",
+            lang,
+        )
+        await message.answer(t("bot.h.digestState", lang, state=state))
 
 
 @router.message(Command("note"))
@@ -393,23 +374,21 @@ async def cmd_note(message: Message, command: CommandObject) -> None:
     with SessionLocal() as db:
         user = service.get_user_by_chat(db, str(message.chat.id))
         if user is None:
-            await message.answer(NOT_LINKED_TEXT)
+            await message.answer(_not_linked(message))
             return
+        lang = normalize_lang(user.language)
 
         if text:
             car = service.set_scratchpad(db, user, text)
             if car is None:
                 owned = service.list_owned_cars(db, user)
                 if not owned:
-                    await message.answer("Спочатку додайте авто у застосунку.")
+                    await message.answer(t("bot.h.noteNoCars", lang))
                 else:
-                    await message.answer(
-                        "У вас кілька авто — відредагуйте нотатку в застосунку "
-                        "(Налаштування → авто → Редагувати)."
-                    )
+                    await message.answer(t("bot.h.noteMultiCar", lang))
                 return
             await message.answer(
-                f"📝 Нотатку до {service.car_label(car, user)} збережено."
+                t("bot.h.noteSaved", lang, label=service.car_label(car, user))
             )
             return
 
@@ -419,10 +398,7 @@ async def cmd_note(message: Message, command: CommandObject) -> None:
             if note and note.strip()
         ]
         if not pads:
-            await message.answer(
-                "Нотаток ще немає. Напишіть, наприклад:\n"
-                "/note ворота у дворі — код 1234, СТО 067 000 00 00"
-            )
+            await message.answer(t("bot.h.noteEmpty", lang))
             return
         if len(pads) == 1:
             await message.answer(f"📝 {pads[0][1]}")
@@ -438,8 +414,9 @@ async def handle_photo(message: Message, bot: Bot) -> None:
     with SessionLocal() as db:
         user = service.get_user_by_chat(db, str(message.chat.id))
         if user is None:
-            await message.answer(NOT_LINKED_TEXT)
+            await message.answer(_not_linked(message))
             return
+        lang = normalize_lang(user.language)
         # Checked before the download and the OCR: a viewer's photo can never
         # become a log entry, so there is nothing to spend tesseract on.
         if not service.list_writable_cars(db, user):
@@ -451,13 +428,13 @@ async def handle_photo(message: Message, bot: Bot) -> None:
         await bot.download(message.photo[-1], destination=buffer)
         image_bytes = buffer.getvalue()
 
-        async with _Progress(message, "Розпізнаю фото") as progress:
+        async with _Progress(message, t("bot.h.recognizingPhoto", lang)) as progress:
             try:
                 # OCR is CPU-bound and slow: keep the event loop free for other
                 # chats while tesseract works.
-                reading = await asyncio.to_thread(service.recognize_photo, image_bytes)
+                reading = await asyncio.to_thread(service.recognize_photo, image_bytes, lang)
             except service.OcrUnavailableError:
-                await progress.finish(OCR_UNAVAILABLE_TEXT)
+                await progress.finish(t("bot.h.ocrUnavailable", lang))
                 return
 
             if reading.kind == "work_order":
@@ -483,12 +460,10 @@ async def handle_photo(message: Message, bot: Bot) -> None:
                 # the alternative is the user retyping a receipt we half read.
                 if parsed.total_cost:
                     await progress.finish(
-                        f"Прочитав лише суму: {parsed.total_cost:.2f} грн.\n"
-                        "Надішліть заправку текстом, напр.: "
-                        f"заправка 45л {parsed.total_cost:.0f}"
+                        t("bot.h.ocrPartialTotal", lang, total=parsed.total_cost)
                     )
                     return
-                await progress.finish(OCR_FAILED_TEXT)
+                await progress.finish(t("bot.h.ocrFailed", lang))
                 return
 
             await _handle_refuel(
@@ -512,17 +487,18 @@ async def cmd_report(message: Message) -> None:
     with SessionLocal() as db:
         user = service.get_user_by_chat(db, str(message.chat.id))
         if user is None:
-            await message.answer(NOT_LINKED_TEXT)
+            await message.answer(_not_linked(message))
             return
+        lang = normalize_lang(user.language)
         cars = service.list_cars(db, user)
         if not cars:
-            await message.answer(NO_CARS_TEXT)
+            await message.answer(t("bot.h.noCars", lang))
             return
         if len(cars) == 1:
             await _send_report(message, db, cars[0], user)
             return
         await message.answer(
-            "Для якого авто підготувати звіт?",
+            t("bot.h.whichCarReport", lang),
             reply_markup=_car_choice_keyboard(cars, "rep", user),
         )
 
@@ -530,11 +506,16 @@ async def cmd_report(message: Message) -> None:
 async def _send_report(
     message: Message, db: Session, car, user: Optional[User] = None
 ) -> None:
-    pdf_bytes = await asyncio.to_thread(service.build_report, db, car)
+    lang = normalize_lang(user.language) if user else normalize_lang(
+        getattr(message.from_user, "language_code", None)
+    )
+    pdf_bytes = await asyncio.to_thread(service.build_report, db, car, lang)
     document = BufferedInputFile(
         pdf_bytes, filename=f"kapot-tracker-report-{car.id}.pdf"
     )
-    await message.answer_document(document, caption=f"Звіт: {_car_label(car, user)}")
+    await message.answer_document(
+        document, caption=t("bot.h.reportCaption", lang, label=_car_label(car, user))
+    )
 
 
 @router.message(Command("backup"))
@@ -542,11 +523,12 @@ async def cmd_backup(message: Message) -> None:
     """On-demand DB backup, admin only. The dump holds EVERY user's data, so it
     goes only to the configured admin chat — and only the admin may ask for it.
     Replaces the old daily auto-push; now it is pull-only (here or in the app)."""
+    lang = normalize_lang(getattr(message.from_user, "language_code", None))
     admin_chat = settings.BACKUP_TELEGRAM_CHAT_ID
     if not admin_chat or str(message.chat.id) != admin_chat:
-        await message.answer("Команда доступна лише адміністратору.")
+        await message.answer(t("bot.h.adminOnly", lang))
         return
-    progress = await message.answer("Готую резервну копію бази…")
+    progress = await message.answer(t("bot.h.backupPreparing", lang))
     try:
         path = await asyncio.to_thread(backup.create_backup)
         await asyncio.to_thread(
@@ -556,7 +538,7 @@ async def cmd_backup(message: Message) -> None:
         await progress.delete()
     except Exception:
         logger.exception("Manual backup failed")
-        await progress.edit_text("Не вдалося зробити бекап. Спробуйте пізніше.")
+        await progress.edit_text(t("bot.h.backupFailed", lang))
 
 
 def _was_asked_for_odometer(chat_id: int) -> bool:
@@ -575,8 +557,9 @@ async def handle_text(message: Message) -> None:
     with SessionLocal() as db:
         user = service.get_user_by_chat(db, str(message.chat.id))
         if user is None:
-            await message.answer(NOT_LINKED_TEXT)
+            await message.answer(_not_linked(message))
             return
+        lang = normalize_lang(user.language)
 
         odometer = parse_odometer(text)
         if odometer is None and _was_asked_for_odometer(message.chat.id):
@@ -609,7 +592,7 @@ async def handle_text(message: Message) -> None:
             if intent and await _handle_intent(message, db, user, intent):
                 return
 
-        await message.answer(UNKNOWN_TEXT, reply_markup=MAIN_KEYBOARD)
+        await message.answer(t("bot.h.unknown", lang), reply_markup=main_keyboard(lang))
 
 
 async def _handle_intent(message: Message, db: Session, user: User, intent: dict) -> bool:
@@ -638,6 +621,7 @@ async def _handle_intent(message: Message, db: Session, user: User, intent: dict
 
 
 async def _handle_odometer(message: Message, db: Session, user: User, value: int) -> None:
+    lang = normalize_lang(user.language)
     cars = service.list_writable_cars(db, user)
     if not cars:
         await _refuse_write(message, db, user)
@@ -656,7 +640,7 @@ async def _handle_odometer(message: Message, db: Session, user: User, value: int
         ]
     )
     await message.answer(
-        f"Для якого авто оновити пробіг до {value} км?", reply_markup=keyboard
+        t("bot.h.whichCarOdometer", lang, value=value), reply_markup=keyboard
     )
 
 
@@ -664,23 +648,34 @@ async def _apply_odometer(
     message: Message, db: Session, car_id: int, value: int, user: Optional[User] = None
 ) -> None:
     """Update the odometer forward-only and reply with nearest intervals."""
+    lang = normalize_lang(user.language) if user else normalize_lang(
+        getattr(message.from_user, "language_code", None)
+    )
     result = service.update_odometer(db, car_id, value)
     if result is None:
-        await message.answer("Авто не знайдено.")
+        await message.answer(t("bot.h.carNotFound", lang))
         return
     if not result.updated:
         await message.answer(
-            f"Не можу оновити: новий пробіг ({value} км) менший за поточний "
-            f"({result.old_odometer} км), а пробіг не може зменшуватися. "
-            "Перевірте значення і надішліть ще раз."
+            t(
+                "bot.h.odometerBackwards",
+                lang,
+                value=value,
+                old=result.old_odometer,
+            )
         )
         return
     lines = [
-        f"Пробіг {_car_label(result.car, user)} оновлено: "
-        f"{result.old_odometer} км -> {result.new_odometer} км."
+        t(
+            "bot.h.odometerUpdated",
+            lang,
+            label=_car_label(result.car, user),
+            old=result.old_odometer,
+            new=result.new_odometer,
+        )
     ]
     if result.top_intervals:
-        lines.append("\nНайближчі ТО:")
+        lines.append(t("bot.h.upcomingService", lang))
         lines.extend(
             service.format_interval_line(interval, computed)
             for interval, computed in result.top_intervals
@@ -692,6 +687,7 @@ async def _handle_expense(
     message: Message, db: Session, user: User, expense: tuple[str, float]
 ) -> None:
     title, amount = expense
+    lang = normalize_lang(user.language)
     cars = service.list_writable_cars(db, user)
     if not cars:
         await _refuse_write(message, db, user)
@@ -703,7 +699,7 @@ async def _handle_expense(
         await _ask_expense_confirm(message, cars[0], pending, user)
         return
     await message.answer(
-        f"До якого авто записати витрату «{title}» на {amount:.2f} грн?",
+        t("bot.h.whichCarExpense", lang, title=title, amount=amount),
         reply_markup=_car_choice_keyboard(cars, "exp", user),
     )
 
@@ -711,12 +707,17 @@ async def _handle_expense(
 async def _ask_expense_confirm(
     message: Message, car, pending: PendingExpense, user: Optional[User] = None
 ) -> None:
+    lang = normalize_lang(user.language) if user else normalize_lang(None)
     await message.answer(
-        f"Витрата: «{pending.title}» — {pending.amount:.2f} грн\n"
-        f"Авто: {_car_label(car, user)}\n"
-        f"Дата: {dt.date.today().isoformat()}\n\n"
-        "Зберегти?",
-        reply_markup=_confirm_keyboard("expok", "expno"),
+        t(
+            "bot.h.expenseConfirm",
+            lang,
+            title=pending.title,
+            amount=pending.amount,
+            label=_car_label(car, user),
+            date=dt.date.today().isoformat(),
+        ),
+        reply_markup=_confirm_keyboard("expok", "expno", lang),
     )
 
 
@@ -727,6 +728,7 @@ async def _handle_refuel(
     pending: PendingRefuel,
     progress: Optional["_Progress"] = None,
 ) -> None:
+    lang = normalize_lang(user.language)
     cars = service.list_writable_cars(db, user)
     if not cars:
         await _refuse_write(message, db, user)
@@ -736,7 +738,7 @@ async def _handle_refuel(
         pending.car_id = cars[0].id
         await _ask_refuel_confirm(message, cars[0], pending, user, progress)
         return
-    text = f"До якого авто записати заправку на {pending.total_cost:.2f} грн?"
+    text = t("bot.h.whichCarRefuel", lang, total=pending.total_cost)
     keyboard = _car_choice_keyboard(cars, "ref", user)
     if progress is not None:
         await progress.finish(text, reply_markup=keyboard)
@@ -751,19 +753,30 @@ async def _ask_refuel_confirm(
     user: Optional[User] = None,
     progress: Optional["_Progress"] = None,
 ) -> None:
+    lang = normalize_lang(user.language) if user else normalize_lang(None)
     lines = [
-        f"Заправка: {pending.liters:.2f} л × {pending.price_per_liter:.2f} грн/л "
-        f"= {pending.total_cost:.2f} грн",
-        f"Авто: {_car_label(car, user)} (пробіг {car.current_odometer} км)",
-        f"Дата: {pending.date.isoformat()}",
+        t(
+            "bot.h.refuelLine",
+            lang,
+            liters=pending.liters,
+            price=pending.price_per_liter,
+            total=pending.total_cost,
+        ),
+        t(
+            "bot.h.carWithOdometer",
+            lang,
+            label=_car_label(car, user),
+            odometer=car.current_odometer,
+        ),
+        t("bot.h.dateLine", lang, date=pending.date.isoformat()),
     ]
     if pending.gas_station:
-        lines.append(f"АЗС: {pending.gas_station}")
+        lines.append(t("bot.h.stationLine", lang, station=pending.gas_station))
     if pending.photo is not None:
-        lines.append("Фото чека буде додано до запису.")
-    lines.append("\nЗберегти?")
+        lines.append(t("bot.h.photoWillBeAdded", lang))
+    lines.append(t("bot.h.savePrompt", lang))
     text = "\n".join(lines)
-    keyboard = _confirm_keyboard("refok", "refno")
+    keyboard = _confirm_keyboard("refok", "refno", lang)
     # Turn the «Розпізнаю чек…» message into the answer rather than leaving a
     # spent progress line above it.
     if progress is not None:
@@ -774,15 +787,16 @@ async def _ask_refuel_confirm(
 
 @router.callback_query(F.data.startswith("odo:"))
 async def cb_odometer(callback: CallbackQuery) -> None:
+    lang = normalize_lang(getattr(callback.from_user, "language_code", None))
     message = callback.message
     if not isinstance(message, Message):
-        await callback.answer("Повідомлення застаріло")
+        await callback.answer(t("bot.h.msgExpired", lang))
         return
     try:
         _, car_raw, value_raw = (callback.data or "").split(":")
         car_id, value = int(car_raw), int(value_raw)
     except ValueError:
-        await callback.answer("Некоректні дані")
+        await callback.answer(t("bot.h.badData", lang))
         return
     with SessionLocal() as db:
         user = service.get_user_by_chat(db, str(message.chat.id))
@@ -819,12 +833,15 @@ async def _writable_car(
     bot's 404, indistinguishable from a car that never existed), and the
     view-only explanation when they can see it but may not write.
     """
+    lang = normalize_lang(user.language) if user else normalize_lang(
+        getattr(callback.from_user, "language_code", None)
+    )
     car = None if user is None else service.get_car(db, user, car_id)
     if car is None:
-        await callback.answer("Авто не знайдено")
+        await callback.answer(t("bot.h.carNotFoundToast", lang))
         return None
     if not service.can_write_to(db, user, car):
-        await message.answer(VIEW_ONLY_TEXT)
+        await message.answer(t("bot.h.viewOnly", lang))
         await callback.answer()
         return None
     return car
@@ -832,15 +849,16 @@ async def _writable_car(
 
 @router.callback_query(F.data.startswith("exp:"))
 async def cb_expense_car(callback: CallbackQuery) -> None:
+    lang = normalize_lang(getattr(callback.from_user, "language_code", None))
     message = callback.message
     if not isinstance(message, Message):
-        await callback.answer("Повідомлення застаріло")
+        await callback.answer(t("bot.h.msgExpired", lang))
         return
     car_id = _callback_car_id(callback.data)
     pending = _pending_expenses.get(message.chat.id)
     if car_id is None or pending is None:
         _pending_expenses.pop(message.chat.id, None)
-        await message.answer(EXPIRED_TEXT)
+        await message.answer(t("bot.h.expired", lang))
         await callback.answer()
         return
     with SessionLocal() as db:
@@ -856,37 +874,45 @@ async def cb_expense_car(callback: CallbackQuery) -> None:
 @router.callback_query(F.data == "expok")
 async def cb_expense_confirm(callback: CallbackQuery) -> None:
     """«Зберегти» tapped: this is the only place an expense is written."""
+    lang = normalize_lang(getattr(callback.from_user, "language_code", None))
     message = callback.message
     if not isinstance(message, Message):
-        await callback.answer("Повідомлення застаріло")
+        await callback.answer(t("bot.h.msgExpired", lang))
         return
     pending = _pending_expenses.pop(message.chat.id, None)
     if pending is None or pending.car_id is None:
-        await message.answer(EXPIRED_TEXT)
+        await message.answer(t("bot.h.expired", lang))
         await callback.answer()
         return
     with SessionLocal() as db:
         user = service.get_user_by_chat(db, str(message.chat.id))
         if await _writable_car(callback, message, db, user, pending.car_id) is None:
             return
+        lang = normalize_lang(user.language)
         log = service.create_quick_expense(
             db, pending.car_id, pending.title, pending.amount, author_id=user.id
         )
         await message.answer(
-            f"Витрату збережено: «{pending.title}» — {pending.amount:.2f} грн "
-            f"({log.date.isoformat()})."
+            t(
+                "bot.h.expenseSaved",
+                lang,
+                title=pending.title,
+                amount=pending.amount,
+                date=log.date.isoformat(),
+            )
         )
     await callback.answer()
 
 
 @router.callback_query(F.data == "expno")
 async def cb_expense_cancel(callback: CallbackQuery) -> None:
+    lang = normalize_lang(getattr(callback.from_user, "language_code", None))
     message = callback.message
     if not isinstance(message, Message):
-        await callback.answer("Повідомлення застаріло")
+        await callback.answer(t("bot.h.msgExpired", lang))
         return
     _pending_expenses.pop(message.chat.id, None)
-    await message.answer(CANCELLED_TEXT)
+    await message.answer(t("bot.h.cancelled", lang))
     await callback.answer()
 
 
@@ -910,6 +936,7 @@ async def _handle_maintenance(
     pending: PendingMaintenance,
     progress: Optional["_Progress"] = None,
 ) -> None:
+    lang = normalize_lang(user.language)
     cars = service.list_writable_cars(db, user)
     if not cars:
         await _refuse_write(message, db, user)
@@ -919,7 +946,7 @@ async def _handle_maintenance(
         pending.car_id = cars[0].id
         await _ask_maintenance_confirm(message, cars[0], pending, user, progress)
         return
-    text = f"До якого авто записати ТО на {pending.total_cost:.2f} грн?"
+    text = t("bot.h.whichCarMaintenance", lang, total=pending.total_cost)
     keyboard = _car_choice_keyboard(cars, "mnt", user)
     if progress is not None:
         await progress.finish(text, reply_markup=keyboard)
@@ -939,21 +966,35 @@ async def _ask_maintenance_confirm(
     user: Optional[User] = None,
     progress: Optional["_Progress"] = None,
 ) -> None:
-    lines = [f"Наряд СТО на {pending.total_cost:.2f} грн"]
+    lang = normalize_lang(user.language) if user else normalize_lang(None)
+    lines = [t("bot.h.maintenanceHeader", lang, total=pending.total_cost)]
     if pending.parts_cost and pending.labor_cost:
         lines.append(
-            f"Запчастини: {pending.parts_cost:.2f} грн · "
-            f"Роботи: {pending.labor_cost:.2f} грн"
+            t(
+                "bot.h.maintenancePartsLabor",
+                lang,
+                parts=pending.parts_cost,
+                labor=pending.labor_cost,
+            )
         )
     for item in pending.items[:_MAX_LISTED_ITEMS]:
         lines.append(f"• {item}")
     if len(pending.items) > _MAX_LISTED_ITEMS:
-        lines.append(f"…та ще {len(pending.items) - _MAX_LISTED_ITEMS}")
-    lines.append(f"Авто: {_car_label(car, user)} (пробіг {car.current_odometer} км)")
-    lines.append(f"Дата: {pending.date.isoformat()}")
-    lines.append("\nЗберегти?")
+        lines.append(
+            t("bot.h.maintenanceMore", lang, count=len(pending.items) - _MAX_LISTED_ITEMS)
+        )
+    lines.append(
+        t(
+            "bot.h.carWithOdometer",
+            lang,
+            label=_car_label(car, user),
+            odometer=car.current_odometer,
+        )
+    )
+    lines.append(t("bot.h.dateLine", lang, date=pending.date.isoformat()))
+    lines.append(t("bot.h.savePrompt", lang))
     text = "\n".join(lines)
-    keyboard = _confirm_keyboard("mntok", "mntno")
+    keyboard = _confirm_keyboard("mntok", "mntno", lang)
     if progress is not None:
         await progress.finish(text, reply_markup=keyboard)
         return
@@ -962,15 +1003,16 @@ async def _ask_maintenance_confirm(
 
 @router.callback_query(F.data.startswith("mnt:"))
 async def cb_maintenance_car(callback: CallbackQuery) -> None:
+    lang = normalize_lang(getattr(callback.from_user, "language_code", None))
     message = callback.message
     if not isinstance(message, Message):
-        await callback.answer("Повідомлення застаріло")
+        await callback.answer(t("bot.h.msgExpired", lang))
         return
     car_id = _callback_car_id(callback.data)
     pending = _pending_maintenance.get(message.chat.id)
     if car_id is None or pending is None:
         _pending_maintenance.pop(message.chat.id, None)
-        await message.answer(EXPIRED_TEXT)
+        await message.answer(t("bot.h.expired", lang))
         await callback.answer()
         return
     with SessionLocal() as db:
@@ -986,19 +1028,21 @@ async def cb_maintenance_car(callback: CallbackQuery) -> None:
 @router.callback_query(F.data == "mntok")
 async def cb_maintenance_confirm(callback: CallbackQuery) -> None:
     """«Зберегти» tapped: this is the only place a scanned order is written."""
+    lang = normalize_lang(getattr(callback.from_user, "language_code", None))
     message = callback.message
     if not isinstance(message, Message):
-        await callback.answer("Повідомлення застаріло")
+        await callback.answer(t("bot.h.msgExpired", lang))
         return
     pending = _pending_maintenance.pop(message.chat.id, None)
     if pending is None or pending.car_id is None:
-        await message.answer(EXPIRED_TEXT)
+        await message.answer(t("bot.h.expired", lang))
         await callback.answer()
         return
     with SessionLocal() as db:
         user = service.get_user_by_chat(db, str(message.chat.id))
         if await _writable_car(callback, message, db, user, pending.car_id) is None:
             return
+        lang = normalize_lang(user.language)
         log = service.create_maintenance(
             db,
             pending.car_id,
@@ -1010,35 +1054,42 @@ async def cb_maintenance_confirm(callback: CallbackQuery) -> None:
             author_id=user.id,
         )
         await message.answer(
-            f"ТО збережено: {pending.total_cost:.2f} грн, "
-            f"{len(pending.items)} позицій ({log.date.isoformat()}), "
-            f"пробіг {log.odometer} км."
+            t(
+                "bot.h.maintenanceSaved",
+                lang,
+                total=pending.total_cost,
+                count=len(pending.items),
+                date=log.date.isoformat(),
+                odometer=log.odometer,
+            )
         )
     await callback.answer()
 
 
 @router.callback_query(F.data == "mntno")
 async def cb_maintenance_cancel(callback: CallbackQuery) -> None:
+    lang = normalize_lang(getattr(callback.from_user, "language_code", None))
     message = callback.message
     if not isinstance(message, Message):
-        await callback.answer("Повідомлення застаріло")
+        await callback.answer(t("bot.h.msgExpired", lang))
         return
     _pending_maintenance.pop(message.chat.id, None)
-    await message.answer(CANCELLED_TEXT)
+    await message.answer(t("bot.h.cancelled", lang))
     await callback.answer()
 
 
 @router.callback_query(F.data.startswith("ref:"))
 async def cb_refuel_car(callback: CallbackQuery) -> None:
+    lang = normalize_lang(getattr(callback.from_user, "language_code", None))
     message = callback.message
     if not isinstance(message, Message):
-        await callback.answer("Повідомлення застаріло")
+        await callback.answer(t("bot.h.msgExpired", lang))
         return
     car_id = _callback_car_id(callback.data)
     pending = _pending_refuels.get(message.chat.id)
     if car_id is None or pending is None:
         _pending_refuels.pop(message.chat.id, None)
-        await message.answer(EXPIRED_TEXT)
+        await message.answer(t("bot.h.expired", lang))
         await callback.answer()
         return
     with SessionLocal() as db:
@@ -1054,19 +1105,21 @@ async def cb_refuel_car(callback: CallbackQuery) -> None:
 @router.callback_query(F.data == "refok")
 async def cb_refuel_confirm(callback: CallbackQuery) -> None:
     """«Зберегти» tapped: this is the only place a refuel is written."""
+    lang = normalize_lang(getattr(callback.from_user, "language_code", None))
     message = callback.message
     if not isinstance(message, Message):
-        await callback.answer("Повідомлення застаріло")
+        await callback.answer(t("bot.h.msgExpired", lang))
         return
     pending = _pending_refuels.pop(message.chat.id, None)
     if pending is None or pending.car_id is None:
-        await message.answer(EXPIRED_TEXT)
+        await message.answer(t("bot.h.expired", lang))
         await callback.answer()
         return
     with SessionLocal() as db:
         user = service.get_user_by_chat(db, str(message.chat.id))
         if await _writable_car(callback, message, db, user, pending.car_id) is None:
             return
+        lang = normalize_lang(user.language)
         log = service.create_refuel(
             db,
             pending.car_id,
@@ -1078,42 +1131,50 @@ async def cb_refuel_confirm(callback: CallbackQuery) -> None:
             photo=pending.photo,
             author_id=user.id,
         )
-        suffix = " Фото чека додано." if pending.photo is not None else ""
+        suffix = t("bot.h.refuelPhotoSuffix", lang) if pending.photo is not None else ""
         await message.answer(
-            f"Заправку збережено: {pending.liters:.2f} л на "
-            f"{pending.total_cost:.2f} грн ({log.date.isoformat()}), "
-            f"пробіг {log.odometer} км.{suffix}"
+            t(
+                "bot.h.refuelSaved",
+                lang,
+                liters=pending.liters,
+                total=pending.total_cost,
+                date=log.date.isoformat(),
+                odometer=log.odometer,
+                suffix=suffix,
+            )
         )
     await callback.answer()
 
 
 @router.callback_query(F.data == "refno")
 async def cb_refuel_cancel(callback: CallbackQuery) -> None:
+    lang = normalize_lang(getattr(callback.from_user, "language_code", None))
     message = callback.message
     if not isinstance(message, Message):
-        await callback.answer("Повідомлення застаріло")
+        await callback.answer(t("bot.h.msgExpired", lang))
         return
     _pending_refuels.pop(message.chat.id, None)
-    await message.answer(CANCELLED_TEXT)
+    await message.answer(t("bot.h.cancelled", lang))
     await callback.answer()
 
 
 @router.callback_query(F.data.startswith("rep:"))
 async def cb_report_car(callback: CallbackQuery) -> None:
+    lang = normalize_lang(getattr(callback.from_user, "language_code", None))
     message = callback.message
     if not isinstance(message, Message):
-        await callback.answer("Повідомлення застаріло")
+        await callback.answer(t("bot.h.msgExpired", lang))
         return
     car_id = _callback_car_id(callback.data)
     if car_id is None:
-        await callback.answer("Некоректні дані")
+        await callback.answer(t("bot.h.badData", lang))
         return
     with SessionLocal() as db:
         user = service.get_user_by_chat(db, str(message.chat.id))
         # A report only reads history, so viewers are welcome to it.
         car = None if user is None else service.get_car(db, user, car_id)
         if car is None:
-            await callback.answer("Авто не знайдено")
+            await callback.answer(t("bot.h.carNotFoundToast", lang))
             return
         await _send_report(message, db, car, user)
     await callback.answer()
@@ -1121,27 +1182,34 @@ async def cb_report_car(callback: CallbackQuery) -> None:
 
 @router.callback_query(F.data.startswith("done:"))
 async def cb_interval_done(callback: CallbackQuery) -> None:
+    lang = normalize_lang(getattr(callback.from_user, "language_code", None))
     message = callback.message
     if not isinstance(message, Message):
-        await callback.answer("Повідомлення застаріло")
+        await callback.answer(t("bot.h.msgExpired", lang))
         return
     try:
         interval_id = int((callback.data or "").split(":")[1])
     except (IndexError, ValueError):
-        await callback.answer("Некоректні дані")
+        await callback.answer(t("bot.h.badData", lang))
         return
     with SessionLocal() as db:
         user = service.get_user_by_chat(db, str(message.chat.id))
+        if user is not None:
+            lang = normalize_lang(user.language)
         interval = None if user is None else service.get_interval(db, user, interval_id)
         if interval is None:
-            await callback.answer("Інтервал не знайдено")
+            await callback.answer(t("bot.h.intervalNotFound", lang))
             return
         title = interval.title
         completion = service.complete_interval_now(db, interval, author_id=user.id)
         await message.answer(
-            f"Записав: «{title}» виконано на {completion.log.odometer} км "
-            f"({completion.log.date.isoformat()}). Відлік почато заново — "
-            "деталі та вартість можна дописати у веб-додатку."
+            t(
+                "bot.h.intervalDone",
+                lang,
+                title=title,
+                odometer=completion.log.odometer,
+                date=completion.log.date.isoformat(),
+            )
         )
     await callback.answer()
 
@@ -1155,50 +1223,59 @@ async def handle_unknown(message: Message) -> None:
     only handler with no filter at all. Without it those messages got
     silence, which reads as a broken bot rather than a misunderstood one.
     """
-    await message.answer(UNKNOWN_TEXT, reply_markup=MAIN_KEYBOARD)
+    with SessionLocal() as db:
+        user = service.get_user_by_chat(db, str(message.chat.id))
+    lang = normalize_lang(user.language) if user else normalize_lang(
+        getattr(message.from_user, "language_code", None)
+    )
+    await message.answer(t("bot.h.unknown", lang), reply_markup=main_keyboard(lang))
 
 
 @router.callback_query(F.data.startswith("rotate:"))
 async def cb_tire_rotate(callback: CallbackQuery) -> None:
+    lang = normalize_lang(getattr(callback.from_user, "language_code", None))
     message = callback.message
     if not isinstance(message, Message):
-        await callback.answer("Повідомлення застаріло")
+        await callback.answer(t("bot.h.msgExpired", lang))
         return
     try:
         tire_set_id = int((callback.data or "").split(":")[1])
     except (IndexError, ValueError):
-        await callback.answer("Некоректні дані")
+        await callback.answer(t("bot.h.badData", lang))
         return
     with SessionLocal() as db:
         user = service.get_user_by_chat(db, str(message.chat.id))
+        if user is not None:
+            lang = normalize_lang(user.language)
         tire_set = None if user is None else service.rotate_tire_set(db, user, tire_set_id)
         if tire_set is None:
-            await callback.answer("Не вдалося записати ротацію")
+            await callback.answer(t("bot.h.rotationFailed", lang))
             return
-        await message.answer(
-            "🛞 Записав ротацію вісей. Наступне нагадування — через 10 000 км."
-        )
+        await message.answer(t("bot.h.tireRotated", lang))
     await callback.answer()
 
 
 @router.callback_query(F.data.startswith("snooze:"))
 async def cb_interval_snooze(callback: CallbackQuery) -> None:
+    lang = normalize_lang(getattr(callback.from_user, "language_code", None))
     message = callback.message
     if not isinstance(message, Message):
-        await callback.answer("Повідомлення застаріло")
+        await callback.answer(t("bot.h.msgExpired", lang))
         return
     try:
         interval_id = int((callback.data or "").split(":")[1])
     except (IndexError, ValueError):
-        await callback.answer("Некоректні дані")
+        await callback.answer(t("bot.h.badData", lang))
         return
     with SessionLocal() as db:
         user = service.get_user_by_chat(db, str(message.chat.id))
+        if user is not None:
+            lang = normalize_lang(user.language)
         interval = None if user is None else service.get_interval(db, user, interval_id)
         if interval is None:
-            await callback.answer("Інтервал не знайдено")
+            await callback.answer(t("bot.h.intervalNotFound", lang))
             return
         title = interval.title
         service.snooze_interval(db, interval)
-        await message.answer(f"Добре, нагадаю про «{title}» через 7 днів.")
+        await message.answer(t("bot.h.intervalSnoozed", lang, title=title))
     await callback.answer()

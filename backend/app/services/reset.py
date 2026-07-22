@@ -84,7 +84,7 @@ async def initiate_reset(db: Session, email: str, channel: str | None = None) ->
         if use_telegram:
             await send_reset_code(user.telegram_chat_id, code)
         elif mail_enabled():
-            send_reset_code_mail(user.email, code)
+            send_reset_code_mail(user.email, code, user.language)
         elif user.telegram_chat_id:
             await send_reset_code(user.telegram_chat_id, code)
     except Exception:  # noqa: BLE001 - delivery failures must not break the 202

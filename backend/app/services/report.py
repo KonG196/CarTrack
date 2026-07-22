@@ -17,6 +17,8 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, Tabl
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from app.domain_labels import fuel_type_label, maintenance_item_label, repair_category_label
+from app.i18n import normalize_lang, t
 from app.models import Car, LogEntry, ServiceInterval
 from app.services.fuel import compute_fuel_stats
 from app.services.intervals import compute_interval_status, effective_avg_daily_km
@@ -26,19 +28,7 @@ FONTS_DIR = Path(__file__).resolve().parent.parent / "assets" / "fonts"
 FONT_NAME = "DejaVuSans"
 FONT_NAME_BOLD = "DejaVuSans-Bold"
 
-FUEL_TYPE_LABELS = {
-    "petrol": "Бензин",
-    "diesel": "Дизель",
-    "lpg": "ГБО",
-    "electric": "Електро",
-    "hybrid": "Гібрид",
-}
-
-STATUS_LABELS = {
-    "ok": "ОК",
-    "due_soon": "скоро",
-    "overdue": "прострочено",
-}
+_STATUS_KEYS = {"ok": "report.status.ok", "due_soon": "report.status.dueSoon", "overdue": "report.status.overdue"}
 
 _fonts_registered = False
 
@@ -72,14 +62,14 @@ def _fmt_number(value: float) -> str:
     return f"{value:,.2f}".replace(",", " ")
 
 
-def _fmt_money(value: float) -> str:
-    return f"{_fmt_number(round(value, 2))} грн"
+def _fmt_money(value: float, lang: str) -> str:
+    return f"{_fmt_number(round(value, 2))} {t('report.unitUah', lang)}"
 
 
-def _fmt_km(value: int | float | None) -> str:
+def _fmt_km(value: int | float | None, lang: str) -> str:
     if value is None:
         return "—"
-    return f"{_fmt_number(round(float(value)))} км"
+    return f"{_fmt_number(round(float(value)))} {t('report.unitKm', lang)}"
 
 
 def _styles() -> dict[str, ParagraphStyle]:
@@ -115,13 +105,18 @@ def _styles() -> dict[str, ParagraphStyle]:
     }
 
 
-def _draw_footer(canvas, doc) -> None:
-    canvas.saveState()
-    canvas.setFont(FONT_NAME, 8)
-    canvas.setFillColor(colors.HexColor("#6b7280"))
-    canvas.drawString(doc.leftMargin, 11 * mm, "Kapot Tracker")
-    canvas.drawRightString(A4[0] - doc.rightMargin, 11 * mm, f"Сторінка {canvas.getPageNumber()}")
-    canvas.restoreState()
+def _footer_drawer(lang: str):
+    def _draw_footer(canvas, doc) -> None:
+        canvas.saveState()
+        canvas.setFont(FONT_NAME, 8)
+        canvas.setFillColor(colors.HexColor("#6b7280"))
+        canvas.drawString(doc.leftMargin, 11 * mm, "Kapot Tracker")
+        canvas.drawRightString(
+            A4[0] - doc.rightMargin, 11 * mm, t("report.page", lang, n=canvas.getPageNumber())
+        )
+        canvas.restoreState()
+
+    return _draw_footer
 
 
 def _base_table_style() -> TableStyle:
@@ -142,14 +137,14 @@ def _base_table_style() -> TableStyle:
     )
 
 
-def _service_log_description(log: LogEntry) -> str:
+def _service_log_description(log: LogEntry, lang: str) -> str:
     parts: list[str] = []
     if log.type == "maintenance" and log.maintenance is not None:
-        items = ", ".join(log.maintenance.items or [])
+        items = ", ".join(maintenance_item_label(item, lang) for item in (log.maintenance.items or []))
         if items:
             parts.append(items)
     elif log.type == "repair" and log.repair is not None:
-        repair = log.repair.category or ""
+        repair = repair_category_label(log.repair.category, lang) or ""
         if log.repair.part_name:
             repair = f"{repair}: {log.repair.part_name}" if repair else log.repair.part_name
         if repair:
@@ -159,7 +154,8 @@ def _service_log_description(log: LogEntry) -> str:
     return " — ".join(parts) if parts else "—"
 
 
-def build_car_report(db: Session, car: Car) -> bytes:
+def build_car_report(db: Session, car: Car, lang: str = "en") -> bytes:
+    lang = normalize_lang(lang)
     _register_fonts()
     styles = _styles()
 
@@ -191,7 +187,7 @@ def build_car_report(db: Session, car: Car) -> bytes:
     story: list = []
 
     # --- 1. Header -------------------------------------------------------
-    story.append(Paragraph("Kapot Tracker — Сервісна історія", styles["title"]))
+    story.append(Paragraph(t("report.title", lang), styles["title"]))
     story.append(Spacer(1, 3 * mm))
     car_title = f"{car.brand} {car.model}, {car.year}"
     story.append(Paragraph(escape(car_title), styles["subtitle"]))
@@ -199,29 +195,32 @@ def build_car_report(db: Session, car: Car) -> bytes:
     if details:
         story.append(Paragraph(escape(details), styles["muted"]))
     story.append(
-        Paragraph(f"Звіт згенеровано: {_fmt_date(dt.date.today())}", styles["muted"])
+        Paragraph(t("report.generated", lang, date=_fmt_date(dt.date.today())), styles["muted"])
     )
     story.append(Spacer(1, 5 * mm))
 
     # --- 2. Car summary ---------------------------------------------------
-    story.append(Paragraph("Авто", styles["heading"]))
+    story.append(Paragraph(t("report.carHeading", lang), styles["heading"]))
     story.append(Spacer(1, 2 * mm))
     avg_daily = round(effective_avg_daily_km(car, logs), 1) if len(logs) >= 2 else None
-    fuel_label = FUEL_TYPE_LABELS.get(car.fuel_type, car.fuel_type)
     summary_lines = [
-        f"Поточний пробіг: {_fmt_km(car.current_odometer)}",
-        f"Тип пального: {fuel_label}",
-        f"Середній добовий пробіг: {f'{avg_daily} км/день' if avg_daily is not None else '—'}",
+        t("report.currentMileage", lang, km=_fmt_km(car.current_odometer, lang)),
+        t("report.fuelType", lang, fuel=fuel_type_label(car.fuel_type, lang)),
+        t(
+            "report.avgDaily",
+            lang,
+            value=t("report.kmPerDay", lang, km=avg_daily) if avg_daily is not None else "—",
+        ),
     ]
     for line in summary_lines:
         story.append(Paragraph(line, styles["body"]))
     story.append(Spacer(1, 5 * mm))
 
     # --- 3. Spending summary ----------------------------------------------
-    story.append(Paragraph("Підсумки витрат", styles["heading"]))
+    story.append(Paragraph(t("report.spendingHeading", lang), styles["heading"]))
     story.append(Spacer(1, 2 * mm))
     if not logs:
-        story.append(Paragraph("Записів поки немає.", styles["body"]))
+        story.append(Paragraph(t("report.noEntries", lang), styles["body"]))
     else:
         by_type = {"refuel": 0.0, "maintenance": 0.0, "repair": 0.0, "expense": 0.0}
         for log in logs:
@@ -233,54 +232,56 @@ def build_car_report(db: Session, car: Car) -> bytes:
             build_refuel_points(logs, car), fuel_kind=car.fuel_type
         )
         avg_consumption = (
-            f"{fuel_stats.avg_consumption_l_100km} л/100 км"
+            f"{fuel_stats.avg_consumption_l_100km} {t('report.unitConsumption', lang)}"
             if fuel_stats.avg_consumption_l_100km is not None
             else "—"
         )
         cost_per_km = (
-            f"{fuel_stats.avg_cost_per_km:.2f} грн/км"
+            f"{fuel_stats.avg_cost_per_km:.2f} {t('report.unitUahPerKm', lang)}"
             if fuel_stats.avg_cost_per_km is not None
             else "—"
         )
         first_date, last_date = logs[0].date, logs[-1].date
         spending_lines = [
-            f"Сума за весь час: {_fmt_money(all_time)}",
-            (
-                f"Заправки: {_fmt_money(by_type['refuel'])} · "
-                f"ТО: {_fmt_money(by_type['maintenance'])} · "
-                f"Ремонти: {_fmt_money(by_type['repair'])} · "
-                f"Інші: {_fmt_money(by_type['expense'])}"
+            t("report.totalAllTime", lang, money=_fmt_money(all_time, lang)),
+            t(
+                "report.byTypeLine",
+                lang,
+                refuel=_fmt_money(by_type["refuel"], lang),
+                maintenance=_fmt_money(by_type["maintenance"], lang),
+                repair=_fmt_money(by_type["repair"], lang),
+                expense=_fmt_money(by_type["expense"], lang),
             ),
-            f"Середній розхід: {avg_consumption}",
-            f"Вартість 1 км: {cost_per_km}",
-            f"Період даних: {_fmt_date(first_date)} — {_fmt_date(last_date)}",
+            t("report.avgConsumption", lang, value=avg_consumption),
+            t("report.costPerKm", lang, value=cost_per_km),
+            t("report.dataPeriod", lang, start=_fmt_date(first_date), end=_fmt_date(last_date)),
         ]
         for line in spending_lines:
             story.append(Paragraph(line, styles["body"]))
     story.append(Spacer(1, 5 * mm))
 
     # --- 4. Service history table ------------------------------------------
-    story.append(Paragraph("Сервісна історія", styles["heading"]))
+    story.append(Paragraph(t("report.serviceHistoryHeading", lang), styles["heading"]))
     story.append(Spacer(1, 2 * mm))
     service_logs = [log for log in logs if log.type in ("maintenance", "repair")]
     if not service_logs:
-        story.append(Paragraph("Записів про ТО та ремонти поки немає.", styles["body"]))
+        story.append(Paragraph(t("report.noServiceEntries", lang), styles["body"]))
     else:
         rows = [
             [
-                Paragraph("Дата", styles["cell_bold"]),
-                Paragraph("Пробіг", styles["cell_bold"]),
-                Paragraph("Опис", styles["cell_bold"]),
-                Paragraph("Вартість", styles["cell_bold"]),
+                Paragraph(t("report.colDate", lang), styles["cell_bold"]),
+                Paragraph(t("report.colMileage", lang), styles["cell_bold"]),
+                Paragraph(t("report.colDescription", lang), styles["cell_bold"]),
+                Paragraph(t("report.colCost", lang), styles["cell_bold"]),
             ]
         ]
         for log in service_logs:
             rows.append(
                 [
                     Paragraph(_fmt_date(log.date), styles["cell"]),
-                    Paragraph(_fmt_km(log.odometer), styles["cell"]),
-                    Paragraph(escape(_service_log_description(log)), styles["cell"]),
-                    Paragraph(_fmt_money(float(log.total_cost or 0)), styles["cell"]),
+                    Paragraph(_fmt_km(log.odometer, lang), styles["cell"]),
+                    Paragraph(escape(_service_log_description(log, lang)), styles["cell"]),
+                    Paragraph(_fmt_money(float(log.total_cost or 0), lang), styles["cell"]),
                 ]
             )
         table = Table(rows, colWidths=[22 * mm, 24 * mm, 95 * mm, 26 * mm], repeatRows=1)
@@ -289,20 +290,22 @@ def build_car_report(db: Session, car: Car) -> bytes:
     story.append(Spacer(1, 5 * mm))
 
     # --- 5. Refuels summary --------------------------------------------------
-    story.append(Paragraph("Заправки", styles["heading"]))
+    story.append(Paragraph(t("report.refuelsHeading", lang), styles["heading"]))
     story.append(Spacer(1, 2 * mm))
     refuel_logs = [log for log in logs if log.type == "refuel" and log.refuel is not None]
     if not refuel_logs:
-        story.append(Paragraph("Заправок поки немає.", styles["body"]))
+        story.append(Paragraph(t("report.noRefuels", lang), styles["body"]))
     else:
         total_liters = sum(float(log.refuel.liters) for log in refuel_logs)
         total_cost = sum(float(log.total_cost or 0) for log in refuel_logs)
         story.append(
             Paragraph(
-                (
-                    f"Кількість заправок: {len(refuel_logs)} · "
-                    f"Всього літрів: {_fmt_number(round(total_liters, 2))} л · "
-                    f"Всього: {_fmt_money(total_cost)}"
+                t(
+                    "report.refuelsLine",
+                    lang,
+                    count=len(refuel_logs),
+                    liters=_fmt_number(round(total_liters, 2)),
+                    money=_fmt_money(total_cost, lang),
                 ),
                 styles["body"],
             )
@@ -310,18 +313,18 @@ def build_car_report(db: Session, car: Car) -> bytes:
     story.append(Spacer(1, 5 * mm))
 
     # --- 6. Service intervals table ------------------------------------------
-    story.append(Paragraph("Сервісні інтервали", styles["heading"]))
+    story.append(Paragraph(t("report.intervalsHeading", lang), styles["heading"]))
     story.append(Spacer(1, 2 * mm))
     if not intervals:
-        story.append(Paragraph("Сервісних інтервалів поки немає.", styles["body"]))
+        story.append(Paragraph(t("report.noIntervals", lang), styles["body"]))
     else:
         avg_daily_km = effective_avg_daily_km(car, logs)
         rows = [
             [
-                Paragraph("Назва", styles["cell_bold"]),
-                Paragraph("Останнє виконання", styles["cell_bold"]),
-                Paragraph("Наступне", styles["cell_bold"]),
-                Paragraph("Статус", styles["cell_bold"]),
+                Paragraph(t("report.colName", lang), styles["cell_bold"]),
+                Paragraph(t("report.colLast", lang), styles["cell_bold"]),
+                Paragraph(t("report.colNext", lang), styles["cell_bold"]),
+                Paragraph(t("report.colStatus", lang), styles["cell_bold"]),
             ]
         ]
         for interval in intervals:
@@ -330,9 +333,9 @@ def build_car_report(db: Session, car: Car) -> bytes:
                 current_odometer=car.current_odometer,
                 avg_daily_km=avg_daily_km,
             )
-            last_text = f"{_fmt_km(interval.last_odometer)} / {_fmt_date(interval.last_date)}"
+            last_text = f"{_fmt_km(interval.last_odometer, lang)} / {_fmt_date(interval.last_date)}"
             next_text = (
-                f"{_fmt_km(computed['due_odometer'])} / "
+                f"{_fmt_km(computed['due_odometer'], lang)} / "
                 f"{_fmt_date(computed['predicted_due_date'])}"
             )
             rows.append(
@@ -340,7 +343,10 @@ def build_car_report(db: Session, car: Car) -> bytes:
                     Paragraph(escape(interval.title), styles["cell"]),
                     Paragraph(last_text, styles["cell"]),
                     Paragraph(next_text, styles["cell"]),
-                    Paragraph(STATUS_LABELS.get(computed["status"], computed["status"]), styles["cell"]),
+                    Paragraph(
+                        t(_STATUS_KEYS.get(computed["status"], "report.status.ok"), lang),
+                        styles["cell"],
+                    ),
                 ]
             )
         table = Table(rows, colWidths=[55 * mm, 42 * mm, 42 * mm, 28 * mm], repeatRows=1)
@@ -358,5 +364,6 @@ def build_car_report(db: Session, car: Car) -> bytes:
         title=f"Kapot Tracker — {car_title}",
         author="Kapot Tracker",
     )
-    doc.build(story, onFirstPage=_draw_footer, onLaterPages=_draw_footer)
+    footer = _footer_drawer(lang)
+    doc.build(story, onFirstPage=footer, onLaterPages=footer)
     return buffer.getvalue()

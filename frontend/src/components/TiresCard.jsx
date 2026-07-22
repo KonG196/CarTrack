@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   CircleDot,
   Plus,
@@ -26,13 +27,12 @@ import { tireAgeYears, tireAgeLevel, tireSeasonMismatch } from '../utils/tireAge
 
 // Makers advise swapping the axles every ~10 000 km; past that the card nudges.
 const ROTATION_INTERVAL_KM = 10000;
-// Accusative season word for the changeover banner («на зимову/літню гуму»).
-const SEASON_ACCUSATIVE = { winter: 'зимову', summer: 'літню' };
 import { formatKm, formatDate } from '../utils/format';
 import { canDo } from '../utils/permissions';
 import { Button, DateField, TextField, SelectField, Card, Spinner, ErrorMessage, ConfirmDialog } from './UI';
 
 function TireForm({ onSubmit, onCancel }) {
+  const { t } = useTranslation();
   const [form, setForm] = useState({
     name: '',
     season: 'winter',
@@ -48,10 +48,10 @@ function TireForm({ onSubmit, onCancel }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    if (!form.name.trim()) return setError('Вкажіть назву');
+    if (!form.name.trim()) return setError(t('tiresCard.errName'));
     const dotYear = parseInt(form.dot_year, 10);
     if (form.dot_year && (!Number.isFinite(dotYear) || dotYear < 1980 || dotYear > 2100)) {
-      return setError('Вкажіть коректний рік випуску');
+      return setError(t('tiresCard.errDotYear'));
     }
 
     setSubmitting(true);
@@ -64,24 +64,24 @@ function TireForm({ onSubmit, onCancel }) {
         purchased_at: form.purchased_at || null,
       });
     } catch (err) {
-      setError(extractError(err, 'Не вдалося додати комплект'));
+      setError(extractError(err, t('tiresCard.errAdd')));
       setSubmitting(false);
     }
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
-      <TextField label="Назва" required value={form.name} onChange={set('name')} />
+      <TextField label={t('tiresCard.name')} required value={form.name} onChange={set('name')} />
       <SelectField
-        label="Сезон"
+        label={t('tiresCard.season')}
         value={form.season}
         onChange={set('season')}
         options={TIRE_SEASONS}
       />
       <div className="grid grid-cols-2 gap-3">
-        <TextField label="Розмір" value={form.size} onChange={set('size')} hint="напр. 205/55 R16" />
+        <TextField label={t('tiresCard.size')} value={form.size} onChange={set('size')} hint={t('tiresCard.sizeHint')} />
         <TextField
-          label="Рік випуску (DOT)"
+          label={t('tiresCard.dotYear')}
           type="number"
           inputMode="numeric"
           numeric
@@ -90,7 +90,7 @@ function TireForm({ onSubmit, onCancel }) {
         />
       </div>
       <DateField
-        label="Куплені"
+        label={t('tiresCard.purchased')}
         clearable
         value={form.purchased_at}
         onChange={(v) => setForm((f) => ({ ...f, purchased_at: v }))}
@@ -98,10 +98,10 @@ function TireForm({ onSubmit, onCancel }) {
       <ErrorMessage>{error}</ErrorMessage>
       <div className="flex gap-2">
         <Button type="submit" disabled={submitting} className="flex-1">
-          {submitting ? 'Збереження…' : 'Додати комплект'}
+          {submitting ? t('common.saving') : t('tiresCard.addSet')}
         </Button>
         <Button variant="secondary" onClick={onCancel}>
-          Скасувати
+          {t('common.cancel')}
         </Button>
       </div>
     </form>
@@ -109,6 +109,7 @@ function TireForm({ onSubmit, onCancel }) {
 }
 
 export default function TiresCard({ car, onToast }) {
+  const { t } = useTranslation();
   const canManage = canDo(car?.your_role, 'tire:manage');
   const [tireSets, setTireSets] = useState([]);
   const [seasonStatus, setSeasonStatus] = useState(null);
@@ -130,7 +131,7 @@ export default function TiresCard({ car, onToast }) {
         if (!cancelled) setTireSets(data);
       })
       .catch(() => {
-        if (!cancelled) setError('Не вдалося завантажити комплекти шин');
+        if (!cancelled) setError(t('tiresCard.errLoad'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -155,7 +156,7 @@ export default function TiresCard({ car, onToast }) {
     await createTireSet(car.id, payload);
     await reload();
     setShowForm(false);
-    onToast('Комплект додано');
+    onToast(t('tiresCard.toastAdded'));
   };
 
   const handleInstall = async (tireSet) => {
@@ -165,9 +166,9 @@ export default function TiresCard({ car, onToast }) {
     try {
       await installTireSet(tireSet.id);
       await reload();
-      onToast(`Встановлено: ${tireSet.name}`);
+      onToast(t('tiresCard.toastInstalled', { name: tireSet.name }));
     } catch (err) {
-      setError(extractError(err, 'Не вдалося встановити комплект'));
+      setError(extractError(err, t('tiresCard.errInstall')));
     } finally {
       setInstallingId(null);
     }
@@ -180,9 +181,9 @@ export default function TiresCard({ car, onToast }) {
     try {
       await rotateTireSet(tireSet.id);
       await reload();
-      onToast('Ротацію вісей записано');
+      onToast(t('tiresCard.toastRotated'));
     } catch (err) {
-      setError(extractError(err, 'Не вдалося записати ротацію'));
+      setError(extractError(err, t('tiresCard.errRotate')));
     } finally {
       setRotatingId(null);
     }
@@ -195,10 +196,10 @@ export default function TiresCard({ car, onToast }) {
     setError('');
     try {
       await deleteTireSet(tireSet.id);
-      setTireSets((prev) => prev.filter((t) => t.id !== tireSet.id));
-      onToast('Комплект видалено');
+      setTireSets((prev) => prev.filter((s) => s.id !== tireSet.id));
+      onToast(t('tiresCard.toastDeleted'));
     } catch (err) {
-      setError(extractError(err, 'Не вдалося видалити комплект'));
+      setError(extractError(err, t('tiresCard.errDelete')));
     }
   };
 
@@ -206,8 +207,8 @@ export default function TiresCard({ car, onToast }) {
     <Card>
       <ConfirmDialog
         open={deletingSet !== null}
-        title="Видалити комплект?"
-        message={deletingSet ? `Видалити «${deletingSet.name}»?` : ''}
+        title={t('tiresCard.deleteSetTitle')}
+        message={deletingSet ? t('tiresCard.deleteSetConfirm', { name: deletingSet.name }) : ''}
         onConfirm={confirmDelete}
         onCancel={() => setDeletingSet(null)}
       />
@@ -215,12 +216,12 @@ export default function TiresCard({ car, onToast }) {
       <div className="mb-2 flex items-center justify-between gap-2">
         <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-fg">
           <CircleDot className="h-4 w-4 text-mist" />
-          Шини · {car.brand} {car.model}
+          {t('tiresCard.title')} · {car.brand} {car.model}
         </h2>
         {!showForm && canManage && (
           <Button variant="ghost" onClick={() => setShowForm(true)} className="px-2.5 py-1.5 text-amber">
             <Plus className="h-4 w-4" />
-            Додати
+            {t('common.add')}
           </Button>
         )}
       </div>
@@ -232,7 +233,7 @@ export default function TiresCard({ car, onToast }) {
         seasonStatus?.changeover_season &&
         tireSeasonMismatch(
           seasonStatus.changeover_season,
-          tireSets.find((t) => t.is_installed),
+          tireSets.find((s) => s.is_installed),
         ) && (
           <div className="mb-3 flex items-start gap-2 rounded-xl border border-edge bg-raised p-3 text-sm font-medium text-amber">
             {seasonStatus.changeover_season === 'winter' ? (
@@ -241,8 +242,10 @@ export default function TiresCard({ car, onToast }) {
               <Sun className="mt-0.5 h-4 w-4 flex-shrink-0" />
             )}
             <span>
-              Час переходити на {SEASON_ACCUSATIVE[seasonStatus.changeover_season]} гуму
-              {tireSets.length === 0 ? ' — додайте свій комплект нижче.' : '.'}
+              {seasonStatus.changeover_season === 'winter'
+                ? t('tiresCard.changeoverWinter')
+                : t('tiresCard.changeoverSummer')}
+              {tireSets.length === 0 ? t('tiresCard.changeoverAddSet') : '.'}
             </span>
           </div>
         )}
@@ -250,7 +253,7 @@ export default function TiresCard({ car, onToast }) {
       {!loading && !error && seasonStatus?.washer_changeover_due && (
         <p className="mb-3 flex items-center gap-1.5 text-xs text-mist">
           <Snowflake className="h-3 w-3 flex-shrink-0" />
-          Скоро нічні заморозки — залийте зимову рідину в омивач.
+          {t('tiresCard.washerChangeover')}
         </p>
       )}
 
@@ -265,8 +268,8 @@ export default function TiresCard({ car, onToast }) {
       ) : tireSets.length === 0 ? (
         <p className="py-2 text-sm text-mist">
           {canManage
-            ? 'Зимові, літні, всесезонні — з розміром, роком випуску і пробігом на встановленому комплекті.'
-            : 'Власник ще не додав комплектів шин.'}
+            ? t('tiresCard.emptyManage')
+            : t('tiresCard.emptyViewer')}
         </p>
       ) : (
         <div className="divide-y divide-edge">
@@ -281,7 +284,7 @@ export default function TiresCard({ car, onToast }) {
                   {tireSet.is_installed && (
                     <span className="flex flex-shrink-0 items-center gap-1 rounded-full bg-ok/15 px-2 py-0.5 text-xs font-medium text-ok">
                       <Check className="h-3 w-3" />
-                      Встановлені
+                      {t('tiresCard.installed')}
                     </span>
                   )}
                 </p>
@@ -292,7 +295,7 @@ export default function TiresCard({ car, onToast }) {
                   {tireSet.km_on_set != null && (
                     <span className="flex items-center gap-1">
                       <Gauge className="h-3 w-3" />
-                      {formatKm(tireSet.km_on_set)} на комплекті
+                      {t('tiresCard.kmOnSet', { km: formatKm(tireSet.km_on_set) })}
                     </span>
                   )}
                   {tireSet.purchased_at && (
@@ -309,7 +312,9 @@ export default function TiresCard({ car, onToast }) {
                     }`}
                   >
                     <AlertTriangle className="h-3 w-3 flex-shrink-0" />
-                    Шинам {ageYears} р. — {ageLevel === 'crit' ? 'час замінити' : 'перевірте стан'}
+                    {ageLevel === 'crit'
+                      ? t('tiresCard.tireAgeReplace', { years: ageYears })
+                      : t('tiresCard.tireAgeCheck', { years: ageYears })}
                   </p>
                 )}
                 {tireSet.is_installed && tireSet.km_since_rotation != null && (
@@ -322,8 +327,8 @@ export default function TiresCard({ car, onToast }) {
                       }`}
                     >
                       {tireSet.km_since_rotation >= ROTATION_INTERVAL_KM
-                        ? `Час на ротацію: ${formatKm(tireSet.km_since_rotation)} від останньої`
-                        : `${formatKm(tireSet.km_since_rotation)} від ротації вісей`}
+                        ? t('tiresCard.rotationDue', { km: formatKm(tireSet.km_since_rotation) })
+                        : t('tiresCard.rotationSince', { km: formatKm(tireSet.km_since_rotation) })}
                     </span>
                     {canManage && (
                       <Button
@@ -333,7 +338,7 @@ export default function TiresCard({ car, onToast }) {
                         className="px-2.5 py-1 text-xs"
                       >
                         <RotateCw className="h-3.5 w-3.5" />
-                        {rotatingId === tireSet.id ? 'Записую…' : 'Зробити ротацію вісей'}
+                        {rotatingId === tireSet.id ? t('tiresCard.recording') : t('tiresCard.rotateAxles')}
                       </Button>
                     )}
                   </div>
@@ -348,13 +353,13 @@ export default function TiresCard({ car, onToast }) {
                       disabled={installingId != null}
                       className="px-2.5 py-1.5"
                     >
-                      {installingId === tireSet.id ? 'Встановлення…' : 'Встановити'}
+                      {installingId === tireSet.id ? t('tiresCard.installing') : t('tiresCard.install')}
                     </Button>
                   )}
                   <button
                     type="button"
                     onClick={() => setDeletingSet(tireSet)}
-                    aria-label={`Видалити ${tireSet.name}`}
+                    aria-label={t('tiresCard.deleteAria', { name: tireSet.name })}
                     className="rounded-lg p-1.5 text-mist/70 transition-colors hover:bg-crit/10 hover:text-crit"
                   >
                     <Trash2 className="h-4 w-4" />

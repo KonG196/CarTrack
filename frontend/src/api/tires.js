@@ -1,9 +1,12 @@
 import client from './client';
+import i18n from '../i18n';
 
+// `value` is the stored season code (never localized); `label` is resolved live
+// via i18n on access so a language switch relabels without a reload.
 export const TIRE_SEASONS = [
-  { value: 'summer', label: 'Літні' },
-  { value: 'winter', label: 'Зимові' },
-  { value: 'all_season', label: 'Всесезонні' },
+  { value: 'summer', get label() { return i18n.t('apiTires.summer'); } },
+  { value: 'winter', get label() { return i18n.t('apiTires.winter'); } },
+  { value: 'all_season', get label() { return i18n.t('apiTires.allSeason'); } },
 ];
 
 export function tireSeasonLabel(season) {

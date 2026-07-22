@@ -5,6 +5,7 @@ import * as intervalsApi from '../api/intervals';
 import * as analyticsApi from '../api/analytics';
 import * as membersApi from '../api/members';
 import outbox from '../offline/outbox';
+import i18n from '../i18n';
 
 const ACTIVE_CAR_KEY = 'kapot_tracker_active_car';
 
@@ -53,7 +54,7 @@ export const useCarStore = create((set, get) => ({
       set({ cars, activeCarId, carsLoading: false, carsLoaded: true });
       return cars;
     } catch (error) {
-      set({ carsLoading: false, carsLoaded: true, carsError: 'Не вдалося завантажити авто' });
+      set({ carsLoading: false, carsLoaded: true, carsError: i18n.t('carStore.errors.cars') });
       throw error;
     }
   },
@@ -86,7 +87,7 @@ export const useCarStore = create((set, get) => ({
       set({ logs, logsLoading: false });
       return logs;
     } catch (error) {
-      set({ logsLoading: false, logsError: 'Не вдалося завантажити журнал' });
+      set({ logsLoading: false, logsError: i18n.t('carStore.errors.logs') });
       throw error;
     }
   },
@@ -100,7 +101,7 @@ export const useCarStore = create((set, get) => ({
       set({ intervals, intervalsLoading: false });
       return intervals;
     } catch (error) {
-      set({ intervalsLoading: false, intervalsError: 'Не вдалося завантажити інтервали ТО' });
+      set({ intervalsLoading: false, intervalsError: i18n.t('carStore.errors.intervals') });
       throw error;
     }
   },
@@ -114,7 +115,7 @@ export const useCarStore = create((set, get) => ({
       set({ analytics, analyticsLoading: false });
       return analytics;
     } catch (error) {
-      set({ analyticsLoading: false, analyticsError: 'Не вдалося завантажити аналітику' });
+      set({ analyticsLoading: false, analyticsError: i18n.t('carStore.errors.analytics') });
       throw error;
     }
   },
@@ -136,7 +137,7 @@ export const useCarStore = create((set, get) => ({
         members: [],
         membersCarId: null,
         membersLoading: false,
-        membersError: 'Не вдалося завантажити учасників',
+        membersError: i18n.t('carStore.errors.members'),
       });
       throw error;
     }

@@ -1,12 +1,17 @@
 import client from './client';
+import i18n from '../i18n';
 
-export const DOCUMENT_KINDS = [
-  { value: 'tech_passport', label: 'Техпаспорт' },
-  { value: 'insurance', label: 'Страховка' },
-  { value: 'inspection', label: 'Техогляд' },
-  { value: 'invoice', label: 'Рахунок' },
-  { value: 'other', label: 'Інше' },
-];
+// `value` is the stored document-kind code (never localized). `label` is a live
+// getter so reading it (in the <select> options and in documentKindLabel) picks
+// the current language via i18n.t — a language switch relabels without a reload.
+export const DOCUMENT_KINDS = ['tech_passport', 'insurance', 'inspection', 'invoice', 'other'].map(
+  (value) => ({
+    value,
+    get label() {
+      return i18n.t(`apiDocuments.kind.${value}`);
+    },
+  }),
+);
 
 export const EXPIRING_KINDS = ['insurance', 'inspection'];
 

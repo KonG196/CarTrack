@@ -13,24 +13,30 @@ from app.bot.handlers import router
 from app.bot.reminders import reminder_loop
 from app.config import settings
 from app.database import engine
+from app.i18n import normalize_lang, t
 from app.migrations import run_migrations
 
-# Published to Telegram's command menu on startup.
-BOT_COMMANDS: list[BotCommand] = [
-    BotCommand(command="start", description="Прив'язати акаунт Kapot Tracker"),
-    BotCommand(command="help", description="Довідка та формати повідомлень"),
-    BotCommand(command="status", description="Стан авто та найближчі ТО"),
-    BotCommand(command="report", description="PDF-звіт по авто"),
-    BotCommand(command="note", description="Блокнот: коди, телефони, PIN"),
-    BotCommand(command="backup", description="Резервна копія бази (адмін)"),
-]
+
+def bot_commands(lang: str) -> list[BotCommand]:
+    """Command menu for Telegram, localized for ``lang`` (en default, uk)."""
+    lang = normalize_lang(lang)
+    return [
+        BotCommand(command="start", description=t("bot.cmd.start", lang)),
+        BotCommand(command="help", description=t("bot.cmd.help", lang)),
+        BotCommand(command="status", description=t("bot.cmd.status", lang)),
+        BotCommand(command="report", description=t("bot.cmd.report", lang)),
+        BotCommand(command="note", description=t("bot.cmd.note", lang)),
+        BotCommand(command="backup", description=t("bot.cmd.backup", lang)),
+    ]
 
 
 async def run() -> None:
     bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
     dispatcher = Dispatcher()
     dispatcher.include_router(router)
-    await bot.set_my_commands(BOT_COMMANDS)
+    # English is the default menu; Telegram serves the uk menu to uk clients.
+    await bot.set_my_commands(bot_commands("en"))
+    await bot.set_my_commands(bot_commands("uk"), language_code="uk")
     reminder_task = asyncio.create_task(reminder_loop(bot))
     try:
         await dispatcher.start_polling(bot)

@@ -25,6 +25,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.bot import handlers, service
+from app.i18n import t
 from app.models import Car, CarMember, LogEntry, ServiceInterval, User
 
 TODAY = dt.date.today()
@@ -68,6 +69,7 @@ def _user(db: Session, email: str, chat_id: int | None) -> User:
         email=email,
         hashed_password="x",
         telegram_chat_id=None if chat_id is None else str(chat_id),
+        language="uk",
     )
     db.add(user)
     db.flush()
@@ -293,9 +295,9 @@ def test_viewer_with_only_a_shared_car_is_refused_politely(
 
     asyncio.run(handlers.handle_text(_message("мийка 300", MEMBER_CHAT)))
 
-    assert replies[0]["text"] == handlers.VIEW_ONLY_TEXT
+    assert replies[0]["text"] == t("bot.h.viewOnly", "uk")
     # Refused, not merely «no cars»: the viewer can plainly see the car.
-    assert replies[0]["text"] != handlers.NO_CARS_TEXT
+    assert replies[0]["text"] != t("bot.h.noCars", "uk")
     assert "лише для перегляду" in replies[0]["text"]
     with bot_db() as db:
         assert _log_count(db) == 0
@@ -352,7 +354,7 @@ def test_viewer_cannot_reach_a_shared_car_with_a_crafted_callback(
         handlers._pending_expenses.pop(MEMBER_CHAT, None)
         handlers._pending_refuels.pop(MEMBER_CHAT, None)
 
-    assert any(reply.get("text") == handlers.VIEW_ONLY_TEXT for reply in replies)
+    assert any(reply.get("text") == t("bot.h.viewOnly", "uk") for reply in replies)
     with bot_db() as db:
         assert _log_count(db) == 0
 
@@ -373,7 +375,7 @@ def test_viewer_cannot_write_by_confirming_a_stale_pending_entry(
     finally:
         handlers._pending_expenses.pop(MEMBER_CHAT, None)
 
-    assert any(reply.get("text") == handlers.VIEW_ONLY_TEXT for reply in replies)
+    assert any(reply.get("text") == t("bot.h.viewOnly", "uk") for reply in replies)
     with bot_db() as db:
         assert _log_count(db) == 0
 
@@ -388,7 +390,7 @@ def test_viewer_cannot_move_the_odometer_of_a_shared_car(
     message = _message("123456", MEMBER_CHAT)
     asyncio.run(handlers.cb_odometer(_callback(f"odo:{shared_id}:123456", message)))
 
-    assert any(reply.get("text") == handlers.VIEW_ONLY_TEXT for reply in replies)
+    assert any(reply.get("text") == t("bot.h.viewOnly", "uk") for reply in replies)
     with bot_db() as db:
         assert db.get(Car, shared_id).current_odometer == 90000  # untouched
 

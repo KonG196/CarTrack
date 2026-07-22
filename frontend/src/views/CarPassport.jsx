@@ -1,17 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Car, Phone, Printer, ShieldCheck, Gauge, Fuel, Hash } from 'lucide-react';
 
 import { getPublicPassport } from '../api/passport';
 import { formatDate } from '../utils/format';
-
-const FUEL_LABELS = {
-  petrol: 'Бензин',
-  diesel: 'Дизель',
-  lpg: 'ГБО',
-  electric: 'Електро',
-  hybrid: 'Гібрид',
-};
+import { fuelKindLabel } from '../utils/fuelKind';
 
 function Row({ icon: Icon, label, children }) {
   if (!children) return null;
@@ -27,6 +21,7 @@ function Row({ icon: Icon, label, children }) {
 }
 
 export default function CarPassport() {
+  const { t } = useTranslation();
   const { token } = useParams();
   const [state, setState] = useState({ loading: true, car: null, missing: false });
 
@@ -54,12 +49,12 @@ export default function CarPassport() {
     <div className="min-h-screen bg-garage px-4 py-8">
       <div className="mx-auto max-w-md">
         {loading ? (
-          <p className="py-16 text-center text-sm text-mist">Завантаження…</p>
+          <p className="py-16 text-center text-sm text-mist">{t('common.loading')}</p>
         ) : missing || !car ? (
           <div className="rounded-2xl border border-edge bg-panel p-8 text-center">
             <Car className="mx-auto h-8 w-8 text-mist/70" />
             <p className="mt-3 text-sm text-mist">
-              Паспорт не знайдено. Можливо, посилання відкликали.
+              {t('carPassport.notFound')}
             </p>
           </div>
         ) : (
@@ -73,7 +68,7 @@ export default function CarPassport() {
                   <h1 className="font-display text-lg font-semibold text-fg">{title}</h1>
                   <p className="text-xs text-mist">
                     {car.year}
-                    {car.engine ? ` · ${car.engine}` : ''} · {FUEL_LABELS[car.fuel_type] || car.fuel_type}
+                    {car.engine ? ` · ${car.engine}` : ''} · {fuelKindLabel(car.fuel_type)}
                   </p>
                 </div>
               </div>
@@ -89,27 +84,27 @@ export default function CarPassport() {
                   className="mt-4 flex items-center justify-center gap-2 rounded-xl bg-amber py-3 text-sm font-semibold text-amber-ink transition active:scale-[0.98]"
                 >
                   <Phone className="h-4 w-4" />
-                  Зателефонувати власнику · {car.contact_phone}
+                  {t('carPassport.callOwner')} · {car.contact_phone}
                 </a>
               )}
 
               <div className="mt-4">
                 <Row icon={Hash} label="VIN">{car.vin}</Row>
-                <Row icon={ShieldCheck} label="Страховка ОСЦПВ">
+                <Row icon={ShieldCheck} label={t('carPassport.insuranceLabel')}>
                   {car.insurance_number || car.insurance_until ? (
                     <>
                       {car.insurance_number}
                       {car.insurance_until ? (
                         <span className="text-mist">
                           {car.insurance_number ? ' · ' : ''}
-                          дійсна до {formatDate(car.insurance_until)}
+                          {t('carPassport.validUntil', { date: formatDate(car.insurance_until) })}
                         </span>
                       ) : null}
                     </>
                   ) : null}
                 </Row>
-                <Row icon={Fuel} label="Допуск пального">{car.fuel_approval}</Row>
-                <Row icon={Gauge} label="Тиск у шинах">{car.tire_pressure}</Row>
+                <Row icon={Fuel} label={t('carPassport.fuelApproval')}>{car.fuel_approval}</Row>
+                <Row icon={Gauge} label={t('carPassport.tirePressure')}>{car.tire_pressure}</Row>
               </div>
             </div>
 
@@ -119,9 +114,9 @@ export default function CarPassport() {
               className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-edge bg-panel py-2.5 text-sm font-medium text-fg transition active:scale-[0.99] print:hidden"
             >
               <Printer className="h-4 w-4" />
-              Роздрукувати
+              {t('carPassport.print')}
             </button>
-            <p className="mt-3 text-center text-xs text-mist/60">Kapot Tracker · паспорт авто</p>
+            <p className="mt-3 text-center text-xs text-mist/60">Kapot Tracker · {t('carPassport.footer')}</p>
           </>
         )}
       </div>

@@ -1,4 +1,6 @@
-const THIN_SPACE = ' '; // narrow no-break space for thousands grouping
+import i18n from '../i18n';
+
+const THIN_SPACE = ' '; // narrow no-break space for thousands grouping (uk)
 
 const UK_MONTHS_SHORT = [
   'січ',
@@ -15,13 +17,41 @@ const UK_MONTHS_SHORT = [
   'гру',
 ];
 
+const EN_MONTHS_SHORT = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
 // A wider no-break space sits between the number and its unit (₴ / км). Reusing
 // the thin thousands-space for the unit too glued it onto the number ("4 650₴")
 // at large/bold sizes; a normal no-break space cleanly separates number + unit.
-const UNIT_GAP = '\u00A0';
+const UNIT_GAP = ' ';
+
+// Locale is read live so a language switch reformats numbers without a reload.
+// English groups with commas and a dot decimal ("1,250.50"); Ukrainian groups
+// with a thin space and a comma decimal ("1 250,50").
+function isEn() {
+  return String(i18n.language || 'en').startsWith('en');
+}
+
+const units = () =>
+  isEn()
+    ? { km: 'km', thousand: 'k', million: 'M', currency: '₴' }
+    : { km: 'км', thousand: 'тис', million: 'млн', currency: '₴' };
 
 function groupThousands(digits) {
-  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, THIN_SPACE);
+  const sep = isEn() ? ',' : THIN_SPACE;
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, sep);
 }
 
 export function formatMoney(n) {
@@ -31,34 +61,37 @@ export function formatMoney(n) {
   const fixed = Math.abs(value).toFixed(2);
   const [intPart, fracPart] = fixed.split('.');
   const grouped = groupThousands(intPart);
-  const frac = fracPart === '00' ? '' : `,${fracPart}`;
-  return `${sign}${grouped}${frac}${UNIT_GAP}₴`;
+  const decimal = isEn() ? '.' : ',';
+  const frac = fracPart === '00' ? '' : `${decimal}${fracPart}`;
+  return `${sign}${grouped}${frac}${UNIT_GAP}${units().currency}`;
 }
 
 // Short money for tight spots (dashboard stat tiles) where the full grouped
 // value with kopecks overflows a one-third-width card. Kopecks are dropped, and
-// large sums collapse to тис/млн so the string stays a few characters wide.
+// large sums collapse to тис/млн (k/M) so the string stays a few characters wide.
 export function formatMoneyCompact(n) {
   if (n === null || n === undefined || Number.isNaN(Number(n))) return '—';
   const value = Number(n);
   const sign = value < 0 ? '-' : '';
   const abs = Math.abs(value);
+  const u = units();
+  const decimal = isEn() ? '.' : ',';
   if (abs >= 1_000_000) {
     const m = abs / 1_000_000;
-    const s = m >= 10 ? String(Math.round(m)) : m.toFixed(1).replace('.', ',');
-    return `${sign}${s}${UNIT_GAP}млн${UNIT_GAP}₴`;
+    const s = m >= 10 ? String(Math.round(m)) : m.toFixed(1).replace('.', decimal);
+    return `${sign}${s}${UNIT_GAP}${u.million}${UNIT_GAP}${u.currency}`;
   }
   if (abs >= 100_000) {
-    return `${sign}${groupThousands(String(Math.round(abs / 1000)))}${UNIT_GAP}тис${UNIT_GAP}₴`;
+    return `${sign}${groupThousands(String(Math.round(abs / 1000)))}${UNIT_GAP}${u.thousand}${UNIT_GAP}${u.currency}`;
   }
-  return `${sign}${groupThousands(String(Math.round(abs)))}${UNIT_GAP}₴`;
+  return `${sign}${groupThousands(String(Math.round(abs)))}${UNIT_GAP}${u.currency}`;
 }
 
 export function formatKm(n) {
   if (n === null || n === undefined || Number.isNaN(Number(n))) return '—';
   const value = Math.round(Number(n));
   const sign = value < 0 ? '-' : '';
-  return `${sign}${groupThousands(String(Math.abs(value)))}${UNIT_GAP}км`;
+  return `${sign}${groupThousands(String(Math.abs(value)))}${UNIT_GAP}${units().km}`;
 }
 
 export function formatDate(iso) {
@@ -77,5 +110,6 @@ export function monthLabel(yyyyMm) {
   const [, year, month] = match;
   const idx = Number(month) - 1;
   if (idx < 0 || idx > 11) return String(yyyyMm);
-  return `${UK_MONTHS_SHORT[idx]} ${year}`;
+  const months = isEn() ? EN_MONTHS_SHORT : UK_MONTHS_SHORT;
+  return `${months[idx]} ${year}`;
 }

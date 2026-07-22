@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Info, Sparkles } from 'lucide-react';
 import { extractError } from '../api/client';
 import {
@@ -11,6 +12,7 @@ import {
 import { Modal, Button, TextField, DateField, ErrorMessage } from './UI';
 
 export default function CompleteIntervalModal({ interval, car, onComplete, onClose, onToast }) {
+  const { t } = useTranslation();
   const open = interval != null;
   const [values, setValues] = useState(() => emptyCompleteValues({ car, interval }));
   const [error, setError] = useState('');
@@ -50,20 +52,20 @@ export default function CompleteIntervalModal({ interval, car, onComplete, onClo
     setSubmitting(true);
     try {
       await onComplete(interval.id, completeValuesToPayload(values));
-      onToast('Записано ТО і оновлено інтервал');
+      onToast(t('completeInterval.savedToast'));
       onClose();
     } catch (err) {
-      setError(extractError(err, 'Не вдалося записати ТО'));
+      setError(extractError(err, t('completeInterval.saveError')));
       setSubmitting(false);
     }
   };
 
   return (
-    <Modal open={open} onClose={onClose} title={interval ? `Виконано: ${interval.title}` : ''} size="sm">
+    <Modal open={open} onClose={onClose} title={interval ? t('completeInterval.title', { title: interval.title }) : ''} size="sm">
       <form onSubmit={handleSubmit} className="space-y-3">
         <div className="grid grid-cols-2 gap-3">
           <TextField
-            label="Пробіг, км"
+            label={t('completeInterval.odometer')}
             type="number"
             inputMode="numeric"
             enterKeyHint="next"
@@ -74,7 +76,7 @@ export default function CompleteIntervalModal({ interval, car, onComplete, onClo
             onChange={set('odometer')}
           />
           <DateField
-          label="Дата"
+          label={t('completeInterval.date')}
           required
           value={values.date}
           onChange={(v) => setValues((prev) => ({ ...prev, date: v }))}
@@ -82,7 +84,7 @@ export default function CompleteIntervalModal({ interval, car, onComplete, onClo
         </div>
         <div className="grid grid-cols-2 gap-3">
           <TextField
-            label="Запчастини, ₴"
+            label={t('completeInterval.partsCost')}
             type="text"
             inputMode="decimal"
             enterKeyHint="next"
@@ -91,7 +93,7 @@ export default function CompleteIntervalModal({ interval, car, onComplete, onClo
             onChange={setPartsCost}
           />
           <TextField
-            label="Робота, ₴"
+            label={t('completeInterval.laborCost')}
             type="text"
             inputMode="decimal"
             enterKeyHint="next"
@@ -101,7 +103,7 @@ export default function CompleteIntervalModal({ interval, car, onComplete, onClo
           />
         </div>
         <TextField
-          label="Вартість, ₴"
+          label={t('completeInterval.totalCost')}
           type="text"
           inputMode="decimal"
           enterKeyHint="next"
@@ -126,18 +128,18 @@ export default function CompleteIntervalModal({ interval, car, onComplete, onClo
             {estimateSource === 'history' ? (
               <>
                 <Sparkles className="h-3.5 w-3.5 flex-shrink-0" />
-                Стільки ви платили минулого разу — можна змінити
+                {t('completeInterval.historyHint')}
               </>
             ) : (
               <>
                 <Info className="h-3.5 w-3.5 flex-shrink-0" />
-                Орієнтовно по ринку — впишіть свою суму
+                {t('completeInterval.marketHint')}
               </>
             )}
           </p>
         )}
         <TextField
-          label="Нотатка"
+          label={t('completeInterval.notes')}
           enterKeyHint="done"
           value={values.notes}
           onChange={set('notes')}
@@ -145,10 +147,10 @@ export default function CompleteIntervalModal({ interval, car, onComplete, onClo
         <ErrorMessage>{error}</ErrorMessage>
         <div className="flex gap-2">
           <Button type="submit" disabled={submitting} className="flex-1">
-            {submitting ? 'Збереження…' : 'Записати ТО'}
+            {submitting ? t('common.saving') : t('completeInterval.submit')}
           </Button>
           <Button variant="secondary" onClick={onClose} disabled={submitting}>
-            Скасувати
+            {t('common.cancel')}
           </Button>
         </div>
       </form>

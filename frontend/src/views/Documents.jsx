@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import BackLink from '../components/BackLink';
 import DocumentsCard from '../components/DocumentsCard';
@@ -7,6 +8,7 @@ import { Card } from '../components/UI';
 import { useCarStore } from '../store/carStore';
 
 export default function Documents() {
+  const { t } = useTranslation();
   const cars = useCarStore((s) => s.cars);
   const activeCarId = useCarStore((s) => s.activeCarId);
   const fetchIntervals = useCarStore((s) => s.fetchIntervals);
@@ -16,7 +18,7 @@ export default function Documents() {
   return (
     <div className="stagger space-y-4">
       <Toast message={toast} onDone={() => setToast('')} />
-      <BackLink to="/garage">Документи</BackLink>
+      <BackLink to="/garage">{t('documents.title')}</BackLink>
       {activeCar ? (
         <DocumentsCard
           key={activeCar.id}
@@ -26,7 +28,7 @@ export default function Documents() {
         />
       ) : (
         <Card>
-          <p className="text-sm text-mist">Спочатку додайте авто.</p>
+          <p className="text-sm text-mist">{t('documents.addCarFirst')}</p>
         </Card>
       )}
     </div>

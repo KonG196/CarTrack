@@ -1,4 +1,5 @@
 import client from './client';
+import i18n from '../i18n';
 import { saveBlob } from './reports';
 
 /**
@@ -23,10 +24,10 @@ export function csvFilename(carId) {
  * message when the shape is wrong (shown as-is in the UI).
  */
 export function summarizeImport(data) {
-  const invalid = () => new Error('Файл не схожий на експорт Kapot Tracker');
+  const invalid = () => new Error(i18n.t('apiBackup.notAnExport'));
   if (data == null || typeof data !== 'object' || Array.isArray(data)) throw invalid();
   if (data.schema_version !== 1) {
-    throw new Error('Непідтримувана версія експорту (очікується schema_version: 1)');
+    throw new Error(i18n.t('apiBackup.unsupportedVersion'));
   }
   if (!Array.isArray(data.cars)) throw invalid();
   let logs = 0;

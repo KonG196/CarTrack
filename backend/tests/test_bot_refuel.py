@@ -16,6 +16,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.bot import handlers, service
+from app.i18n import t
 from app.bot.parsers import parse_refuel
 from app.config import settings
 from app.models import Car, LogEntry, LogPhoto, MaintenanceDetails, RefuelDetails, User
@@ -97,7 +98,7 @@ def replies(monkeypatch: pytest.MonkeyPatch) -> list[dict]:
 
 def _seed_user_with_car(db: Session, odometer: int = 50000) -> tuple[User, Car]:
     user = User(
-        email="refueler@example.com", hashed_password="x", telegram_chat_id=str(CHAT_ID)
+        email="refueler@example.com", hashed_password="x", telegram_chat_id=str(CHAT_ID), language="uk"
     )
     db.add(user)
     db.flush()
@@ -407,7 +408,7 @@ lambda image: called.append(image))
 
     asyncio.run(handlers.handle_photo(_message(photo=True), _FakeBot()))
 
-    assert "прив'яза" in replies[0]["text"].lower()
+    assert "link" in replies[0]["text"].lower()
     assert called == []  # no OCR work for strangers
 
 
@@ -561,7 +562,7 @@ def test_fallback_handler_explains_what_the_bot_understands(
     asyncio.run(handlers.handle_unknown(_message()))
 
     assert len(replies) == 1
-    assert replies[0]["text"] == handlers.UNKNOWN_TEXT
+    assert replies[0]["text"] == t("bot.h.unknown", "uk")
 
 
 def test_report_command_sends_a_pdf_document(

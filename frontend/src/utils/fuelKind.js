@@ -1,4 +1,9 @@
+import i18n from '../i18n';
 
+// `value` is the stored fuel code (never localized); `label` is the Ukrainian
+// display used as the fallback. English labels live in EN_LABELS and are chosen
+// live by fuelKindLabel(), so a language switch relabels without a reload. Use
+// fuelKindLabel(opt.value) for display rather than opt.label directly.
 export const FUEL_KIND_OPTIONS = [
   { value: 'petrol', label: 'Бензин' },
   { value: 'diesel', label: 'Дизель' },
@@ -8,7 +13,15 @@ export const FUEL_KIND_OPTIONS = [
 
 const LABELS = Object.fromEntries(FUEL_KIND_OPTIONS.map((o) => [o.value, o.label]));
 
+const EN_LABELS = {
+  petrol: 'Petrol',
+  diesel: 'Diesel',
+  lpg: 'LPG',
+  electric: 'Electric',
+};
+
 export function fuelKindLabel(kind) {
+  if (String(i18n.language || 'en').startsWith('en')) return EN_LABELS[kind] || LABELS[kind] || kind;
   return LABELS[kind] || kind;
 }
 

@@ -10,7 +10,7 @@ from app.database import get_db
 from app.models import Car, CarSpec, User
 from app.routers.cars import get_owned_car
 from app.schemas import SPEC_CATEGORIES, CarSpecCreate, CarSpecOut, CarSpecUpdate
-from app.services.spec_presets import SPEC_PRESETS
+from app.services.spec_presets import preset_for
 
 router = APIRouter(tags=["specs"])
 
@@ -106,7 +106,7 @@ def apply_spec_preset(
     gaps and never undoes the owner's own numbers.
     """
     car = get_owned_car(db, current_user, car_id)
-    preset = SPEC_PRESETS.get(key)
+    preset = preset_for(key, current_user.language)
     if preset is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Preset not found")
 

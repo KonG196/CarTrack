@@ -71,7 +71,7 @@ def test_sixth_login_attempt_is_429(client: TestClient) -> None:
 
     response = _login(client)  # correct password, but the limit is spent
     assert response.status_code == 429
-    assert response.json()["detail"] == "Забагато спроб. Спробуйте пізніше."
+    assert response.json()["detail"] == "Too many attempts. Try again later."
     assert int(response.headers["retry-after"]) >= 1
 
 
@@ -124,4 +124,4 @@ def test_sixth_reset_confirm_is_429(client: TestClient) -> None:
         assert client.post("/api/auth/reset/confirm", json=payload).status_code == 400
     response = client.post("/api/auth/reset/confirm", json=payload)
     assert response.status_code == 429
-    assert response.json()["detail"] == "Забагато спроб. Спробуйте пізніше."
+    assert response.json()["detail"] == "Too many attempts. Try again later."

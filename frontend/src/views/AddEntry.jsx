@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useCarStore } from '../store/carStore';
 import { isNetworkError } from '../api/client';
 import { getLog } from '../api/logs';
 import { uploadPhoto } from '../api/photos';
 import { emptyFormValues, entryToFormValues, todayIso } from '../utils/entryForm';
-import { canDo } from '../utils/permissions';
+import { canDo, roleLabel } from '../utils/permissions';
 import EntryForm, { ENTRY_TYPES } from '../components/EntryForm';
 import { Card, Spinner, ErrorMessage } from '../components/UI';
 
 export default function AddEntry() {
+  const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
@@ -54,7 +56,7 @@ export default function AddEntry() {
         if (!cancelled) setSource(log);
       })
       .catch(() => {
-        if (!cancelled) setSourceError('Не вдалося завантажити запис для дублювання');
+        if (!cancelled) setSourceError(t('addEntry.loadForDuplicateFailed'));
       })
       .finally(() => {
         if (!cancelled) setSourceLoading(false);
@@ -79,7 +81,7 @@ export default function AddEntry() {
 
   const handleSubmit = async (payload) => {
     setSubmitting(true);
-    let toast = 'Запис додано';
+    let toast = t('addEntry.entryAdded');
     try {
       const log = await addLog(payload);
       // Attach the scanned чек/наряд to ANY entry type, not just refuels — the
@@ -89,7 +91,7 @@ export default function AddEntry() {
         try {
           await uploadPhoto(log.id, scannedFile);
         } catch {
-          toast = 'Запис додано, але фото не додалось';
+          toast = t('addEntry.entryAddedPhotoFailed');
         }
       }
       navigate('/logbook', { state: { toast } });
@@ -103,7 +105,7 @@ export default function AddEntry() {
         }
         navigate('/logbook', {
           state: {
-            toast: 'Немає звʼязку — запис збережено локально і відправиться пізніше',
+            toast: t('addEntry.offlineSaved'),
             toastVariant: 'warn',
           },
         });
@@ -118,11 +120,11 @@ export default function AddEntry() {
     return (
       <Card className="rise-in mt-8 p-8 text-center">
         <p className="text-sm text-mist">
-          Щоб додати запис, спершу створіть авто в розділі{' '}
+          {t('addEntry.noCarPrefix')}
           <Link to="/garage" className="text-amber hover:text-amber-deep">
-            «Налаштування»
+            {t('addEntry.settingsLink')}
           </Link>
-          .
+          {t('addEntry.noCarSuffix')}
         </p>
       </Card>
     );
@@ -132,14 +134,16 @@ export default function AddEntry() {
     return (
       <Card className="rise-in mt-8 p-8 text-center">
         <p className="text-sm text-mist">
-          Ви маєте доступ до {activeCar.brand} {activeCar.model} лише для перегляду, тож додавати
-          записи не можна. Попросіть власника змінити вашу роль на «Редактор».
+          {t('addEntry.viewOnly', {
+            car: `${activeCar.brand} ${activeCar.model}`,
+            role: roleLabel('editor'),
+          })}
         </p>
         <Link
           to="/logbook"
           className="mt-3 inline-block text-sm font-medium text-amber hover:text-amber-deep"
         >
-          До журналу
+          {t('addEntry.toLogbook')}
         </Link>
       </Card>
     );

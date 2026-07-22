@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { CloudOff, RefreshCw } from 'lucide-react';
 
 const RECONNECTED_MS = 3000;
 
 export default function OfflineBanner() {
+  const { t } = useTranslation();
   const [online, setOnline] = useState(() =>
     typeof navigator === 'undefined' ? true : navigator.onLine,
   );
@@ -45,7 +47,7 @@ export default function OfflineBanner() {
       }`}
     >
       <Icon className={`h-3.5 w-3.5 flex-shrink-0 ${online ? 'animate-spin' : ''}`} />
-      {online ? 'Звʼязок відновлено, синхронізую…' : 'Немає звʼязку — записи збережуться локально'}
+      {online ? t('offlineBanner.reconnected') : t('offlineBanner.offline')}
     </div>
   );
 }

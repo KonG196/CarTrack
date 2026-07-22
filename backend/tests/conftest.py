@@ -110,11 +110,12 @@ def client(db_session_factory: sessionmaker) -> Generator[TestClient, None, None
 def make_user(client: TestClient) -> Callable[..., dict[str, str]]:
 
     def _make_user(
-        email: str = DEFAULT_EMAIL, password: str = DEFAULT_PASSWORD
+        email: str = DEFAULT_EMAIL, password: str = DEFAULT_PASSWORD, language: str | None = None
     ) -> dict[str, str]:
-        response = client.post(
-            "/api/auth/register", json={"email": email, "password": password}
-        )
+        body = {"email": email, "password": password}
+        if language is not None:
+            body["language"] = language
+        response = client.post("/api/auth/register", json=body)
         assert response.status_code == 201, response.text
         response = client.post(
             "/api/auth/token", data={"username": email, "password": password}

@@ -7,6 +7,7 @@ from app.models import User
 from app.ratelimit import RateLimiter, client_ip
 from app.schemas import PlateLookupIn, PlateLookupOut
 from app.services import plate as plate_service
+from app.i18n import t
 
 router = APIRouter(tags=["plate"])
 
@@ -24,13 +25,13 @@ def lookup_plate(
     if not plate_service.enabled():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Пошук за номером не налаштований на цьому сервері.",
+            detail=t("err.plateNotConfigured", current_user.language),
         )
     key = (client_ip(request), current_user.id)
     if not lookup_limiter.check(key):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Забагато запитів. Спробуйте пізніше.",
+            detail=t("err.tooManyRequests", current_user.language),
             headers={"Retry-After": str(lookup_limiter.retry_after(key))},
         )
 
@@ -39,11 +40,11 @@ def lookup_plate(
     except plate_service.LookupUnavailable:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Сервіс пошуку тимчасово недоступний.",
+            detail=t("err.plateServiceUnavailable", current_user.language),
         )
     if found is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Авто з таким номером не знайдено в реєстрі.",
+            detail=t("err.plateNotFound", current_user.language),
         )
     return PlateLookupOut(**found)

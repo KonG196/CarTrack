@@ -59,7 +59,7 @@ def test_non_admin_cannot_backup(replies, monkeypatch: pytest.MonkeyPatch) -> No
     asyncio.run(handlers.cmd_backup(_message()))
 
     assert called == []  # never touched the DB dump
-    assert any("адміністратор" in r["text"] for r in replies)
+    assert any("admin" in r["text"].lower() for r in replies)
 
 
 def test_backup_disabled_is_admin_only_too(replies, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -69,7 +69,7 @@ def test_backup_disabled_is_admin_only_too(replies, monkeypatch: pytest.MonkeyPa
 
     asyncio.run(handlers.cmd_backup(_message()))
     assert called == []
-    assert any("адміністратор" in r["text"] for r in replies)
+    assert any("admin" in r["text"].lower() for r in replies)
 
 
 def test_admin_gets_a_backup_on_demand(replies, monkeypatch: pytest.MonkeyPatch) -> None:

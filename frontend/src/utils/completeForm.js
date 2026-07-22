@@ -7,6 +7,7 @@
  * the backend creates says what was actually serviced.
  */
 
+import i18n from '../i18n';
 import { num } from './refuelMath';
 import { todayIso } from './entryForm';
 
@@ -40,10 +41,10 @@ export function sumCostTotal(partsCost, laborCost) {
 
 export function validateCompleteValues(values) {
   const odometer = parseInt(values.odometer, 10);
-  if (!Number.isFinite(odometer) || odometer < 0) return 'Вкажіть коректний пробіг';
-  if (!values.date) return 'Вкажіть дату';
+  if (!Number.isFinite(odometer) || odometer < 0) return i18n.t('completeForm.invalidOdometer');
+  if (!values.date) return i18n.t('completeForm.dateRequired');
   const total = num(values.totalCost) ?? 0;
-  if (total < 0) return 'Вкажіть коректну вартість';
+  if (total < 0) return i18n.t('completeForm.invalidCost');
   return '';
 }
 

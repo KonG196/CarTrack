@@ -13,7 +13,7 @@ def mail_on(monkeypatch):
     """Turn the gate on and capture what would have been mailed."""
     sent: list[tuple[str, str]] = []
 
-    def fake_send(to: str, code: str) -> bool:
+    def fake_send(to: str, code: str, lang: str = "en") -> bool:
         sent.append((to, code))
         return True
 
@@ -50,7 +50,8 @@ def test_register_with_mail_server_gates_login(client: TestClient, mail_on) -> N
 
     login = _login(client)
     assert login.status_code == 403
-    assert "Підтвердіть пошту" in login.json()["detail"]
+    # English is the default language for a registration that doesn't specify one.
+    assert "Confirm your email" in login.json()["detail"]
 
 
 def test_verify_then_login(client: TestClient, mail_on) -> None:

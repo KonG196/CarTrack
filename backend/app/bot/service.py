@@ -23,6 +23,7 @@ from app.access import (
     role_rank,
     user_role_for_car,
 )
+from app.i18n import normalize_lang, t
 from app.models import (
     Car,
     LogEntry,
@@ -45,7 +46,7 @@ from app.services.intervals import compute_interval_status, effective_avg_daily_
 from app.services.intervals_complete import IntervalCompletion, complete_interval
 from app.services.ocr import ParsedReceipt
 from app.services.tires import due_rotation_km, is_tire_age_due, tire_age_years
-from app.services.ocr_llm import PhotoReading, recognize_receipt
+from app.services.ocr_llm import OcrUnavailable, PhotoReading, recognize_receipt
 from app.services.ocr_llm import recognize_photo as ocr_recognize_photo
 from app.services.photos import new_photo_filename, write_photo_file
 from app.services.report import build_car_report
@@ -59,12 +60,18 @@ SNOOZE_DAYS = 7
 # Monday..Sunday calendar week, since it only ever goes out on a Sunday.
 DIGEST_DAYS = 7
 
-DIGEST_TYPE_LABELS: dict[str, str] = {
-    "refuel": "заправки",
-    "maintenance": "ТО",
-    "repair": "ремонт",
-    "expense": "інші",
+# Log-type → i18n key suffix for the digest / status spend breakdown. The word
+# is resolved at call time in the reader's language.
+_DIGEST_TYPE_KEYS: dict[str, str] = {
+    "refuel": "typeRefuel",
+    "maintenance": "typeMaintenance",
+    "repair": "typeRepair",
+    "expense": "typeExpense",
 }
+
+
+def _type_word(log_type: str, lang: str) -> str:
+    return t(f"bot.svc.{_DIGEST_TYPE_KEYS[log_type]}", lang)
 
 
 @dataclass
@@ -413,39 +420,47 @@ def create_maintenance(
     return log
 
 
-def recognize_refuel(image_bytes: bytes) -> ParsedReceipt:
+def recognize_refuel(image_bytes: bytes, lang: str = "en") -> ParsedReceipt:
     """OCR a receipt photo into refuel fields.
 
-    Wraps the OCR service so callers never have to know about tesseract: a
-    missing binary surfaces as OcrUnavailableError, which the handlers turn
-    into a friendly Ukrainian reply instead of a stack trace.
+    Wraps the OCR service so callers never have to know about the OCR ladder: a
+    missing tesseract binary or a down vision model both surface as
+    OcrUnavailableError, which the handlers turn into a friendly reply instead
+    of a stack trace.
     """
     try:
-        return recognize_receipt(image_bytes)
+        return recognize_receipt(image_bytes, lang=lang)
     except pytesseract.TesseractNotFoundError as exc:
         raise OcrUnavailableError("tesseract binary is not installed") from exc
+    except OcrUnavailable as exc:
+        raise OcrUnavailableError("vision OCR is unavailable") from exc
 
 
-def recognize_photo(image_bytes: bytes) -> PhotoReading:
+def recognize_photo(image_bytes: bytes, lang: str = "en") -> PhotoReading:
     """OCR a photo the user sent without saying what it is.
 
     In a chat there is no form to pick a type in: whatever the station or the
     shop handed over gets photographed and sent, so the reader identifies it.
+    Uses the same vision path as the web scan (Gemini when configured).
     """
     try:
-        return ocr_recognize_photo(image_bytes)
+        return ocr_recognize_photo(image_bytes, lang=lang)
     except pytesseract.TesseractNotFoundError as exc:
         raise OcrUnavailableError("tesseract binary is not installed") from exc
+    except OcrUnavailable as exc:
+        raise OcrUnavailableError("vision OCR is unavailable") from exc
 
 
-def build_report(db: Session, car: Car) -> bytes:
-    return build_car_report(db, car)
+def build_report(db: Session, car: Car, lang: str = "en") -> bytes:
+    return build_car_report(db, car, lang)
 
 
 # Ukrainian summaries
 
 
-def format_interval_line(interval: ServiceInterval, computed: dict) -> str:
+def format_interval_line(
+    interval: ServiceInterval, computed: dict, lang: str = "en"
+) -> str:
     # An interval falls due when EITHER its distance or its time runs out, so it
     # can be overdue on one axis while the other still has slack. Once overdue,
     # only report what is overdue — "залишилось 10 873 км" beside "прострочено"
@@ -456,37 +471,48 @@ def format_interval_line(interval: ServiceInterval, computed: dict) -> str:
     remaining: list[str] = []
     if km_left is not None:
         if km_left < 0:
-            remaining.append(f"прострочено на {-km_left} км")
+            remaining.append(t("bot.svc.overdueKm", lang, km=-km_left))
         elif not overdue:
-            remaining.append(f"залишилось {km_left} км")
+            remaining.append(t("bot.svc.leftKm", lang, km=km_left))
     if days_left is not None:
         if days_left < 0:
-            remaining.append(f"прострочено на {-days_left} дн.")
+            remaining.append(t("bot.svc.overdueDays", lang, days=-days_left))
         elif not overdue:
-            remaining.append(f"залишилось {days_left} дн.")
-    detail = ", ".join(remaining) if remaining else "без прив'язки до пробігу чи дати"
+            remaining.append(t("bot.svc.leftDays", lang, days=days_left))
+    detail = ", ".join(remaining) if remaining else t("bot.svc.noLimit", lang)
     return f"- {interval.title}: {computed['health_pct']:.0f}% ({detail})"
 
 
 def car_label(car: Car, user: Optional[User] = None) -> str:
     label = f"{car.brand} {car.model}"
     if user is not None and is_shared_with(user, car):
-        return f"{label} (спільне)"
+        return f"{label} {t('bot.svc.shared', normalize_lang(user.language))}"
     return label
 
 
 def status_summary(db: Session, user: User, today: dt.date | None = None) -> str:
+    lang = normalize_lang(user.language)
     cars = list_cars(db, user)
     if not cars:
-        return "У гаражі поки немає авто. Додайте перше авто у веб-додатку Kapot Tracker."
+        return t("bot.svc.emptyGarage", lang)
     blocks: list[str] = []
     for car in cars:
-        lines = [f"{car_label(car, user)} — пробіг {car.current_odometer} км"]
+        lines = [
+            t(
+                "bot.svc.statusCarLine",
+                lang,
+                label=car_label(car, user),
+                km=car.current_odometer,
+            )
+        ]
         statuses = car_interval_statuses(db, car, today=today)[:3]
         if statuses:
-            lines.extend(format_interval_line(interval, computed) for interval, computed in statuses)
+            lines.extend(
+                format_interval_line(interval, computed, lang)
+                for interval, computed in statuses
+            )
         else:
-            lines.append("- Інтервали ТО не налаштовані.")
+            lines.append(f"- {t('bot.svc.intervalsNotSet', lang)}")
         blocks.append("\n".join(lines))
     return "\n\n".join(blocks)
 
@@ -1008,7 +1034,7 @@ def _week_consumption_l_100km(
 
 
 def _nearest_interval_phrase(
-    db: Session, car: Car, today: dt.date
+    db: Session, car: Car, today: dt.date, lang: str = "en"
 ) -> Optional[str]:
     statuses = car_interval_statuses(db, car, today=today)
     if not statuses:
@@ -1016,12 +1042,16 @@ def _nearest_interval_phrase(
     interval, computed = statuses[0]
     km_left, days_left = computed["km_left"], computed["days_left"]
     if km_left is not None:
-        when = f"через {km_left} км" if km_left >= 0 else f"прострочено на {-km_left} км"
+        when = (
+            t("bot.svc.inKm", lang, km=km_left)
+            if km_left >= 0
+            else t("bot.svc.overdueKm", lang, km=-km_left)
+        )
     elif days_left is not None:
         when = (
-            f"через {days_left} дн."
+            t("bot.svc.inDays", lang, days=days_left)
             if days_left >= 0
-            else f"прострочено на {-days_left} дн."
+            else t("bot.svc.overdueDays", lang, days=-days_left)
         )
     else:
         # Neither a km nor a date limit: nothing about it is «nearest».
@@ -1030,7 +1060,7 @@ def _nearest_interval_phrase(
 
 
 def build_weekly_digest(
-    db: Session, car: Car, today: dt.date | None = None
+    db: Session, car: Car, today: dt.date | None = None, lang: str = "en"
 ) -> Optional[str]:
     """One car's week in one Ukrainian message, or None when there was no week.
 
@@ -1061,25 +1091,25 @@ def build_weekly_digest(
     # describe the input set, not the calendar.
     totals = compute_analytics(week_logs, car, today=end)["totals"]
     breakdown = ", ".join(
-        f"{DIGEST_TYPE_LABELS[log_type]} {_money(amount)}"
+        f"{_type_word(log_type, lang)} {_money(amount)}"
         for log_type, amount in totals["by_type"].items()
         if amount > 0
     )
-    spent = f"Витрачено {_money(totals['all_time'])}"
+    spent = t("bot.svc.spent", lang, money=_money(totals["all_time"]))
 
     lines = [
-        f"📊 Тиждень з Kapot — {car_label(car)}",
+        t("bot.svc.digestHeader", lang, label=car_label(car)),
         f"{spent} ({breakdown})" if breakdown else spent,
     ]
     distance_km = _week_distance_km(logs, week_logs, start)
     if distance_km is not None:
-        lines.append(f"Пробіг: +{distance_km} км")
+        lines.append(t("bot.svc.distance", lang, km=distance_km))
     consumption = _week_consumption_l_100km(logs, car, start, end)
     if consumption is not None:
-        lines.append(f"Середній розхід: {consumption:.1f} л/100км")
-    nearest = _nearest_interval_phrase(db, car, today)
+        lines.append(t("bot.svc.consumption", lang, value=f"{consumption:.1f}"))
+    nearest = _nearest_interval_phrase(db, car, today, lang)
     if nearest is not None:
-        lines.append(f"Найближче ТО: {nearest}")
+        lines.append(t("bot.svc.nearest", lang, phrase=nearest))
     return "\n".join(lines)
 
 
@@ -1112,9 +1142,10 @@ def digest_targets(
     targets: list[tuple[User, list[WeeklyDigest]]] = []
     for user in users:
         digests: list[WeeklyDigest] = []
+        lang = normalize_lang(user.language)
         # Owned cars only — see the note above.
         for car in list_owned_cars(db, user):
-            text = build_weekly_digest(db, car, today=today)
+            text = build_weekly_digest(db, car, today=today, lang=lang)
             if text is not None:
                 digests.append(WeeklyDigest(car=car, text=text))
         if digests:

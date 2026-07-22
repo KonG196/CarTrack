@@ -1,3 +1,5 @@
+import i18n from '../i18n';
+
 // A наряд from the shop, mapped onto the maintenance form.
 //
 // The shop writes «Олива моторна 5W-30 5л»; the form has a checkbox called
@@ -8,13 +10,16 @@
 // Each canonical item and what a shop actually prints for it. Both halves must
 // hit: a filter line names a filter AND says which one, and «Фільтр масляний»
 // must not read as engine oil just because it says «масл».
+// `item` is the canonical (Ukrainian) value; the regex signs match a scanned
+// line in Ukrainian, Russian OR English (the OCR now returns items in the
+// user's language), so an English «Oil filter» still ticks its canonical box.
 const CANONICAL_SIGNS = [
-  { item: 'Масляний фільтр', needs: [/фільтр|фильтр/, /масл|олив/] },
-  { item: 'Повітряний фільтр', needs: [/фільтр|фильтр/, /повітр|воздуш/] },
-  { item: 'Салонний фільтр', needs: [/фільтр|фильтр/, /салон|кондиц|пилк/] },
-  { item: 'Паливний фільтр', needs: [/фільтр|фильтр/, /палив|топлив|дизел|соляр/] },
-  { item: 'Гальмівна рідина', needs: [/рідин|жидк/, /гальм|тормоз/] },
-  { item: 'Олива двигуна', needs: [/олив|мастил|масло/, /мотор|двигун|двигат|\d\dw-?\d\d/] },
+  { item: 'Масляний фільтр', needs: [/фільтр|фильтр|filter/, /масл|олив|oil/] },
+  { item: 'Повітряний фільтр', needs: [/фільтр|фильтр|filter/, /повітр|воздуш|air/] },
+  { item: 'Салонний фільтр', needs: [/фільтр|фильтр|filter/, /салон|кондиц|пилк|cabin|pollen/] },
+  { item: 'Паливний фільтр', needs: [/фільтр|фильтр|filter/, /палив|топлив|дизел|соляр|fuel/] },
+  { item: 'Гальмівна рідина', needs: [/рідин|жидк|fluid/, /гальм|тормоз|brake/] },
+  { item: 'Олива двигуна', needs: [/олив|мастил|масло|oil/, /мотор|двигун|двигат|engine|\d\dw-?\d\d/] },
 ];
 
 const MAX_ITEM_NAME = 80;
@@ -73,7 +78,7 @@ export function workOrderToFormValues(scan) {
 export function describeWorkOrder(scan) {
   const values = workOrderToFormValues(scan);
   const parts = [];
-  if (values.checkedItems.length) parts.push(`${values.checkedItems.length} позицій`);
-  if (values.totalCost != null) parts.push(`${values.totalCost} грн`);
+  if (values.checkedItems.length) parts.push(i18n.t('workOrder.itemsCount', { n: values.checkedItems.length }));
+  if (values.totalCost != null) parts.push(i18n.t('workOrder.totalCost', { amount: values.totalCost }));
   return parts.join(', ');
 }

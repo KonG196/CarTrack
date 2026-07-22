@@ -10,6 +10,7 @@ from app.database import get_db
 from app.models import ObdMetric, ObdSession, User
 from app.schemas import ObdMetricOut, ObdSessionDetail, ObdSessionOut, ObdVerdictOut
 from app.services.obd import ObdParseError, parse_obd_csv, session_verdicts, summarize
+from app.i18n import t
 
 router = APIRouter(tags=["obd"])
 
@@ -103,12 +104,12 @@ async def import_obd_csv(
     if content_type not in CSV_CONTENT_TYPES and not filename.lower().endswith(".csv"):
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail="Підтримується лише CSV-експорт Car Scanner",
+            detail=t("err.onlyCarScannerCsv", current_user.language),
         )
 
     too_large = HTTPException(
         status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-        detail="Файл завеликий (максимум 20 МБ)",
+        detail=t("err.fileTooLarge20", current_user.language),
     )
     # Same cap strategy as the photo endpoint: check the spooled size first,
     # then read at most one byte over the limit.

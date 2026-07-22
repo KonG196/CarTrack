@@ -1,14 +1,9 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import useAnimatedPresence from '../../hooks/useAnimatedPresence';
 
 const CLOSE_MS = 150;
-// Monday first, as a Ukrainian calendar prints it — not the browser's Sunday.
-const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'];
-const MONTHS = [
-  'Січень', 'Лютий', 'Березень', 'Квітень', 'Травень', 'Червень',
-  'Липень', 'Серпень', 'Вересень', 'Жовтень', 'Листопад', 'Грудень',
-];
 
 // Parsed and formatted by hand, never through `new Date('2026-07-16')`: that
 // reads the string as UTC midnight and can land on the day before in a western
@@ -52,6 +47,10 @@ export default function DateField({
   hint,
   containerClassName = '',
 }) {
+  const { t } = useTranslation();
+  // Monday first, as a Ukrainian calendar prints it — not the browser's Sunday.
+  const WEEKDAYS = t('uiDateField.weekdays', { returnObjects: true });
+  const MONTHS = t('uiDateField.months', { returnObjects: true });
   const fieldId = useId();
   const selected = parseISO(value);
   const [open, setOpen] = useState(false);
@@ -120,7 +119,7 @@ export default function DateField({
         className="field-input flex items-center justify-between text-left"
       >
         <span className={selected ? 'text-fg' : 'text-mist'}>
-          {selected ? displayValue(selected) : 'Оберіть дату'}
+          {selected ? displayValue(selected) : t('uiDateField.placeholder')}
         </span>
         <CalendarDays className="h-4 w-4 flex-shrink-0 text-mist" aria-hidden="true" />
       </button>
@@ -141,7 +140,7 @@ export default function DateField({
             <button
               type="button"
               onClick={() => shiftMonth(-1)}
-              aria-label="Попередній місяць"
+              aria-label={t('uiDateField.prevMonth')}
               className="rounded-lg p-1.5 text-mist transition-colors hover:bg-raised hover:text-fg"
             >
               <ChevronLeft className="h-4 w-4" />
@@ -152,7 +151,7 @@ export default function DateField({
             <button
               type="button"
               onClick={() => shiftMonth(1)}
-              aria-label="Наступний місяць"
+              aria-label={t('uiDateField.nextMonth')}
               className="rounded-lg p-1.5 text-mist transition-colors hover:bg-raised hover:text-fg"
             >
               <ChevronRight className="h-4 w-4" />
@@ -193,7 +192,7 @@ export default function DateField({
               onClick={() => pick(new Date())}
               className="rounded-lg px-2 py-1 text-xs font-medium text-amber transition-colors hover:bg-raised"
             >
-              Сьогодні
+              {t('uiDateField.today')}
             </button>
             {clearable && (
               <button
@@ -204,7 +203,7 @@ export default function DateField({
                 }}
                 className="rounded-lg px-2 py-1 text-xs text-mist transition-colors hover:bg-raised hover:text-fg"
               >
-                Очистити
+                {t('uiDateField.clear')}
               </button>
             )}
           </div>

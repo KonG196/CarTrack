@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuthStore } from './store/authStore';
 import { safeNext } from './utils/nextPath';
 import Layout from './components/Layout';
@@ -38,6 +39,10 @@ function PublicOnly({ children }) {
 }
 
 export default function App() {
+  // Subscribe the root to the active language. A switch re-renders the whole
+  // tree, so components that render domain-label helpers (fuel kind, categories,
+  // OBD metrics) without their own useTranslation still refresh.
+  useTranslation();
   return (
     <Routes>
       <Route

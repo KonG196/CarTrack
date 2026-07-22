@@ -8,6 +8,8 @@ prices match the rest of Analytics.
 
 from __future__ import annotations
 
+from app.domain_labels import expense_category_label, repair_category_label
+from app.i18n import normalize_lang, t
 from app.models import Car, LogEntry
 from app.services.fuel import compute_fuel_stats
 from app.services.stats import build_refuel_points, compute_station_stats
@@ -20,19 +22,20 @@ def available_years(logs: list[LogEntry]) -> list[int]:
     return sorted({log.date.year for log in logs}, reverse=True)
 
 
-def _biggest_title(log: LogEntry) -> str:
+def _biggest_title(log: LogEntry, lang: str) -> str:
     if log.type == "repair" and log.repair is not None:
-        return log.repair.category or "Ремонт"
+        return repair_category_label(log.repair.category, lang) or t("yr.repair", lang)
     if log.type == "expense" and log.expense is not None:
-        return log.expense.category or "Витрата"
+        return expense_category_label(log.expense.category, lang) or t("yr.expense", lang)
     if log.type == "refuel" and log.refuel is not None:
-        return log.refuel.gas_station or "Заправка"
+        return log.refuel.gas_station or t("yr.refuel", lang)
     if log.type == "maintenance":
-        return "ТО"
-    return "Запис"
+        return t("yr.service", lang)
+    return t("yr.entry", lang)
 
 
-def build_year_review(car: Car, logs: list[LogEntry], year: int) -> dict:
+def build_year_review(car: Car, logs: list[LogEntry], year: int, lang: str = "en") -> dict:
+    lang = normalize_lang(lang)
     year_logs = [log for log in logs if log.date.year == year]
     result: dict = {"year": year, "has_data": bool(year_logs), "available_years": available_years(logs)}
     if not year_logs:
@@ -79,7 +82,7 @@ def build_year_review(car: Car, logs: list[LogEntry], year: int) -> dict:
             ),
             "biggest_expense": {
                 "type": biggest.type,
-                "title": _biggest_title(biggest),
+                "title": _biggest_title(biggest, lang),
                 "amount": round(float(biggest.total_cost), 2),
                 "date": biggest.date.isoformat(),
             },

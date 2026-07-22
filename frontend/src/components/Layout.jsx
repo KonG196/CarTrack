@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { flushSync } from 'react-dom';
+import { useTranslation } from 'react-i18next';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Home, BookOpen, PlusCircle, BarChart2, Settings, Car, Plus } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
@@ -12,20 +13,12 @@ import Wordmark from './Wordmark';
 import { TourProvider } from '../tour/TourContext';
 import TourOverlay from '../tour/TourOverlay';
 
-function recordsPlural(n) {
-  const tens = n % 100;
-  const ones = n % 10;
-  if (ones === 1 && tens !== 11) return 'запис';
-  if (ones >= 2 && ones <= 4 && (tens < 12 || tens > 14)) return 'записи';
-  return 'записів';
-}
-
 const NAV_ITEMS = [
-  { to: '/', label: 'Головна', icon: Home, end: true },
-  { to: '/logbook', label: 'Журнал', icon: BookOpen, tour: 'nav-logbook' },
-  { to: '/add', label: 'Додати', icon: PlusCircle, primary: true, tour: 'nav-add' },
-  { to: '/analytics', label: 'Аналітика', icon: BarChart2, tour: 'nav-analytics' },
-  { to: '/garage', label: 'Налаштування', icon: Settings, tour: 'nav-settings' },
+  { to: '/', labelKey: 'nav.home', icon: Home, end: true },
+  { to: '/logbook', labelKey: 'nav.logbook', icon: BookOpen, tour: 'nav-logbook' },
+  { to: '/add', labelKey: 'nav.add', icon: PlusCircle, primary: true, tour: 'nav-add' },
+  { to: '/analytics', labelKey: 'nav.analytics', icon: BarChart2, tour: 'nav-analytics' },
+  { to: '/garage', labelKey: 'nav.settings', icon: Settings, tour: 'nav-settings' },
 ];
 
 // Горизонтальний порядок табів — з нього беремо напрямок слайду.
@@ -43,6 +36,7 @@ function directionFor(from, to) {
 }
 
 function CarSelector() {
+  const { t } = useTranslation();
   const cars = useCarStore((s) => s.cars);
   const activeCarId = useCarStore((s) => s.activeCarId);
   const setActiveCar = useCarStore((s) => s.setActiveCar);
@@ -56,7 +50,7 @@ function CarSelector() {
 
   return (
     <Menu
-      ariaLabel="Активне авто"
+      ariaLabel={t('nav.activeCar')}
       value={String(active.id)}
       onSelect={setActiveCar}
       items={cars.map((car) => {
@@ -84,7 +78,7 @@ function CarSelector() {
           className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-mist transition-colors hover:bg-raised hover:text-fg"
         >
           <Plus className="h-4 w-4 flex-shrink-0" />
-          Додати авто
+          {t('nav.addCar')}
         </NavLink>
       }
     />
@@ -92,6 +86,7 @@ function CarSelector() {
 }
 
 export default function Layout() {
+  const { t } = useTranslation();
   const token = useAuthStore((s) => s.token);
   const user = useAuthStore((s) => s.user);
   const fetchMe = useAuthStore((s) => s.fetchMe);
@@ -158,11 +153,11 @@ export default function Layout() {
     flushOutbox()
       .then((report) => {
         if (report.sent > 0) {
-          setSyncToast(`${report.sent} ${recordsPlural(report.sent)} синхронізовано`);
+          setSyncToast(t('layout.recordsSynced', { count: report.sent }));
         }
       })
       .catch(() => {});
-  }, [flushOutbox]);
+  }, [flushOutbox, t]);
 
   useEffect(() => {
     if (!token) return undefined;
@@ -184,7 +179,7 @@ export default function Layout() {
       <AppBadge />
       <header className="app-header sticky top-0 z-40 border-b border-edge bg-garage/90 pt-[env(safe-area-inset-top)] backdrop-blur">
         <div className="mx-auto flex max-w-md items-center justify-between gap-3 px-4 py-3">
-          <NavLink to="/" aria-label="На головну" className="shrink-0">
+          <NavLink to="/" aria-label={t('nav.toHome')} className="shrink-0">
             <Wordmark />
           </NavLink>
           <span data-tour="car-switcher" className="min-w-0">
@@ -202,7 +197,7 @@ export default function Layout() {
 
       <nav className="app-nav fixed inset-x-0 bottom-0 z-40 border-t border-edge bg-garage/95 backdrop-blur">
         <div className="mx-auto grid max-w-md grid-cols-5 items-end px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-1.5">
-          {NAV_ITEMS.map(({ to, label, icon: Icon, end, primary, tour }) => (
+          {NAV_ITEMS.map(({ to, labelKey, icon: Icon, end, primary, tour }) => (
             <NavLink
               key={to}
               to={to}
@@ -222,7 +217,7 @@ export default function Layout() {
               ) : (
                 <Icon className="h-5 w-5" />
               )}
-              <span>{label}</span>
+              <span>{t(labelKey)}</span>
             </NavLink>
           ))}
         </div>

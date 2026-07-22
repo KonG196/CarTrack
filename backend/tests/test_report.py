@@ -106,8 +106,8 @@ def test_report_returns_valid_pdf_with_content(
 
     text = _extract_text(response.content)
     assert "Toyota" in text
-    assert "Сервісна історія" in text
-    assert "Олива двигуна" in text
+    assert "Service history" in text
+    assert "Engine oil" in text
 
 
 def test_report_for_empty_car_is_still_valid_pdf(
@@ -121,7 +121,7 @@ def test_report_for_empty_car_is_still_valid_pdf(
 
     text = _extract_text(response.content)
     assert "Kapot Tracker" in text
-    assert "Записів поки немає" in text
+    assert "No entries yet" in text
 
 
 def test_report_requires_ownership(client: TestClient, make_car, make_user) -> None:
@@ -270,8 +270,8 @@ def test_report_totals_match_analytics_totals(
     text = _extract_text(
         client.get(f"/api/cars/{car['id']}/report", headers=auth_headers).content
     )
-    assert "6 775 грн" in text  # all-time total, analytics figure
-    assert "2 475 грн" in text  # refuel total, analytics figure
+    assert "6 775 UAH" in text  # all-time total, analytics figure
+    assert "2 475 UAH" in text  # refuel total, analytics figure
 
 
 def test_report_query_count_does_not_scale_with_logs(

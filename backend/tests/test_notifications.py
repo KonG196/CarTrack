@@ -12,7 +12,7 @@ TODAY = dt.date(2026, 7, 21)
 
 
 def _owner(db: Session, email: str = "notify@example.com", **car_kwargs) -> tuple[User, Car]:
-    user = User(email=email, hashed_password="x")
+    user = User(email=email, hashed_password="x", language="uk")
     db.add(user)
     db.flush()
     car = Car(

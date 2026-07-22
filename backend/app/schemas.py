@@ -7,6 +7,7 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.i18n import normalize_lang
 from app.services.vin import normalize_vin
 
 FuelType = Literal["diesel", "petrol", "lpg", "electric", "hybrid"]
@@ -87,6 +88,9 @@ DEFAULT_EXPENSE_CATEGORY = "Інше"
 class UserCreate(BaseModel):
     email: str = Field(min_length=3, max_length=255)
     password: str = Field(min_length=6, max_length=128)
+    # The UI language the account is created in; drives emails/bot/errors too.
+    # Optional so older clients still work — the register endpoint defaults it.
+    language: Optional[str] = None
 
     @field_validator("email")
     @classmethod
@@ -96,6 +100,11 @@ class UserCreate(BaseModel):
         if not local or not domain or "." not in domain:
             raise ValueError("invalid email address")
         return value
+
+    @field_validator("language")
+    @classmethod
+    def validate_language(cls, value: Optional[str]) -> Optional[str]:
+        return None if value is None else normalize_lang(value)
 
 
 class PasswordChangeIn(BaseModel):
@@ -145,6 +154,8 @@ class UserOut(BaseModel):
     notify_fuel: bool = True
     notify_seasonal: bool = True
     notify_rotation: bool = True
+    # UI language ('en' | 'uk'); also the language of emails/bot/error details.
+    language: str = "en"
     created_at: dt.datetime
 
 
@@ -171,11 +182,17 @@ class UserUpdate(BaseModel):
     notify_fuel: Optional[bool] = None
     notify_seasonal: Optional[bool] = None
     notify_rotation: Optional[bool] = None
+    language: Optional[str] = None
 
     @field_validator("display_name")
     @classmethod
     def validate_display_name(cls, value: Optional[str]) -> Optional[str]:
         return _clean_display_name(value)
+
+    @field_validator("language")
+    @classmethod
+    def validate_language(cls, value: Optional[str]) -> Optional[str]:
+        return None if value is None else normalize_lang(value)
 
 
 class Token(BaseModel):

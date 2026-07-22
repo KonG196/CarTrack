@@ -24,6 +24,7 @@ import httpx
 import logging
 
 from app.config import settings
+from app.i18n import normalize_lang
 from app.services import ocr_space
 from app.services.ocr import (
     GAS_STATION_BRANDS,
@@ -63,20 +64,33 @@ _TIMEOUT_SECONDS = 90.0
 _RETRY_STATUSES = (429, 500, 502, 503)
 _RETRY_DELAYS_SECONDS = (2.0, 5.0)
 
-_PROMPT = """\
-Це фото фіскального чека української АЗС. Витягни поля заправки і поверни
-СУВОРО один JSON-обʼєкт без пояснень:
-{"liters": число або null, "price_per_liter": число або null,
- "total_cost": число або null, "date": "YYYY-MM-DD" або null,
- "gas_station": "мережа АЗС" або null}
+# Output-language name injected into the prompt. The model reads a receipt in
+# ANY language but writes the text fields back in the user's language.
+_LANG_NAMES = {"en": "English", "uk": "Ukrainian"}
 
-- liters і price_per_liter — з рядка відпуску пального (вигляд "43,06 л х 15,99":
-  кількість літрів, потім ціна за літр).
-- price_per_liter — саме ціна пального; НЕ податкова і НЕ знижкова ставка
-  "грн/л" з інформаційних рядків.
-- total_cost — фактично сплачена сума (СУМА / ДО СПЛАТИ), після знижки.
-- Числа повертай з десятковою крапкою. Не вигадуй: якщо поля не видно — null.
-"""
+
+def _receipt_prompt(lang: str) -> str:
+    name = _LANG_NAMES.get(normalize_lang(lang), "English")
+    return (
+        "This is a photo of a fuel receipt (petrol/diesel/LPG/EV charging). It may "
+        "be from ANY country and printed in ANY language. Extract the refuel fields "
+        "and return STRICTLY one JSON object, no explanations:\n"
+        '{"liters": number or null, "price_per_liter": number or null,\n'
+        ' "total_cost": number or null, "date": "YYYY-MM-DD" or null,\n'
+        ' "gas_station": string or null}\n\n'
+        "- liters and price_per_liter come from the fuel-dispensing line "
+        '(e.g. "43.06 L x 15.99" = litres, then price per litre). If the quantity '
+        "is in US/imperial gallons, convert to litres (1 gal = 3.785 L) and adjust "
+        "the unit price to match.\n"
+        "- price_per_liter is the fuel unit price itself, NOT a tax rate or a "
+        "discount rate.\n"
+        "- total_cost is the amount actually paid (total / amount due), after any "
+        "discount. Keep the receipt's own number; do NOT convert the currency.\n"
+        "- Numbers use a decimal point. Do NOT invent values: if a field is not "
+        "visible, use null.\n"
+        f"- Write the gas_station value in {name} (transliterate the brand into the "
+        f"{name} script if needed)."
+    )
 
 
 def _as_float(value: Any) -> Optional[float]:
@@ -261,9 +275,9 @@ def _is_out_of_credit(response: httpx.Response) -> bool:
 
 
 def recognize_receipt_llm(
-    image_bytes: bytes, content_type: str
+    image_bytes: bytes, content_type: str, lang: str = "en"
 ) -> Optional[ParsedReceipt]:
-    data = _ask_gemini(_PROMPT, image_bytes, content_type)
+    data = _ask_gemini(_receipt_prompt(lang), image_bytes, content_type)
     return parsed_receipt_from_llm(data) if data is not None else None
 
 
@@ -310,7 +324,9 @@ def _receipt_score(text: str) -> int:
     return parse_receipt_text(text).found_in_text
 
 
-def recognize_receipt(image_bytes: bytes, content_type: str = "image/jpeg") -> ParsedReceipt:
+def recognize_receipt(
+    image_bytes: bytes, content_type: str = "image/jpeg", lang: str = "en"
+) -> ParsedReceipt:
     """Read a receipt: the free rungs first, the vision model when they fall short.
 
     The single entry point for every caller. It used to live inline in the API
@@ -326,7 +342,7 @@ def recognize_receipt(image_bytes: bytes, content_type: str = "image/jpeg") -> P
         # reads the same receipt in ~11s — so a tesseract pre-pass only added
         # latency. Go straight to the model.
         try:
-            llm_parsed = recognize_receipt_llm(image_bytes, content_type)
+            llm_parsed = recognize_receipt_llm(image_bytes, content_type, lang)
         except Exception as exc:
             logger.warning("Vision OCR failed", exc_info=True)
             raise OcrUnavailable from exc
@@ -369,22 +385,26 @@ def _work_order_score(text: str) -> int:
 _ORDER_ENOUGH = 50
 
 
-_ORDER_PROMPT = """\
-Це фото українського наряду-замовлення або рахунку-фактури зі СТО.
-Поверни СУВОРО один JSON-обʼєкт без пояснень:
-{"parts_cost": число або null, "labor_cost": число або null,
- "total_cost": число або null, "date": "YYYY-MM-DD" або null,
- "items": ["назва позиції", ...]}
-
-- labor_cost — разом за роботи; parts_cost — разом за запчастини й матеріали;
-  total_cost — сума до сплати.
-- УВАГА: слово «Разом» може стояти двічі й означати різне — під заголовком
-  «Вартість робіт» це роботи, під «Вартість придбаних товарів та матеріалів» —
-  запчастини. Дивись, під яким заголовком стоїть сума.
-- items — лише виконані роботи і встановлені запчастини. НЕ включай реквізити
-  СТО, дані клієнта, авто, шапки таблиць і підсумкові рядки.
-- Числа з десятковою крапкою. Не вигадуй: чого не видно — null.
-"""
+def _order_prompt(lang: str) -> str:
+    name = _LANG_NAMES.get(normalize_lang(lang), "English")
+    return (
+        "This is a photo of a vehicle service order or repair invoice. It may be "
+        "from ANY country and printed in ANY language. Return STRICTLY one JSON "
+        "object, no explanations:\n"
+        '{"parts_cost": number or null, "labor_cost": number or null,\n'
+        ' "total_cost": number or null, "date": "YYYY-MM-DD" or null,\n'
+        ' "items": [string, ...]}\n\n'
+        "- labor_cost is the total for labour/work; parts_cost is the total for "
+        "parts and materials; total_cost is the amount due.\n"
+        '- A "total"/"subtotal" word may appear more than once meaning different '
+        "things — look at which heading (labour vs parts) the sum sits under.\n"
+        "- items = only the work performed and the parts installed. Do NOT include "
+        "the shop's details, the customer/vehicle data, table headers or summary "
+        "rows.\n"
+        "- Keep the receipt's own numbers; do NOT convert the currency. Numbers use "
+        "a decimal point. Do not invent — if not visible, use null.\n"
+        f"- Write each items entry in {name} (translate the description into {name})."
+    )
 
 
 def parsed_work_order_from_llm(data: Any) -> Optional[ParsedWorkOrder]:
@@ -437,7 +457,7 @@ def _as_past_date_str(value: Any) -> Optional[str]:
 
 
 def recognize_work_order(
-    image_bytes: bytes, content_type: str = "image/jpeg"
+    image_bytes: bytes, content_type: str = "image/jpeg", lang: str = "en"
 ) -> ParsedWorkOrder:
     """Read a service order off a photo: the free rungs, then the model.
 
@@ -451,7 +471,7 @@ def recognize_work_order(
         # on the prod CPU and reads a photographed наряд poorly, while the model
         # reads the table cleanly in ~11s. Go straight to the model.
         try:
-            data = _ask_gemini(_ORDER_PROMPT, image_bytes, content_type)
+            data = _ask_gemini(_order_prompt(lang), image_bytes, content_type)
         except Exception as exc:
             logger.warning("Vision OCR failed", exc_info=True)
             raise OcrUnavailable from exc
@@ -512,16 +532,75 @@ def _photo_score(text: str) -> int:
     return reading.receipt.found_in_text
 
 
-def recognize_photo(image_bytes: bytes, content_type: str = "image/jpeg") -> PhotoReading:
+def _photo_prompt(lang: str) -> str:
+    """One combined prompt: classify the photo AND extract its fields.
+
+    The bot sends a photo without saying what it is, so the model both decides
+    (fuel receipt vs service order) and reads it — the same vision path the web
+    scan uses, any country, any language, text written back in the user's."""
+    name = _LANG_NAMES.get(normalize_lang(lang), "English")
+    return (
+        "This is a photo of EITHER a fuel receipt OR a vehicle service order / "
+        "repair invoice. It may be from ANY country in ANY language. Decide which "
+        "it is, extract the fields, and return STRICTLY one JSON object, no "
+        "explanations:\n"
+        '{"kind": "refuel" | "work_order" | "unreadable",\n'
+        ' "liters": number|null, "price_per_liter": number|null,\n'
+        ' "total_cost": number|null, "date": "YYYY-MM-DD"|null,\n'
+        ' "gas_station": string|null,\n'
+        ' "parts_cost": number|null, "labor_cost": number|null,\n'
+        ' "items": [string, ...]}\n\n'
+        '- A fuel receipt (filling station / EV charge): kind="refuel". Fill '
+        "liters, price_per_liter, total_cost, gas_station. liters and the unit "
+        "price come from the fuel line; if the quantity is in gallons convert to "
+        "litres (1 gal = 3.785 L). price_per_liter is the fuel unit price, NOT a "
+        "tax/discount rate. total_cost is the amount paid after discount.\n"
+        '- A service order / repair invoice (garage / workshop): kind="work_order". '
+        "Fill parts_cost (parts and materials), labor_cost (work), total_cost "
+        "(amount due), and items — only the work done and parts installed, NOT the "
+        "shop/customer/vehicle details, table headers or summary rows.\n"
+        '- Neither, or unreadable: kind="unreadable".\n'
+        "- Keep the receipt's own numbers; do NOT convert currency. Numbers use a "
+        "decimal point. Do not invent — if not visible, use null.\n"
+        f"- Write text fields (gas_station, items) in {name}."
+    )
+
+
+def _photo_reading_from_llm(data: Any) -> Optional[PhotoReading]:
+    if not isinstance(data, dict):
+        return None
+    kind = data.get("kind")
+    if kind not in ("refuel", "work_order", "unreadable"):
+        kind = "unreadable"
+    receipt = parsed_receipt_from_llm(data)
+    order = parsed_work_order_from_llm(data)
+    if receipt is None or order is None:
+        return None
+    return PhotoReading(kind, receipt, order)
+
+
+def recognize_photo(
+    image_bytes: bytes, content_type: str = "image/jpeg", lang: str = "en"
+) -> PhotoReading:
     """Read a photo without being told what it is — a receipt or a service order.
 
-    One climb up the rungs, both parsers on the text it returns, so a bot user
-    photographs whatever paper the shop handed them and never picks a mode.
-
-    The rung is asked for table layout: a receipt reads the same either way,
-    while an order without it comes back a column at a time — every name, then
-    every price — and no line holds both.
+    Vision-first, exactly like the web scan: one Gemini call classifies AND reads
+    the photo (any country, any language, text back in the user's language). Only
+    when no vision model is configured does it fall back to the free rungs — one
+    climb, both text parsers on what they return.
     """
+    if settings.GEMINI_API_KEY:
+        try:
+            data = _ask_gemini(_photo_prompt(lang), image_bytes, content_type)
+        except Exception as exc:
+            logger.warning("Vision OCR failed", exc_info=True)
+            raise OcrUnavailable from exc
+        if data is not None:
+            reading = _photo_reading_from_llm(data)
+            if reading is not None:
+                return reading
+        raise OcrUnavailable
+
     return _classify(
         read_text(image_bytes, content_type, _photo_score, _ORDER_ENOUGH, is_table=True)
     )

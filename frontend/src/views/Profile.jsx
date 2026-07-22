@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
   Check,
@@ -20,6 +21,7 @@ import { Button, Card, ConfirmDialog, ErrorMessage, Spinner, TextField } from '.
 import { useAuthStore } from '../store/authStore';
 
 function ProfileCard({ onToast }) {
+  const { t } = useTranslation();
   const user = useAuthStore((s) => s.user);
   const saveDisplayName = useAuthStore((s) => s.saveDisplayName);
 
@@ -39,15 +41,15 @@ function ProfileCard({ onToast }) {
   const handleSave = async (e) => {
     e.preventDefault();
     const name = value.trim();
-    if (!name) return setError('Вкажіть імʼя');
+    if (!name) return setError(t('profile.nameRequired'));
     setError('');
     setSaving(true);
     try {
       await saveDisplayName(name);
       setDraft(null);
-      onToast('Імʼя збережено');
+      onToast(t('profile.nameSaved'));
     } catch (err) {
-      setError(extractError(err, 'Не вдалося зберегти імʼя'));
+      setError(extractError(err, t('profile.nameSaveFailed')));
     } finally {
       setSaving(false);
     }
@@ -58,10 +60,10 @@ function ProfileCard({ onToast }) {
       <div>
         <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-fg">
           <UserCircle className="h-4 w-4 text-mist" />
-          Ваше імʼя
+          {t('profile.yourName')}
         </h2>
         <p className="mt-1 text-xs text-mist">
-          Так вас підписано під записами у спільних авто. Без імені — {emailPrefix || 'початок email'}.
+          {t('profile.nameHint', { name: emailPrefix || t('profile.emailStart') })}
         </p>
       </div>
 
@@ -69,14 +71,14 @@ function ProfileCard({ onToast }) {
 
       <form onSubmit={handleSave} className="mt-3 flex items-end gap-2">
         <TextField
-          label="Імʼя"
+          label={t('profile.name')}
           maxLength={80}
           value={value}
           onChange={(e) => setDraft(e.target.value)}
           containerClassName="flex-1"
         />
         <Button type="submit" disabled={saving || !dirty} className="flex-shrink-0">
-          {saving ? 'Збереження…' : 'Зберегти'}
+          {saving ? t('common.saving') : t('common.save')}
         </Button>
       </form>
     </Card>
@@ -84,6 +86,7 @@ function ProfileCard({ onToast }) {
 }
 
 function TelegramCard({ onToast }) {
+  const { t } = useTranslation();
   const [status, setStatus] = useState(null);
   const [linkData, setLinkData] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -100,7 +103,7 @@ function TelegramCard({ onToast }) {
       .catch(() => {
         if (!cancelled) {
           setStatus({ linked: false });
-          setError('Не вдалося завантажити статус Telegram');
+          setError(t('profile.telegramStatusFailed'));
         }
       });
     return () => {
@@ -115,7 +118,7 @@ function TelegramCard({ onToast }) {
       const data = await telegramApi.createLinkCode();
       setLinkData(data);
     } catch (err) {
-      setError(extractError(err, 'Не вдалося створити код привʼязки'));
+      setError(extractError(err, t('profile.linkCodeFailed')));
     } finally {
       setBusy(false);
     }
@@ -124,9 +127,9 @@ function TelegramCard({ onToast }) {
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(linkData.code);
-      onToast('Код скопійовано');
+      onToast(t('profile.codeCopied'));
     } catch {
-      setError('Не вдалося скопіювати код');
+      setError(t('profile.copyFailed'));
     }
   };
 
@@ -138,9 +141,9 @@ function TelegramCard({ onToast }) {
       await telegramApi.unlink();
       setStatus({ linked: false });
       setLinkData(null);
-      onToast('Telegram відвʼязано');
+      onToast(t('profile.telegramUnlinked'));
     } catch (err) {
-      setError(extractError(err, 'Не вдалося відвʼязати Telegram'));
+      setError(extractError(err, t('profile.unlinkFailed')));
     } finally {
       setBusy(false);
     }
@@ -152,16 +155,16 @@ function TelegramCard({ onToast }) {
         <div>
           <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-fg">
             <Send className="h-4 w-4 text-signal" />
-            Telegram-бот
+            {t('profile.telegramBot')}
           </h2>
           <p className="mt-1 text-xs text-mist">
-            Нагадування про ТО та швидкі записи пробігу й витрат просто з Telegram.
+            {t('profile.telegramHint')}
           </p>
         </div>
         {status?.linked && (
           <span className="flex flex-shrink-0 items-center gap-1 rounded-full bg-ok/15 px-2.5 py-1 text-xs font-medium text-ok">
             <Check className="h-3 w-3" />
-            Привʼязано
+            {t('profile.linked')}
           </span>
         )}
       </div>
@@ -178,13 +181,13 @@ function TelegramCard({ onToast }) {
             disabled={busy}
             className="mt-3 text-mist"
           >
-            Відвʼязати
+            {t('profile.unlink')}
           </Button>
           <ConfirmDialog
             open={confirmUnlink}
-            title="Відвʼязати Telegram?"
-            message="Відвʼязати Telegram? Бот перестане надсилати нагадування."
-            confirmLabel="Відвʼязати"
+            title={t('profile.unlinkTelegramTitle')}
+            message={t('profile.unlinkTelegramMessage')}
+            confirmLabel={t('profile.unlink')}
             onConfirm={handleUnlink}
             onCancel={() => setConfirmUnlink(false)}
           />
@@ -198,7 +201,7 @@ function TelegramCard({ onToast }) {
             <button
               type="button"
               onClick={handleCopy}
-              aria-label="Скопіювати код"
+              aria-label={t('profile.copyCode')}
               className="flex-shrink-0 rounded-lg p-1.5 text-mist transition-colors hover:bg-raised hover:text-fg"
             >
               <Copy className="h-4 w-4" />
@@ -211,18 +214,18 @@ function TelegramCard({ onToast }) {
               className="w-full"
             >
               <ExternalLink className="h-4 w-4" />
-              Відкрити бота
+              {t('profile.openBot')}
             </Button>
           )}
           <p className="text-xs text-mist">
-            Надішліть боту команду{' '}
-            <span className="font-mono text-fg">/start {'<код>'}</span>. Код діє{' '}
-            {linkData.expires_in_minutes} хвилин.
+            {t('profile.sendCommand')}{' '}
+            <span className="font-mono text-fg">/start {t('profile.codePlaceholder')}</span>.{' '}
+            {t('profile.codeExpires', { minutes: linkData.expires_in_minutes })}
           </p>
         </div>
       ) : (
         <Button onClick={handleCreateCode} disabled={busy} className="mt-3 w-full">
-          {busy ? 'Створення коду…' : 'Привʼязати Telegram'}
+          {busy ? t('profile.creatingCode') : t('profile.linkTelegram')}
         </Button>
       )}
     </Card>
@@ -230,6 +233,7 @@ function TelegramCard({ onToast }) {
 }
 
 function PasswordCard({ onToast }) {
+  const { t } = useTranslation();
   const changePassword = useAuthStore((s) => s.changePassword);
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
@@ -239,10 +243,10 @@ function PasswordCard({ onToast }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (next.length < 6) return setError('Пароль має бути не коротшим за 6 символів');
+    if (next.length < 6) return setError(t('profile.passwordTooShort'));
     // Caught here rather than by the server: a mistyped confirmation is the one
     // error that would otherwise succeed and lock the user out.
-    if (next !== repeat) return setError('Паролі не збігаються');
+    if (next !== repeat) return setError(t('profile.passwordsMismatch'));
     setError('');
     setSaving(true);
     try {
@@ -250,9 +254,9 @@ function PasswordCard({ onToast }) {
       setCurrent('');
       setNext('');
       setRepeat('');
-      onToast('Пароль змінено');
+      onToast(t('profile.passwordChanged'));
     } catch (err) {
-      setError(extractError(err, 'Не вдалося змінити пароль'));
+      setError(extractError(err, t('profile.passwordChangeFailed')));
     } finally {
       setSaving(false);
     }
@@ -262,14 +266,14 @@ function PasswordCard({ onToast }) {
     <Card>
       <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-fg">
         <KeyRound className="h-4 w-4 text-mist" />
-        Пароль
+        {t('profile.password')}
       </h2>
       <p className="mt-1 text-xs text-mist">
-        Поточний пароль потрібен, щоб чужа відкрита сесія не могла забрати акаунт.
+        {t('profile.passwordHint')}
       </p>
       <form onSubmit={handleSubmit} className="mt-3 space-y-3">
         <TextField
-          label="Поточний пароль"
+          label={t('profile.currentPassword')}
           type="password"
           autoComplete="current-password"
           value={current}
@@ -277,14 +281,14 @@ function PasswordCard({ onToast }) {
         />
         <div className="grid grid-cols-2 gap-3">
           <TextField
-            label="Новий пароль"
+            label={t('profile.newPassword')}
             type="password"
             autoComplete="new-password"
             value={next}
             onChange={(e) => setNext(e.target.value)}
           />
           <TextField
-            label="Ще раз"
+            label={t('profile.repeatPassword')}
             type="password"
             autoComplete="new-password"
             value={repeat}
@@ -293,7 +297,7 @@ function PasswordCard({ onToast }) {
         </div>
         <ErrorMessage>{error}</ErrorMessage>
         <Button type="submit" disabled={saving || !current || !next}>
-          {saving ? 'Збереження…' : 'Змінити пароль'}
+          {saving ? t('common.saving') : t('profile.changePassword')}
         </Button>
       </form>
     </Card>
@@ -301,6 +305,7 @@ function PasswordCard({ onToast }) {
 }
 
 function EmailCard({ onToast }) {
+  const { t } = useTranslation();
   const user = useAuthStore((s) => s.user);
   const fetchMe = useAuthStore((s) => s.fetchMe);
   const [email, setEmail] = useState('');
@@ -318,9 +323,9 @@ function EmailCard({ onToast }) {
       const { pending_email: parked } = await requestEmailChange(email.trim(), password);
       setPending(parked);
       setPassword('');
-      onToast(`Код надіслано на ${parked}`);
+      onToast(t('profile.codeSentTo', { email: parked }));
     } catch (err) {
-      setError(extractError(err, 'Не вдалося змінити пошту'));
+      setError(extractError(err, t('profile.emailChangeFailed')));
     } finally {
       setBusy(false);
     }
@@ -336,9 +341,9 @@ function EmailCard({ onToast }) {
       setPending(null);
       setEmail('');
       setCode('');
-      onToast('Пошту змінено');
+      onToast(t('profile.emailChanged'));
     } catch (err) {
-      setError(extractError(err, 'Код невірний або протермінований'));
+      setError(extractError(err, t('profile.codeInvalid')));
     } finally {
       setBusy(false);
     }
@@ -348,10 +353,10 @@ function EmailCard({ onToast }) {
     <Card>
       <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-fg">
         <Mail className="h-4 w-4 text-mist" />
-        Пошта
+        {t('profile.email')}
       </h2>
       <p className="mt-1 text-xs text-mist">
-        Зараз вхід за <span className="text-fg">{user?.email}</span>.
+        {t('profile.currentLoginLabel')} <span className="text-fg">{user?.email}</span>.
       </p>
 
       {pending ? (
@@ -359,11 +364,11 @@ function EmailCard({ onToast }) {
           {/* The address moves only when a code from it comes back. Until then
               the old one still logs in — a typo costs a retry, not the account. */}
           <p className="rounded-xl border border-edge bg-raised px-3 py-2 text-xs text-mist">
-            Код надіслано на <span className="text-fg">{pending}</span>. Поки не
-            введете — вхід лишається на старій адресі.
+            {t('profile.codeSentToPrefix')} <span className="text-fg">{pending}</span>.{' '}
+            {t('profile.untilConfirmed')}
           </p>
           <TextField
-            label="Код з листа"
+            label={t('profile.codeFromEmail')}
             inputMode="numeric"
             maxLength={6}
             numeric
@@ -373,24 +378,24 @@ function EmailCard({ onToast }) {
           <ErrorMessage>{error}</ErrorMessage>
           <div className="flex gap-2">
             <Button type="submit" disabled={busy || !code.trim()} className="flex-1">
-              {busy ? 'Перевірка…' : 'Підтвердити'}
+              {busy ? t('profile.verifying') : t('common.confirm')}
             </Button>
             <Button variant="secondary" onClick={() => setPending(null)} disabled={busy}>
-              Скасувати
+              {t('common.cancel')}
             </Button>
           </div>
         </form>
       ) : (
         <form onSubmit={handleRequest} className="mt-3 space-y-3">
           <TextField
-            label="Нова пошта"
+            label={t('profile.newEmail')}
             type="email"
             autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
           <TextField
-            label="Пароль"
+            label={t('profile.password')}
             type="password"
             autoComplete="current-password"
             value={password}
@@ -398,7 +403,7 @@ function EmailCard({ onToast }) {
           />
           <ErrorMessage>{error}</ErrorMessage>
           <Button type="submit" disabled={busy || !email.trim() || !password}>
-            {busy ? 'Надсилання…' : 'Надіслати код на нову пошту'}
+            {busy ? t('profile.sending') : t('profile.sendCodeToNewEmail')}
           </Button>
         </form>
       )}
@@ -407,6 +412,7 @@ function EmailCard({ onToast }) {
 }
 
 function DangerZone() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const deleteAccount = useAuthStore((s) => s.deleteAccount);
   const [password, setPassword] = useState('');
@@ -423,7 +429,7 @@ function DangerZone() {
       // Account and session are gone; land on the login screen.
       navigate('/login', { replace: true });
     } catch (err) {
-      setError(extractError(err, 'Не вдалося видалити акаунт'));
+      setError(extractError(err, t('profile.deleteFailed')));
       setBusy(false);
     }
   };
@@ -432,11 +438,10 @@ function DangerZone() {
     <Card className="border-crit/30">
       <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-crit">
         <Trash2 className="h-4 w-4" />
-        Видалити акаунт
+        {t('profile.deleteAccount')}
       </h2>
       <p className="mt-1 text-xs text-mist">
-        Безповоротно зникнуть усі ваші авто, історія обслуговування, документи й фото.
-        Скасувати неможливо. Введіть пароль для підтвердження.
+        {t('profile.deleteHint')}
       </p>
       <form
         onSubmit={(e) => {
@@ -446,7 +451,7 @@ function DangerZone() {
         className="mt-3 space-y-3"
       >
         <TextField
-          label="Пароль"
+          label={t('profile.password')}
           type="password"
           autoComplete="current-password"
           value={password}
@@ -454,15 +459,15 @@ function DangerZone() {
         />
         <ErrorMessage>{error}</ErrorMessage>
         <Button type="submit" variant="danger" disabled={busy || !password}>
-          {busy ? 'Видалення…' : 'Видалити акаунт назавжди'}
+          {busy ? t('profile.deleting') : t('profile.deleteAccountForever')}
         </Button>
       </form>
 
       <ConfirmDialog
         open={confirming}
-        title="Видалити акаунт назавжди?"
-        message="Уся сервісна історія ваших авто буде знищена без можливості відновлення."
-        confirmLabel="Так, видалити"
+        title={t('profile.deleteForeverTitle')}
+        message={t('profile.deleteForeverMessage')}
+        confirmLabel={t('profile.yesDelete')}
         onConfirm={handleDelete}
         onCancel={() => setConfirming(false)}
       />
@@ -471,13 +476,14 @@ function DangerZone() {
 }
 
 export default function Profile() {
+  const { t } = useTranslation();
   const [toast, setToast] = useState('');
 
   return (
     <div className="stagger space-y-4">
       <Toast message={toast} onDone={() => setToast('')} />
 
-      <BackLink to="/garage">Профіль</BackLink>
+      <BackLink to="/garage">{t('profile.title')}</BackLink>
 
       <ProfileCard onToast={setToast} />
       <EmailCard onToast={setToast} />

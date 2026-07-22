@@ -177,6 +177,21 @@ _BASELINES: tuple[Baseline, ...] = (
     Baseline(("діагностик",), (), _flat(400), "робота 200-500"),
     Baseline(("колодк",), (), _flat(2500), "колодки ~1800 + робота ~700"),
     Baseline(("свічк",), (), _spark_plugs, "свічки ~1200 + робота ~400; дизель їх не має"),
+    # English titles (preset titles seeded for English users). Ukrainian rows
+    # above never match these; filters before oil, same as the Ukrainian order.
+    Baseline(("oil filter",), (), _flat(700), "filter ~600 + labour with the oil change"),
+    Baseline(("air filter",), (), _flat(800), "filter ~600 + labour ~200"),
+    Baseline(("cabin filter",), (), _flat(900), "filter ~600 + labour ~300"),
+    Baseline(("fuel filter",), (), _fuel_filter, "diesel ~1400 + labour ~500; petrol cheaper"),
+    Baseline(("brake", "fluid"), (), _flat(1150), "fluid ~450 + bleed ~700"),
+    Baseline(("timing",), (), _timing_belt, "kit ~5000 + labour ~3000; more with the pump"),
+    Baseline(("antifreeze",), (), _flat(1650), "coolant ~800 + labour ~850"),
+    Baseline(("coolant",), (), _flat(1650), "coolant ~800 + labour ~850"),
+    Baseline(("engine oil",), (), _oil_change, "engine volume × ~500 UAH/L + filter ~600 + labour ~400"),
+    Baseline(("oil",), ("filter",), _oil_change, "engine volume × ~500 UAH/L + filter ~600 + labour ~400"),
+    Baseline(("diagnostic",), (), _flat(400), "labour 200-500"),
+    Baseline(("brake", "pad"), (), _flat(2500), "pads ~1800 + labour ~700"),
+    Baseline(("spark",), (), _spark_plugs, "plugs ~1200 + labour ~400; diesels have none"),
 )
 
 _DISPLACEMENT_LITRES_RE = re.compile(r"\b([0-9])[.,]([0-9])\b")

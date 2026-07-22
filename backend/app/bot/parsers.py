@@ -11,14 +11,14 @@ MAX_ODOMETER = 2_000_000
 # «пробіг 240054», «пробег 240 054», «Пробіг: 240054» — the word carries the
 # intent so a stray number can never be one.
 _ODOMETER_WORD_RE = re.compile(
-    r"(?:пробіг|пробіr|пробег|probig|odo)\s*[:=]?\s*([\d\s\u00a0]+)", re.IGNORECASE
+    r"(?:пробіг|пробіr|пробег|probig|odo|mileage)\s*[:=]?\s*([\d\s\u00a0]+)", re.IGNORECASE
 )
 # "<title> <amount>": the title must contain at least one non-space character
 # before the trailing amount, so a bare number never matches (that is an
 # odometer update, not an expense).
 _QUICK_EXPENSE_RE = re.compile(r"(?P<title>.*\S)\s+(?P<amount>\d+(?:[.,]\d{1,2})?)")
 
-_REFUEL_PREFIX_RE = re.compile(r"^заправ\w*", re.IGNORECASE)
+_REFUEL_PREFIX_RE = re.compile(r"^(?:заправ|refuel|fuel|fill)\w*", re.IGNORECASE)
 _REFUEL_NUMBER = r"\d+(?:[.,]\d+)?"
 _REFUEL_LITERS_RE = re.compile(
     rf"(?<![\d.,/])({_REFUEL_NUMBER})[ \t]*(?:л|l)\b", re.IGNORECASE

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Users, UserPlus, Copy, Trash2, LogOut, Check } from 'lucide-react';
 import { useCarStore } from '../store/carStore';
 import { extractError } from '../api/client';
@@ -7,17 +8,8 @@ import { canDo, roleLabel } from '../utils/permissions';
 import { formatDate } from '../utils/format';
 import { Button, SelectField, Card, Spinner, ErrorMessage, Modal, ConfirmDialog } from './UI';
 
-const INVITE_ROLES = [
-  { value: 'editor', label: 'Редактор — може вести журнал' },
-  { value: 'viewer', label: 'Спостерігач — лише перегляд' },
-];
-
-const MEMBER_ROLES = [
-  { value: 'editor', label: 'Редактор' },
-  { value: 'viewer', label: 'Спостерігач' },
-];
-
 function InviteModal({ open, onClose, onCreate }) {
+  const { t } = useTranslation();
   const [role, setRole] = useState('editor');
   const [invite, setInvite] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -39,7 +31,7 @@ function InviteModal({ open, onClose, onCreate }) {
     try {
       setInvite(await onCreate(role));
     } catch (err) {
-      setError(extractError(err, 'Не вдалося створити запрошення'));
+      setError(extractError(err, t('sharing.inviteCreateError')));
     } finally {
       setBusy(false);
     }
@@ -52,48 +44,52 @@ function InviteModal({ open, onClose, onCreate }) {
       await navigator.clipboard.writeText(link);
       setCopied(true);
     } catch {
-      setError('Не вдалося скопіювати. Скопіюйте посилання вручну.');
+      setError(t('sharing.copyError'));
     }
   };
 
+  const inviteRoles = [
+    { value: 'editor', label: t('sharing.inviteRoleEditor') },
+    { value: 'viewer', label: t('sharing.inviteRoleViewer') },
+  ];
+
   return (
-    <Modal open={open} onClose={onClose} title="Запросити до авто" size="sm">
+    <Modal open={open} onClose={onClose} title={t('sharing.inviteTitle')} size="sm">
       {error && <ErrorMessage className="mb-3">{error}</ErrorMessage>}
 
       {invite ? (
         <div className="space-y-3">
           <p className="text-xs text-mist">
-            Надішліть це посилання. Воно одноразове й діє до {formatDate(invite.expires_at)}.
+            {t('sharing.inviteLinkInfo', { date: formatDate(invite.expires_at) })}
           </p>
           <div className="flex items-center gap-2 rounded-xl border border-edge-soft bg-garage px-3.5 py-2.5">
             <code className="min-w-0 flex-1 break-all font-mono text-xs text-fg">{link}</code>
             <button
               type="button"
               onClick={handleCopy}
-              aria-label="Скопіювати посилання"
+              aria-label={t('sharing.copyLinkAria')}
               className="flex-shrink-0 rounded-lg p-1.5 text-mist transition-colors hover:bg-raised hover:text-fg"
             >
               {copied ? <Check className="h-4 w-4 text-ok" /> : <Copy className="h-4 w-4" />}
             </button>
           </div>
           <p className="text-xs text-mist/70">
-            Посилання показується один раз — після закриття вікна відновити його не можна, лише
-            створити нове.
+            {t('sharing.inviteOnceInfo')}
           </p>
           <Button variant="secondary" onClick={onClose} className="w-full">
-            Готово
+            {t('common.done')}
           </Button>
         </div>
       ) : (
         <div className="space-y-3">
           <SelectField
-            label="Роль"
+            label={t('sharing.roleLabel')}
             value={role}
             onChange={(e) => setRole(e.target.value)}
-            options={INVITE_ROLES}
+            options={inviteRoles}
           />
           <Button onClick={handleCreate} disabled={busy} className="w-full">
-            {busy ? 'Створення…' : 'Створити посилання'}
+            {busy ? t('sharing.creating') : t('sharing.createLink')}
           </Button>
         </div>
       )}
@@ -102,7 +98,13 @@ function InviteModal({ open, onClose, onCreate }) {
 }
 
 function MemberRow({ member, canManage, onRemove, onRoleChange }) {
+  const { t } = useTranslation();
   const manageable = canManage && member.id != null && !member.is_you && member.role !== 'owner';
+
+  const memberRoles = [
+    { value: 'editor', label: roleLabel('editor') },
+    { value: 'viewer', label: roleLabel('viewer') },
+  ];
 
   return (
     <div className="flex items-center justify-between gap-3 py-3">
@@ -111,28 +113,31 @@ function MemberRow({ member, canManage, onRemove, onRoleChange }) {
           {member.label}
           {member.is_you && (
             <span className="flex-shrink-0 rounded-full bg-amber/15 px-2 py-0.5 text-xs font-medium text-amber">
-              ви
+              {t('sharing.you')}
             </span>
           )}
         </p>
         <p className="mt-0.5 text-xs text-mist">
-          {roleLabel(member.role)} · з {formatDate(member.created_at)}
+          {t('sharing.memberMeta', {
+            role: roleLabel(member.role),
+            date: formatDate(member.created_at),
+          })}
         </p>
       </div>
       <div className="flex flex-shrink-0 items-center gap-1">
         {manageable ? (
           <>
             <SelectField
-              label="Роль"
+              label={t('sharing.roleLabel')}
               value={member.role}
               onChange={(e) => onRoleChange(member, e.target.value)}
-              options={MEMBER_ROLES}
+              options={memberRoles}
               containerClassName="w-36"
             />
             <button
               type="button"
               onClick={() => onRemove(member)}
-              aria-label={`Прибрати ${member.label}`}
+              aria-label={t('sharing.removeMemberAria', { name: member.label })}
               className="rounded-lg p-1.5 text-mist/70 transition-colors hover:bg-crit/10 hover:text-crit"
             >
               <Trash2 className="h-4 w-4" />
@@ -147,6 +152,7 @@ function MemberRow({ member, canManage, onRemove, onRoleChange }) {
 }
 
 export default function SharingCard({ car, onToast }) {
+  const { t } = useTranslation();
   const members = useCarStore((s) => s.members);
   const membersCarId = useCarStore((s) => s.membersCarId);
   const membersLoading = useCarStore((s) => s.membersLoading);
@@ -179,9 +185,9 @@ export default function SharingCard({ car, onToast }) {
     setError('');
     try {
       await removeMember(member.id);
-      onToast(`${member.label} більше не має доступу`);
+      onToast(t('sharing.memberRemovedToast', { name: member.label }));
     } catch (err) {
-      setError(extractError(err, 'Не вдалося прибрати учасника'));
+      setError(extractError(err, t('sharing.removeMemberError')));
     }
   };
 
@@ -189,9 +195,9 @@ export default function SharingCard({ car, onToast }) {
     setError('');
     try {
       await changeMemberRole(member.id, role);
-      onToast(`${member.label} тепер ${roleLabel(role).toLowerCase()}`);
+      onToast(t('sharing.roleChangedToast', { name: member.label, role: roleLabel(role).toLowerCase() }));
     } catch (err) {
-      setError(extractError(err, 'Не вдалося змінити роль'));
+      setError(extractError(err, t('sharing.roleChangeError')));
     }
   };
 
@@ -201,9 +207,9 @@ export default function SharingCard({ car, onToast }) {
     setError('');
     try {
       await leaveCar(car.id, you.id);
-      onToast('Ви вийшли з авто');
+      onToast(t('sharing.leftCarToast'));
     } catch (err) {
-      setError(extractError(err, 'Не вдалося вийти з авто'));
+      setError(extractError(err, t('sharing.leaveError')));
     }
   };
 
@@ -216,10 +222,10 @@ export default function SharingCard({ car, onToast }) {
           <div className="min-w-0">
             <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-fg">
               <Users className="h-4 w-4 text-signal" />
-              Спільний доступ
+              {t('sharing.sharedAccess')}
             </h2>
             <p className="mt-1 text-xs text-mist">
-              Ви маєте доступ як {roleLabel(car.your_role)}. Авто веде інший власник.
+              {t('sharing.viewerAccessInfo', { role: roleLabel(car.your_role) })}
             </p>
           </div>
           {you?.id != null && (
@@ -229,7 +235,7 @@ export default function SharingCard({ car, onToast }) {
               className="flex-shrink-0 px-3 py-1.5 text-mist"
             >
               <LogOut className="h-4 w-4" />
-              Вийти з авто
+              {t('sharing.leaveCar')}
             </Button>
           )}
         </div>
@@ -238,9 +244,9 @@ export default function SharingCard({ car, onToast }) {
 
         <ConfirmDialog
           open={leaving}
-          title="Вийти з авто?"
-          message={`Вийти з ${car.brand} ${car.model}? Авто зникне з вашого гаража. Повернутись можна лише за новим запрошенням.`}
-          confirmLabel="Вийти"
+          title={t('sharing.leaveCarConfirmTitle')}
+          message={t('sharing.leaveCarConfirmMessage', { car: `${car.brand} ${car.model}` })}
+          confirmLabel={t('sharing.leave')}
           onConfirm={confirmLeave}
           onCancel={() => setLeaving(false)}
         />
@@ -254,10 +260,10 @@ export default function SharingCard({ car, onToast }) {
         <div className="min-w-0">
           <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-fg">
             <Users className="h-4 w-4 text-signal" />
-            Спільний доступ
+            {t('sharing.sharedAccess')}
           </h2>
           <p className="mt-1 text-xs text-mist">
-            Хто ще бачить {car.brand} {car.model}. Редактор веде журнал, спостерігач лише читає.
+            {t('sharing.ownerInfo', { car: `${car.brand} ${car.model}` })}
           </p>
         </div>
         <Button
@@ -266,7 +272,7 @@ export default function SharingCard({ car, onToast }) {
           className="flex-shrink-0 px-2.5 py-1.5 text-amber"
         >
           <UserPlus className="h-4 w-4" />
-          Запросити
+          {t('sharing.invite')}
         </Button>
       </div>
 
@@ -289,7 +295,7 @@ export default function SharingCard({ car, onToast }) {
         </div>
       ) : (
         <p className="py-2 text-sm text-mist">
-          Доступ лише у вас. Запросіть посиланням того, хто теж їздить цим авто.
+          {t('sharing.emptyState')}
         </p>
       )}
 
@@ -297,13 +303,13 @@ export default function SharingCard({ car, onToast }) {
 
       <ConfirmDialog
         open={removingMember !== null}
-        title="Прибрати учасника?"
+        title={t('sharing.removeMemberConfirmTitle')}
         message={
           removingMember
-            ? `Прибрати ${removingMember.label}? Доступ до авто зникне одразу, а записи в журналі лишаться.`
+            ? t('sharing.removeMemberConfirmMessage', { name: removingMember.label })
             : ''
         }
-        confirmLabel="Прибрати"
+        confirmLabel={t('common.remove')}
         onConfirm={confirmRemove}
         onCancel={() => setRemovingMember(null)}
       />

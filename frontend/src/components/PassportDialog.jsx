@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Check, Copy, ExternalLink, RefreshCw } from 'lucide-react';
 
 import { extractError } from '../api/client';
@@ -8,6 +9,7 @@ import { Modal, Button, ErrorMessage, Spinner } from './UI';
 // The owner's QR-passport dialog: mints (idempotently) the public link on open,
 // shows a scannable QR of it, and offers to copy / open / regenerate / revoke.
 export default function PassportDialog({ car, open, onClose, onToast }) {
+  const { t } = useTranslation();
   const [data, setData] = useState(null); // { token, url, qr_svg }
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -22,7 +24,7 @@ export default function PassportDialog({ car, open, onClose, onToast }) {
     setLoading(true);
     mintPassportToken(car.id)
       .then((d) => !cancelled && setData(d))
-      .catch((e) => !cancelled && setError(extractError(e, 'Не вдалося створити паспорт')))
+      .catch((e) => !cancelled && setError(extractError(e, t('passportDialog.errCreate'))))
       .finally(() => !cancelled && setLoading(false));
     return () => {
       cancelled = true;
@@ -45,9 +47,9 @@ export default function PassportDialog({ car, open, onClose, onToast }) {
     setError('');
     try {
       setData(await mintPassportToken(car.id, { regenerate: true }));
-      onToast?.('Посилання оновлено — старий QR більше не працює');
+      onToast?.(t('passportDialog.linkUpdated'));
     } catch (e) {
-      setError(extractError(e, 'Не вдалося оновити посилання'));
+      setError(extractError(e, t('passportDialog.errUpdate')));
     } finally {
       setBusy(false);
     }
@@ -58,17 +60,17 @@ export default function PassportDialog({ car, open, onClose, onToast }) {
     setError('');
     try {
       await revokePassportToken(car.id);
-      onToast?.('QR-паспорт відкликано');
+      onToast?.(t('passportDialog.revoked'));
       onClose();
     } catch (e) {
-      setError(extractError(e, 'Не вдалося відкликати'));
+      setError(extractError(e, t('passportDialog.errRevoke')));
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <Modal open={open} onClose={onClose} title="QR-паспорт авто" size="sm">
+    <Modal open={open} onClose={onClose} title={t('passportDialog.title')} size="sm">
       {loading || !data ? (
         <Spinner className="py-10" />
       ) : (
@@ -76,19 +78,18 @@ export default function PassportDialog({ car, open, onClose, onToast }) {
           {error && <ErrorMessage>{error}</ErrorMessage>}
           <div
             className="mx-auto h-44 w-44 rounded-xl bg-white p-3"
-            aria-label="QR-код паспорта"
+            aria-label={t('passportDialog.qrAlt')}
             dangerouslySetInnerHTML={{ __html: data.qr_svg }}
           />
           <p className="text-center text-xs leading-snug text-mist">
-            Наведіть камеру — відкриється сторінка з телефоном, ОСЦПВ, тиском і допуском
-            пального. Роздрукуйте й покладіть у бардачок.
+            {t('passportDialog.description')}
           </p>
           <div className="flex items-center gap-2 rounded-xl border border-edge bg-panel px-3 py-2">
             <span className="min-w-0 flex-1 truncate font-mono text-xs text-mist">{data.url}</span>
             <button
               type="button"
               onClick={copy}
-              aria-label="Скопіювати посилання"
+              aria-label={t('passportDialog.copyLink')}
               className="flex-shrink-0 rounded-lg p-1.5 text-mist transition-colors hover:text-fg active:opacity-60"
             >
               {copied ? <Check className="h-4 w-4 text-ok" /> : <Copy className="h-4 w-4" />}
@@ -102,15 +103,15 @@ export default function PassportDialog({ car, open, onClose, onToast }) {
               className="flex items-center justify-center gap-2 rounded-xl border border-edge bg-panel py-2.5 text-sm font-medium text-fg transition active:scale-[0.98] hover:bg-raised"
             >
               <ExternalLink className="h-4 w-4" />
-              Відкрити
+              {t('passportDialog.open')}
             </a>
             <Button variant="secondary" onClick={regenerate} disabled={busy}>
               <RefreshCw className="h-4 w-4" />
-              Оновити
+              {t('passportDialog.regenerate')}
             </Button>
           </div>
           <Button variant="ghost" onClick={revoke} disabled={busy} className="w-full text-crit">
-            Відкликати посилання
+            {t('passportDialog.revokeLink')}
           </Button>
         </div>
       )}

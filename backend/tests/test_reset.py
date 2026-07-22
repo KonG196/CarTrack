@@ -47,7 +47,7 @@ def test_reset_happy_path(
     response = client.post("/api/auth/reset/request", json={"email": EMAIL})
     assert response.status_code == 202, response.text
     assert response.json()["detail"] == (
-        "Якщо акаунт існує — ми надіслали код."
+        "If the account exists, we've sent a code."
     )
     assert len(sent_codes) == 1
     chat_id, code = sent_codes[0]
@@ -89,7 +89,7 @@ def test_reset_confirm_wrong_code_400(
         json={"email": EMAIL, "code": wrong, "new_password": NEW_PASSWORD},
     )
     assert response.status_code == 400
-    assert response.json()["detail"] == "Невірний або прострочений код"
+    assert response.json()["detail"] == "Invalid or expired code"
 
 
 def test_reset_confirm_expired_code_400(
@@ -112,7 +112,7 @@ def test_reset_confirm_expired_code_400(
         json={"email": EMAIL, "code": code, "new_password": NEW_PASSWORD},
     )
     assert response.status_code == 400
-    assert response.json()["detail"] == "Невірний або прострочений код"
+    assert response.json()["detail"] == "Invalid or expired code"
 
 
 def test_reset_request_without_telegram_is_202_but_stores_nothing(
@@ -172,7 +172,7 @@ def test_reset_confirm_jwt_as_code_is_uniform_400(
         json={"email": EMAIL, "code": access_token, "new_password": NEW_PASSWORD},
     )
     assert response.status_code == 400
-    assert response.json()["detail"] == "Невірний або прострочений код"
+    assert response.json()["detail"] == "Invalid or expired code"
 
 
 def test_reset_confirm_short_password_422(client: TestClient) -> None:
@@ -192,7 +192,7 @@ def test_reset_without_telegram_goes_by_email(client, monkeypatch) -> None:
     monkeypatch.setattr(
         reset_service,
         "send_reset_code_mail",
-        lambda to, code: sent.append((to, code)) or True,
+        lambda to, code, lang="en": sent.append((to, code)) or True,
     )
 
     client.post(
@@ -226,7 +226,7 @@ def test_channel_email_is_honoured_even_with_telegram_linked(
     telegrammed: list[str] = []
     monkeypatch.setattr(reset_service, "mail_enabled", lambda: True)
     monkeypatch.setattr(
-        reset_service, "send_reset_code_mail", lambda to, code: mailed.append((to, code)) or True
+        reset_service, "send_reset_code_mail", lambda to, code, lang="en": mailed.append((to, code)) or True
     )
 
     async def fake_telegram(chat_id, code):
@@ -253,7 +253,7 @@ def test_channel_telegram_falls_back_to_mail_when_not_linked(client, monkeypatch
     mailed: list[tuple[str, str]] = []
     monkeypatch.setattr(reset_service, "mail_enabled", lambda: True)
     monkeypatch.setattr(
-        reset_service, "send_reset_code_mail", lambda to, code: mailed.append((to, code)) or True
+        reset_service, "send_reset_code_mail", lambda to, code, lang="en": mailed.append((to, code)) or True
     )
 
     client.post(

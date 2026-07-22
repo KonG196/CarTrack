@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Check, Minus, Plus, Route, Share2, Sparkles } from 'lucide-react';
 
 import { buildTripShareText, computeTripCost, tripInputsFrom } from '../utils/tripCost';
@@ -6,6 +7,7 @@ import { formatMoney } from '../utils/format';
 import { Card, TextField } from './UI';
 
 export default function TripCostCard({ analytics, refuelContext, carName }) {
+  const { t } = useTranslation();
   const [distance, setDistance] = useState('');
   const [people, setPeople] = useState(1);
   const [consumption, setConsumption] = useState('');
@@ -70,19 +72,19 @@ export default function TripCostCard({ analytics, refuelContext, carName }) {
     <Card>
       <div className="mb-3 flex items-center gap-2">
         <Route className="h-5 w-5 text-amber" />
-        <h2 className="font-display text-base font-semibold text-fg">Скільки коштує поїздка</h2>
+        <h2 className="font-display text-base font-semibold text-fg">{t('tripCostCard.title')}</h2>
       </div>
 
       {(auto.consumption || auto.price) && (
         <p className="mb-3 flex items-center gap-1.5 text-xs text-ok">
           <Sparkles className="h-3.5 w-3.5" />
-          Заповнено з вашої історії — можна змінити
+          {t('tripCostCard.filledFromHistory')}
         </p>
       )}
 
       <div className="grid grid-cols-2 gap-3">
         <TextField
-          label="Відстань, км"
+          label={t('tripCostCard.distanceLabel')}
           inputMode="decimal"
           numeric
           value={distance}
@@ -91,18 +93,18 @@ export default function TripCostCard({ analytics, refuelContext, carName }) {
         <div className="flex items-end justify-end gap-1.5 pb-1">
           <button
             type="button"
-            aria-label="Менше людей"
+            aria-label={t('tripCostCard.fewerPeople')}
             onClick={() => setPeople((n) => Math.max(1, n - 1))}
             className="rounded-lg border border-edge p-2 text-mist transition-colors hover:text-fg"
           >
             <Minus className="h-3.5 w-3.5" />
           </button>
           <span className="w-12 text-center text-sm text-fg">
-            {people} <span className="text-mist">ос.</span>
+            {people} <span className="text-mist">{t('tripCostCard.peopleUnit')}</span>
           </span>
           <button
             type="button"
-            aria-label="Більше людей"
+            aria-label={t('tripCostCard.morePeople')}
             onClick={() => setPeople((n) => n + 1)}
             className="rounded-lg border border-edge p-2 text-mist transition-colors hover:text-fg"
           >
@@ -113,7 +115,7 @@ export default function TripCostCard({ analytics, refuelContext, carName }) {
 
       <div className="mt-3 grid grid-cols-2 gap-3">
         <TextField
-          label="Розхід, л/100 км"
+          label={t('tripCostCard.consumptionLabel')}
           inputMode="decimal"
           numeric
           value={consumption}
@@ -124,7 +126,7 @@ export default function TripCostCard({ analytics, refuelContext, carName }) {
           }}
         />
         <TextField
-          label="Ціна за літр, ₴"
+          label={t('tripCostCard.pricePerLiterLabel')}
           inputMode="decimal"
           numeric
           value={price}
@@ -139,18 +141,18 @@ export default function TripCostCard({ analytics, refuelContext, carName }) {
       {result ? (
         <div className="mt-3 space-y-2 rounded-xl bg-garage/60 px-3.5 py-3">
           <div className="flex items-baseline justify-between">
-            <span className="text-sm text-mist">В один бік · {result.liters} л</span>
+            <span className="text-sm text-mist">{t('tripCostCard.oneWay', { liters: result.liters })}</span>
             <span className="font-display text-lg font-semibold text-fg">
               {formatMoney(result.cost)}
             </span>
           </div>
           <div className="flex items-baseline justify-between border-t border-edge pt-2">
-            <span className="text-sm text-mist">Туди й назад</span>
+            <span className="text-sm text-mist">{t('tripCostCard.roundTrip')}</span>
             <span className="text-sm text-fg">{formatMoney(result.roundTripCost)}</span>
           </div>
           {result.people > 1 && (
             <div className="flex items-baseline justify-between border-t border-edge pt-2">
-              <span className="text-sm text-mist">З кожного (туди й назад)</span>
+              <span className="text-sm text-mist">{t('tripCostCard.perPersonRoundTrip')}</span>
               <span className="font-display text-base font-semibold text-amber">
                 {formatMoney(result.roundTripPerPerson)}
               </span>
@@ -164,19 +166,19 @@ export default function TripCostCard({ analytics, refuelContext, carName }) {
             {shared ? (
               <>
                 <Check className="h-4 w-4 text-ok" />
-                Скопійовано
+                {t('tripCostCard.copied')}
               </>
             ) : (
               <>
                 <Share2 className="h-4 w-4 text-amber" />
-                Поділитися
+                {t('tripCostCard.share')}
               </>
             )}
           </button>
         </div>
       ) : (
         <p className="mt-3 text-xs text-mist">
-          Вкажіть відстань, розхід і ціну — порахую вартість і скільки з кожного.
+          {t('tripCostCard.emptyHint')}
         </p>
       )}
     </Card>

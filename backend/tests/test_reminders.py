@@ -17,7 +17,7 @@ TODAY = dt.date.today()
 
 def _setup_overdue_interval(db: Session) -> tuple[User, Car, ServiceInterval]:
     user = User(
-        email="linked@example.com", hashed_password="x", telegram_chat_id="42"
+        email="linked@example.com", hashed_password="x", telegram_chat_id="42", language="uk"
     )
     db.add(user)
     db.flush()
@@ -127,7 +127,7 @@ def test_send_due_reminders_isolates_per_user_failures(
     with db_session_factory() as db:
         _user1, _car1, interval1 = _setup_overdue_interval(db)  # chat id "42"
         user2 = User(
-            email="second@example.com", hashed_password="x", telegram_chat_id="43"
+            email="second@example.com", hashed_password="x", telegram_chat_id="43", language="uk"
         )
         db.add(user2)
         db.flush()
@@ -220,7 +220,7 @@ def test_reminder_keyboard_names_each_interval_when_several_are_due(
             service.ReminderItem(car=car, interval=first, computed={}),
             service.ReminderItem(car=car, interval=second, computed={}),
         ]
-        markup = reminders.build_reminder_keyboard(items)
+        markup = reminders.build_reminder_keyboard(items, lang="uk")
 
     assert [row[0].text for row in markup.inline_keyboard] == [
         "Виконано: Олива двигуна",
@@ -239,7 +239,7 @@ def test_reminder_keyboard_shortens_long_titles(
             service.ReminderItem(car=car, interval=interval, computed={}),
             service.ReminderItem(car=car, interval=interval, computed={}),
         ]
-        markup = reminders.build_reminder_keyboard(items)
+        markup = reminders.build_reminder_keyboard(items, lang="uk")
 
     label = markup.inline_keyboard[0][0].text
     assert label.endswith("…")

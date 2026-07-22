@@ -1,31 +1,74 @@
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Fuel, Wrench, Hammer, Receipt, Trash2, User } from 'lucide-react';
 import { formatMoney, formatKm, formatDate } from '../utils/format';
+import i18n from '../i18n';
+import {
+  maintenanceItemLabel,
+  repairCategoryLabel,
+  expenseCategoryLabel,
+} from '../i18n/domain';
 
+// `label` is a live getter so a language switch relabels without a reload; this
+// object is a module-level constant, so it can't use the `useTranslation` hook.
 export const LOG_TYPE_META = {
-  refuel: { label: 'Заправка', icon: Fuel, color: 'text-[#3987e5]', bg: 'bg-[#3987e5]/10' },
-  maintenance: { label: 'ТО', icon: Wrench, color: 'text-[#199e70]', bg: 'bg-[#199e70]/10' },
-  repair: { label: 'Ремонт', icon: Hammer, color: 'text-[#c98500]', bg: 'bg-[#c98500]/10' },
-  expense: { label: 'Витрата', icon: Receipt, color: 'text-[#9085e9]', bg: 'bg-[#9085e9]/10' },
+  refuel: {
+    get label() {
+      return i18n.t('logTimeline.typeRefuel');
+    },
+    icon: Fuel,
+    color: 'text-[#3987e5]',
+    bg: 'bg-[#3987e5]/10',
+  },
+  maintenance: {
+    get label() {
+      return i18n.t('logTimeline.typeMaintenance');
+    },
+    icon: Wrench,
+    color: 'text-[#199e70]',
+    bg: 'bg-[#199e70]/10',
+  },
+  repair: {
+    get label() {
+      return i18n.t('logTimeline.typeRepair');
+    },
+    icon: Hammer,
+    color: 'text-[#c98500]',
+    bg: 'bg-[#c98500]/10',
+  },
+  expense: {
+    get label() {
+      return i18n.t('logTimeline.typeExpense');
+    },
+    icon: Receipt,
+    color: 'text-[#9085e9]',
+    bg: 'bg-[#9085e9]/10',
+  },
 };
 
 export function logTitle(log) {
   if (log.type === 'refuel') {
-    return log.refuel?.gas_station ? `Заправка · ${log.refuel.gas_station}` : 'Заправка';
+    const type = i18n.t('logTimeline.typeRefuel');
+    return log.refuel?.gas_station ? `${type} · ${log.refuel.gas_station}` : type;
   }
   if (log.type === 'maintenance') {
+    const type = i18n.t('logTimeline.typeMaintenance');
     const items = log.maintenance?.items || [];
-    return items.length > 0 ? `ТО · ${items.slice(0, 2).join(', ')}${items.length > 2 ? '…' : ''}` : 'ТО';
+    return items.length > 0
+      ? `${type} · ${items.slice(0, 2).map(maintenanceItemLabel).join(', ')}${items.length > 2 ? '…' : ''}`
+      : type;
   }
   if (log.type === 'repair') {
+    const type = i18n.t('logTimeline.typeRepair');
     const cat = log.repair?.category;
     const part = log.repair?.part_name;
-    if (cat && part) return `Ремонт · ${cat} · ${part}`;
-    if (cat) return `Ремонт · ${cat}`;
-    return 'Ремонт';
+    if (cat && part) return `${type} · ${repairCategoryLabel(cat)} · ${part}`;
+    if (cat) return `${type} · ${repairCategoryLabel(cat)}`;
+    return type;
   }
-  if (log.expense?.category) return `Витрата · ${log.expense.category}`;
-  return log.notes ? `Витрата · ${log.notes}` : 'Витрата';
+  const type = i18n.t('logTimeline.typeExpense');
+  if (log.expense?.category) return `${type} · ${expenseCategoryLabel(log.expense.category)}`;
+  return log.notes ? `${type} · ${log.notes}` : type;
 }
 
 export function authorLabel(log) {
@@ -45,6 +88,7 @@ export function AuthorChip({ label, className = '' }) {
 }
 
 export default function LogTimelineItem({ log, onDelete, showAuthor = false, tourId }) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const meta = LOG_TYPE_META[log.type] || LOG_TYPE_META.expense;
   const Icon = meta.icon;
@@ -71,11 +115,14 @@ export default function LogTimelineItem({ log, onDelete, showAuthor = false, tou
         </p>
         {log.type === 'refuel' && log.refuel && (
           <p className="mt-0.5 font-mono text-xs tabular-nums text-mist">
-            {Number(log.refuel.liters).toFixed(1)} л × {formatMoney(log.refuel.price_per_liter)}/л
+            {t('logTimeline.refuelLine', {
+              liters: Number(log.refuel.liters).toFixed(1),
+              price: formatMoney(log.refuel.price_per_liter),
+            })}
             {log.refuel.consumption_l_100km != null
-              ? ` · ${log.refuel.consumption_l_100km.toFixed(1)} л/100 км`
+              ? ` · ${t('logTimeline.consumption', { value: log.refuel.consumption_l_100km.toFixed(1) })}`
               : ''}
-            {log.refuel.is_full_tank ? ' · повний бак' : ''}
+            {log.refuel.is_full_tank ? ` · ${t('logTimeline.fullTank')}` : ''}
           </p>
         )}
         {log.type !== 'refuel' && log.notes && (
@@ -94,7 +141,7 @@ export default function LogTimelineItem({ log, onDelete, showAuthor = false, tou
               e.stopPropagation();
               onDelete(log);
             }}
-            aria-label="Видалити запис"
+            aria-label={t('logTimeline.deleteEntry')}
             className="rounded-lg p-1.5 text-mist/70 transition-colors hover:bg-crit/10 hover:text-crit"
           >
             <Trash2 className="h-4 w-4" />

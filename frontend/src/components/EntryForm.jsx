@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Fuel, Wrench, Hammer, Receipt, Plus, Camera, Loader2, AlertTriangle } from 'lucide-react';
 import { extractError } from '../api/client';
 import { scanReceipt, scanWorkOrder } from '../api/ocr';
@@ -16,14 +17,17 @@ import {
 } from '../utils/entryForm';
 import { entryWarnings, lastEntryHint } from '../utils/entryWarnings';
 import { FUEL_KIND_OPTIONS, fuelKindLabel, shouldShowFuelKind } from '../utils/fuelKind';
+import { maintenanceItemLabel, repairCategoryLabel, expenseCategoryLabel } from '../i18n/domain';
 import { Button, TextField, DateField, SelectField, Card, Toggle, ErrorMessage } from './UI';
 import Toast from './Toast';
 
+// `labelKey` is an entryForm i18n key; the display label is resolved with t()
+// at render time. Consumers that only need the code use `value`.
 export const ENTRY_TYPES = [
-  { value: 'refuel', label: 'Заправка', icon: Fuel },
-  { value: 'maintenance', label: 'ТО', icon: Wrench },
-  { value: 'repair', label: 'Ремонт', icon: Hammer },
-  { value: 'expense', label: 'Витрата', icon: Receipt },
+  { value: 'refuel', labelKey: 'typeRefuel', icon: Fuel },
+  { value: 'maintenance', labelKey: 'typeMaintenance', icon: Wrench },
+  { value: 'repair', labelKey: 'typeRepair', icon: Hammer },
+  { value: 'expense', labelKey: 'typeExpense', icon: Receipt },
 ];
 
 const NO_TOAST = { message: '', variant: 'ok' };
@@ -94,6 +98,7 @@ export default function EntryForm({
   scannedFile,
   onScanFile,
 }) {
+  const { t } = useTranslation();
   const [init] = useState(() => ({ ...emptyFormValues(), ...initialValues }));
 
   // shared fields
@@ -232,13 +237,13 @@ export default function EntryForm({
       const summary = describe(data);
       setToast(
         summary
-          ? { message: `Розпізнано: ${summary}`, variant: 'ok' }
+          ? { message: t('entryForm.scanRecognized', { summary }), variant: 'ok' }
           : { message: failure, variant: 'warn' }
       );
     } catch (err) {
       setToast({
         message:
-          err?.response?.status === 503 ? 'Розпізнавання недоступне на сервері' : failure,
+          err?.response?.status === 503 ? t('entryForm.scanUnavailable') : failure,
         variant: 'warn',
       });
     } finally {
@@ -250,7 +255,7 @@ export default function EntryForm({
   const handleReceiptFile = (e) =>
     runScan(e, {
       read: scanReceipt,
-      failure: 'Не вдалося розпізнати чек. Спробуйте інше фото.',
+      failure: t('entryForm.scanReceiptFailed'),
       apply: (data, edited) => {
         // Scanned numbers are the user's inputs too — mark them owned so the
         // one field the receipt didn't carry still gets computed.
@@ -271,9 +276,11 @@ export default function EntryForm({
       },
       describe: (data) => {
         const parts = [];
-        if (data.liters != null) parts.push(`${data.liters} л`);
-        if (data.price_per_liter != null) parts.push(`${data.price_per_liter} грн/л`);
-        if (data.total_cost != null) parts.push(`${Number(data.total_cost).toFixed(2)} грн`);
+        if (data.liters != null) parts.push(t('entryForm.unitLiters', { value: data.liters }));
+        if (data.price_per_liter != null)
+          parts.push(t('entryForm.unitPricePerLiter', { value: data.price_per_liter }));
+        if (data.total_cost != null)
+          parts.push(t('entryForm.unitUah', { value: Number(data.total_cost).toFixed(2) }));
         if (data.date) parts.push(formatDate(data.date));
         if (data.gas_station) parts.push(data.gas_station);
         return parts.join(', ');
@@ -283,7 +290,7 @@ export default function EntryForm({
   const handleWorkOrderFile = (e) =>
     runScan(e, {
       read: scanWorkOrder,
-      failure: 'Не вдалося розпізнати наряд. Спробуйте інше фото.',
+      failure: t('entryForm.scanWorkOrderFailed'),
       describe: describeWorkOrder,
       apply: (data, edited) => {
         const scanned = workOrderToFormValues(data);
@@ -313,7 +320,7 @@ export default function EntryForm({
   const handleRepairOrderFile = (e) =>
     runScan(e, {
       read: scanWorkOrder,
-      failure: 'Не вдалося розпізнати наряд. Спробуйте інше фото.',
+      failure: t('entryForm.scanWorkOrderFailed'),
       describe: describeWorkOrder,
       apply: (data, edited) => {
         if (data.date && !edited.has('date')) setDate(data.date);
@@ -333,7 +340,7 @@ export default function EntryForm({
   const handleExpenseReceiptFile = (e) =>
     runScan(e, {
       read: scanReceipt,
-      failure: 'Не вдалося розпізнати чек. Спробуйте інше фото.',
+      failure: t('entryForm.scanReceiptFailed'),
       apply: (data, edited) => {
         if (data.total_cost != null && !edited.has('totalCost'))
           setTotalCost(Number(data.total_cost).toFixed(2));
@@ -344,10 +351,11 @@ export default function EntryForm({
       },
       describe: (data) => {
         const parts = [];
-        if (data.total_cost != null) parts.push(`${Number(data.total_cost).toFixed(2)} грн`);
+        if (data.total_cost != null)
+          parts.push(t('entryForm.unitUah', { value: Number(data.total_cost).toFixed(2) }));
         if (data.date) parts.push(formatDate(data.date));
         const category = expenseCategoryFrom(data.raw_text);
-        if (category) parts.push(category.toLowerCase());
+        if (category) parts.push(expenseCategoryLabel(category).toLowerCase());
         return parts.join(', ');
       },
     });
@@ -389,12 +397,14 @@ export default function EntryForm({
   };
 
   // An entry may carry a category outside the fixed list (e.g. created via bot).
-  const categoryOptions = useMemo(() => {
-    const list = REPAIR_CATEGORIES.includes(category)
+  // Keep the memo to the (value) list; labels are localized at render time so a
+  // language switch relabels the options.
+  const categoryValues = useMemo(() => {
+    return REPAIR_CATEGORIES.includes(category)
       ? REPAIR_CATEGORIES
       : [category, ...REPAIR_CATEGORIES];
-    return list.map((c) => ({ value: c, label: c }));
   }, [category]);
+  const categoryOptions = categoryValues.map((c) => ({ value: c, label: repairCategoryLabel(c) }));
 
   const warnings = useMemo(
     () => entryWarnings({ type, odometer, date, context }),
@@ -414,15 +424,15 @@ export default function EntryForm({
     const odo = parseInt(odometer, 10);
     const cost = num(totalCost);
 
-    if (!date) return setError('Вкажіть дату');
-    if (!Number.isFinite(odo) || odo < 0) return setError('Вкажіть коректний пробіг');
-    if (cost === null || cost < 0) return setError('Вкажіть загальну вартість');
+    if (!date) return setError(t('entryForm.errDate'));
+    if (!Number.isFinite(odo) || odo < 0) return setError(t('entryForm.errOdometer'));
+    if (cost === null || cost < 0) return setError(t('entryForm.errTotalCost'));
 
     if (type === 'refuel') {
       const l = num(liters);
       const p = num(pricePerLiter);
-      if (!l || l <= 0) return setError('Вкажіть кількість літрів');
-      if (!p || p <= 0) return setError('Вкажіть ціну за літр');
+      if (!l || l <= 0) return setError(t('entryForm.errLiters'));
+      if (!p || p <= 0) return setError(t('entryForm.errPricePerLiter'));
     }
 
     const payload = formValuesToPayload(type, {
@@ -449,7 +459,7 @@ export default function EntryForm({
     try {
       await onSubmit(payload);
     } catch (err) {
-      setError(extractError(err, 'Не вдалося зберегти запис'));
+      setError(extractError(err, t('entryForm.saveFailed')));
     }
   };
 
@@ -462,7 +472,7 @@ export default function EntryForm({
           data-tour="add-type"
           className="grid grid-cols-4 gap-1 rounded-2xl border border-edge bg-panel p-1"
         >
-          {ENTRY_TYPES.map(({ value, label, icon: Icon }) => (
+          {ENTRY_TYPES.map(({ value, labelKey, icon: Icon }) => (
             <button
               key={value}
               type="button"
@@ -473,7 +483,7 @@ export default function EntryForm({
               }`}
             >
               <Icon className="h-4 w-4" />
-              {label}
+              {t(`entryForm.${labelKey}`)}
             </button>
           ))}
         </div>
@@ -482,7 +492,7 @@ export default function EntryForm({
       <Card data-tour="add-form" className="flex flex-col gap-3.5">
         <div className="grid grid-cols-2 gap-3">
           <DateField
-            label="Дата"
+            label={t('entryForm.date')}
             required
             value={date}
             onChange={(v) => {
@@ -491,7 +501,7 @@ export default function EntryForm({
             }}
           />
           <TextField
-            label="Пробіг, км"
+            label={t('entryForm.odometerKm')}
             type="number"
             inputMode="numeric"
             enterKeyHint="next"
@@ -523,15 +533,15 @@ export default function EntryForm({
             <ScanButton
               scanning={scanning}
               onFile={handleReceiptFile}
-              idle="Сканувати чек"
-              busy="Розпізнаю чек…"
+              idle={t('entryForm.scanReceipt')}
+              busy={t('entryForm.scanningReceipt')}
             />
             {mode === 'create' && scannedFile && (
-              <p className="text-xs text-mist">Чек буде додано як фото запису.</p>
+              <p className="text-xs text-mist">{t('entryForm.receiptAttached')}</p>
             )}
             <div className="grid grid-cols-2 gap-3">
               <TextField
-                label="Літри"
+                label={t('entryForm.liters')}
                 type="text"
                 inputMode="decimal"
                 enterKeyHint="next"
@@ -541,7 +551,7 @@ export default function EntryForm({
                 onBlur={onRefuelBlur}
               />
               <TextField
-                label="Ціна за літр, ₴"
+                label={t('entryForm.pricePerLiter')}
                 type="text"
                 inputMode="decimal"
                 enterKeyHint="next"
@@ -552,7 +562,7 @@ export default function EntryForm({
               />
             </div>
             <TextField
-              label="Загальна вартість, ₴"
+              label={t('entryForm.totalCost')}
               type="text"
               inputMode="decimal"
               enterKeyHint="next"
@@ -564,22 +574,24 @@ export default function EntryForm({
             />
             {showFuelKind && (
               <SelectField
-                label="Тип пального"
+                label={t('entryForm.fuelKind')}
                 value={fuelKind}
                 onChange={(e) => setFuelKind(e.target.value)}
-                hint="«Як у авто» — звичайна заправка основним пальним"
+                hint={t('entryForm.fuelKindHint')}
               >
-                <option value="">Як у авто ({fuelKindLabel(car?.fuel_type)})</option>
+                <option value="">
+                  {t('entryForm.fuelKindDefault', { fuel: fuelKindLabel(car?.fuel_type) })}
+                </option>
                 {FUEL_KIND_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
-                    {opt.label}
+                    {fuelKindLabel(opt.value)}
                   </option>
                 ))}
               </SelectField>
             )}
-            <Toggle label="Повний бак" checked={isFullTank} onChange={setIsFullTank} />
+            <Toggle label={t('entryForm.fullTank')} checked={isFullTank} onChange={setIsFullTank} />
             <TextField
-              label="АЗС (необов'язково)"
+              label={t('entryForm.gasStation')}
               type="text"
               value={gasStation}
               onChange={(e) => {
@@ -611,14 +623,14 @@ export default function EntryForm({
             <ScanButton
               scanning={scanning}
               onFile={handleWorkOrderFile}
-              idle="Сканувати наряд СТО"
-              busy="Розпізнаю наряд…"
+              idle={t('entryForm.scanWorkOrder')}
+              busy={t('entryForm.scanningWorkOrder')}
             />
             {mode === 'create' && scannedFile && (
-              <p className="text-xs text-mist">Наряд буде додано як фото запису.</p>
+              <p className="text-xs text-mist">{t('entryForm.workOrderAttached')}</p>
             )}
             <div>
-              <span className="mb-1.5 block text-sm text-mist">Що замінено</span>
+              <span className="mb-1.5 block text-sm text-mist">{t('entryForm.whatReplaced')}</span>
               <div className="flex flex-col gap-1.5">
                 {allMaintenanceItems.map((item) => (
                   <label
@@ -631,13 +643,13 @@ export default function EntryForm({
                       onChange={() => toggleItem(item)}
                       className="h-4 w-4 rounded border-edge-soft bg-panel accent-amber"
                     />
-                    <span className="text-sm text-fg">{item}</span>
+                    <span className="text-sm text-fg">{maintenanceItemLabel(item)}</span>
                   </label>
                 ))}
               </div>
               <div className="mt-2 flex items-start gap-2">
                 <TextField
-                  label="Інша позиція"
+                  label={t('entryForm.customItem')}
                   type="text"
                   value={customItem}
                   onChange={(e) => setCustomItem(e.target.value)}
@@ -652,7 +664,7 @@ export default function EntryForm({
                 <Button
                   variant="secondary"
                   onClick={addCustomItem}
-                  aria-label="Додати позицію"
+                  aria-label={t('entryForm.addItem')}
                   className="h-14 w-14 flex-shrink-0"
                 >
                   <Plus className="h-4 w-4" />
@@ -661,7 +673,7 @@ export default function EntryForm({
             </div>
             <div className="grid grid-cols-2 gap-3">
               <TextField
-                label="Запчастини, ₴"
+                label={t('entryForm.parts')}
                 type="text"
                 inputMode="decimal"
                 enterKeyHint="next"
@@ -670,7 +682,7 @@ export default function EntryForm({
                 onChange={(e) => onPartsChange(e.target.value)}
               />
               <TextField
-                label="Робота, ₴"
+                label={t('entryForm.labor')}
                 type="text"
                 inputMode="decimal"
                 enterKeyHint="next"
@@ -687,27 +699,27 @@ export default function EntryForm({
             <ScanButton
               scanning={scanning}
               onFile={handleRepairOrderFile}
-              idle="Сканувати наряд СТО"
-              busy="Розпізнаю наряд…"
+              idle={t('entryForm.scanWorkOrder')}
+              busy={t('entryForm.scanningWorkOrder')}
             />
             {mode === 'create' && scannedFile && (
-              <p className="text-xs text-mist">Наряд буде додано як фото запису.</p>
+              <p className="text-xs text-mist">{t('entryForm.workOrderAttached')}</p>
             )}
             <SelectField
-              label="Категорія"
+              label={t('entryForm.category')}
               value={category}
               onChange={(e) => setCategory(e.target.value)}
               options={categoryOptions}
             />
             <TextField
-              label="Деталь (необов'язково)"
+              label={t('entryForm.partName')}
               type="text"
               value={partName}
               onChange={(e) => setPartName(e.target.value)}
             />
             <div className="grid grid-cols-2 gap-3">
               <TextField
-                label="Гарантія, міс."
+                label={t('entryForm.warrantyMonths')}
                 type="number"
                 inputMode="numeric"
                 enterKeyHint="next"
@@ -717,7 +729,7 @@ export default function EntryForm({
                 onChange={(e) => setWarrantyMonths(e.target.value)}
               />
               <TextField
-                label="Гарантія, км"
+                label={t('entryForm.warrantyKm')}
                 type="number"
                 inputMode="numeric"
                 enterKeyHint="next"
@@ -735,18 +747,18 @@ export default function EntryForm({
             <ScanButton
               scanning={scanning}
               onFile={handleExpenseReceiptFile}
-              idle="Сканувати чек"
-              busy="Розпізнаю чек…"
+              idle={t('entryForm.scanReceipt')}
+              busy={t('entryForm.scanningReceipt')}
             />
             {mode === 'create' && scannedFile && (
-              <p className="text-xs text-mist">Чек буде додано як фото запису.</p>
+              <p className="text-xs text-mist">{t('entryForm.receiptAttached')}</p>
             )}
           </>
         )}
 
         {type === 'expense' && (
           <div>
-            <span className="mb-1.5 block text-sm text-mist">Категорія</span>
+            <span className="mb-1.5 block text-sm text-mist">{t('entryForm.category')}</span>
             <div className="flex flex-wrap gap-1.5">
               {EXPENSE_CATEGORIES.map((c) => (
                 <Chip
@@ -757,7 +769,7 @@ export default function EntryForm({
                     markEdited('expenseCategory');
                   }}
                 >
-                  {c}
+                  {expenseCategoryLabel(c)}
                 </Chip>
               ))}
             </div>
@@ -768,7 +780,7 @@ export default function EntryForm({
             other types keep it here in the shared position. */}
         {type !== 'refuel' && (
           <TextField
-            label="Загальна вартість, ₴"
+            label={t('entryForm.totalCost')}
             type="text"
             inputMode="decimal"
             enterKeyHint="next"
@@ -780,7 +792,7 @@ export default function EntryForm({
         )}
 
         <TextField
-          label="Нотатки (необов'язково)"
+          label={t('entryForm.notes')}
           multiline
           enterKeyHint="done"
           value={notes}
@@ -795,11 +807,15 @@ export default function EntryForm({
         {error && <ErrorMessage className="mb-3">{error}</ErrorMessage>}
         <div className="flex gap-2">
           <Button type="submit" disabled={submitting} className="flex-1">
-            {submitting ? 'Збереження…' : mode === 'edit' ? 'Зберегти зміни' : 'Зберегти запис'}
+            {submitting
+              ? t('common.saving')
+              : mode === 'edit'
+                ? t('common.saveChanges')
+                : t('entryForm.saveEntry')}
           </Button>
           {onCancel && (
             <Button variant="secondary" onClick={onCancel}>
-              Скасувати
+              {t('common.cancel')}
             </Button>
           )}
         </div>

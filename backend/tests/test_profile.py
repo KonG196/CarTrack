@@ -82,7 +82,7 @@ def mail_on(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, str]]:
     """
     sent: list[tuple[str, str]] = []
 
-    def fake_send(to: str, code: str) -> bool:
+    def fake_send(to: str, code: str, lang: str = "en") -> bool:
         sent.append((to, code))
         return True
 

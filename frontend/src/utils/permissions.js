@@ -1,3 +1,4 @@
+import i18n from '../i18n';
 
 export const ROLE_RANK = { viewer: 1, editor: 2, owner: 3 };
 
@@ -20,12 +21,6 @@ export const ACTION_MIN_ROLE = {
   'members:manage': 'owner',
 };
 
-const ROLE_LABELS = {
-  owner: 'Власник',
-  editor: 'Редактор',
-  viewer: 'Спостерігач',
-};
-
 export function canDo(role, action) {
   const required = ACTION_MIN_ROLE[action];
   if (required === undefined) return false;
@@ -36,7 +31,9 @@ export function canDo(role, action) {
 
 export function roleLabel(role) {
   if (!role) return '';
-  return ROLE_LABELS[role] || role;
+  const label = i18n.t(`roles.${role}`);
+  // t() echoes the key back when there's no match — fall back to the raw role.
+  return label === `roles.${role}` ? role : label;
 }
 
 export function carIsShared(members) {

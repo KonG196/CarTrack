@@ -182,7 +182,8 @@ def test_fallback_hint_lists_every_shape_the_parsers_understand() -> None:
     stops accepting one, this test fails instead of the bot quietly promising
     something it no longer does.
     """
-    from app.bot.handlers import UNKNOWN_TEXT
+    from app.i18n import t
+    UNKNOWN_TEXT = t("bot.h.unknown", "uk")
 
     assert parse_odometer("пробіг 240054") == 240054
     assert "пробіг 240054" in UNKNOWN_TEXT

@@ -1,4 +1,5 @@
 import { formatMoney, formatKm } from './format';
+import i18n from '../i18n';
 
 // Draw «Ваш рік з Kapot» to a portrait canvas and share it (Web Share API with
 // a file) or download it as a fallback. Returns 'shared' | 'downloaded' |
@@ -48,7 +49,7 @@ export function renderYearCanvas(review, carName) {
   // title
   ctx.font = '800 108px sans-serif';
   ctx.fillStyle = C.fg;
-  ctx.fillText(`Ваш рік ${review.year}`, pad, 300);
+  ctx.fillText(i18n.t('shareYear.title', { year: review.year }), pad, 300);
   ctx.font = '500 40px sans-serif';
   ctx.fillStyle = C.mist;
   ctx.fillText(carName, pad, 360);
@@ -56,30 +57,38 @@ export function renderYearCanvas(review, carName) {
   // total spent hero
   ctx.font = '600 34px sans-serif';
   ctx.fillStyle = C.mist;
-  ctx.fillText('Витрачено за рік', pad, 500);
+  ctx.fillText(i18n.t('shareYear.spentLabel'), pad, 500);
   ctx.font = '800 128px monospace';
   ctx.fillStyle = C.amber;
   ctx.fillText(formatMoney(review.total_spent), pad, 630);
 
   // stat rows
   const rows = [
-    ['Пробіг', formatKm(review.km_driven)],
-    ['Заправлено', review.liters != null ? `${review.liters} л` : '—'],
+    [i18n.t('shareYear.distance'), formatKm(review.km_driven)],
     [
-      'Витрата',
+      i18n.t('shareYear.fueled'),
+      review.liters != null ? i18n.t('shareYear.litersValue', { liters: review.liters }) : '—',
+    ],
+    [
+      i18n.t('shareYear.consumption'),
       review.avg_consumption_l_100km != null
-        ? `${review.avg_consumption_l_100km.toFixed(1)} л/100 км`
+        ? i18n.t('shareYear.consumptionValue', { value: review.avg_consumption_l_100km.toFixed(1) })
         : '—',
     ],
-    ['Вартість км', review.cost_per_km != null ? formatMoney(review.cost_per_km * 100) + '/100км' : '—'],
+    [
+      i18n.t('shareYear.costPerKm'),
+      review.cost_per_km != null
+        ? i18n.t('shareYear.costPerKmValue', { amount: formatMoney(review.cost_per_km * 100) })
+        : '—',
+    ],
   ];
   if (review.cheapest_station) {
-    rows.push(['Найдешевша АЗС', review.cheapest_station.name]);
+    rows.push([i18n.t('shareYear.cheapestStation'), review.cheapest_station.name]);
   }
   if (review.biggest_expense) {
     // Amount only — the truncation loop trims from the right, which would eat
     // the ₴ figure if the title were appended here.
-    rows.push(['Найбільша витрата', formatMoney(review.biggest_expense.amount)]);
+    rows.push([i18n.t('shareYear.biggestExpense'), formatMoney(review.biggest_expense.amount)]);
   }
 
   let y = 760;
@@ -110,7 +119,7 @@ export function renderYearCanvas(review, carName) {
   // footer
   ctx.font = '500 30px sans-serif';
   ctx.fillStyle = C.mist;
-  ctx.fillText('kapot-tracker · автологбук', pad, H - 70);
+  ctx.fillText(i18n.t('shareYear.footer'), pad, H - 70);
 
   return canvas;
 }
@@ -123,7 +132,7 @@ export async function shareYearImage(review, carName) {
 
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
     try {
-      await navigator.share({ files: [file], title: `Ваш рік ${review.year} з Kapot` });
+      await navigator.share({ files: [file], title: i18n.t('shareYear.shareTitle', { year: review.year }) });
       return 'shared';
     } catch {
       return 'cancelled';

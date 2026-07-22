@@ -35,6 +35,7 @@ from app.schemas import (
     MemberOut,
     MemberUpdate,
 )
+from app.i18n import t
 from app.services.invites import (
     INVITE_PATH_PREFIX,
     as_utc,
@@ -58,7 +59,7 @@ def _assignable_role_or_400(role: str) -> str:
     if role not in ASSIGNABLE_ROLES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Роль має бути «editor» або «viewer»",
+            detail=t("err.roleMustBe", current_user.language),
         )
     return role
 
@@ -169,7 +170,7 @@ def accept_invite(
     if car.user_id == current_user.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Це ваше авто — ви вже маєте до нього повний доступ",
+            detail=t("err.ownCarFullAccess", current_user.language),
         )
 
     existing = db.execute(
@@ -248,7 +249,7 @@ def update_member(
         # editing the mirror would say something that is not true.
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Роль власника авто змінити не можна",
+            detail=t("err.ownerRoleImmutable", current_user.language),
         )
     member.role = role
     db.commit()
@@ -280,7 +281,7 @@ def delete_member(
     if member.user_id == car.user_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Власника авто не можна прибрати зі списку учасників",
+            detail=t("err.ownerCantBeRemoved", current_user.language),
         )
     is_self = member.user_id == current_user.id
     is_owner = car.user_id == current_user.id

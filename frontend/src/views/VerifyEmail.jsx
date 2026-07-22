@@ -1,14 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { MailCheck } from 'lucide-react';
 
 import { confirmEmail, resendVerification } from '../api/auth';
 import { Button, Card, ErrorMessage, TextField } from '../components/UI';
 import Wordmark from '../components/Wordmark';
 import Toast from '../components/Toast';
+import LanguageToggle from '../components/LanguageToggle';
 import { extractError } from '../api/client';
 
 export default function VerifyEmail() {
+  const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [email, setEmail] = useState(searchParams.get('email') || '');
@@ -23,10 +26,10 @@ export default function VerifyEmail() {
     setLoading(true);
     try {
       await confirmEmail(mail.trim(), value.trim());
-      setToast('Пошту підтверджено');
+      setToast(t('auth.verify.confirmed'));
       setTimeout(() => navigate('/login', { replace: true }), 1200);
     } catch (err) {
-      setError(extractError(err, 'Невірний або прострочений код'));
+      setError(extractError(err, t('auth.verify.invalidCode')));
     } finally {
       setLoading(false);
     }
@@ -47,30 +50,30 @@ export default function VerifyEmail() {
     setError('');
     try {
       await resendVerification(email.trim());
-      setToast('Якщо акаунт існує — код надіслано');
+      setToast(t('auth.verify.codeSent'));
     } catch (err) {
-      setError(extractError(err, 'Не вдалося надіслати код'));
+      setError(extractError(err, t('auth.verify.sendFailed')));
     }
   };
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-garage px-4">
       <div className="rise-in w-full max-w-md">
+        <div className="mb-4 flex justify-end">
+          <LanguageToggle />
+        </div>
         <div className="mb-6 flex flex-col items-center gap-2">
           <Wordmark size="lg" />
           <p className="font-mono text-xs uppercase tracking-[0.14em] text-mist">
-            Підтвердження пошти
+            {t('auth.verify.tagline')}
           </p>
         </div>
         <Card>
           <div className="mb-4 flex items-center gap-2">
             <MailCheck className="h-5 w-5 text-amber" />
-            <h1 className="font-display text-lg font-semibold text-fg">Підтвердіть пошту</h1>
+            <h1 className="font-display text-lg font-semibold text-fg">{t('auth.verify.title')}</h1>
           </div>
-          <p className="mb-4 text-sm text-mist">
-            Ми надіслали 6-значний код на вашу адресу. Введіть його нижче або перейдіть за
-            посиланням з листа.
-          </p>
+          <p className="mb-4 text-sm text-mist">{t('auth.verify.intro')}</p>
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -79,7 +82,7 @@ export default function VerifyEmail() {
             className="flex flex-col gap-3.5"
           >
             <TextField
-              label="Email"
+              label={t('auth.verify.email')}
               type="email"
               autoComplete="email"
               value={email}
@@ -87,7 +90,7 @@ export default function VerifyEmail() {
               required
             />
             <TextField
-              label="Код з листа"
+              label={t('auth.verify.codeLabel')}
               inputMode="numeric"
               autoComplete="one-time-code"
               value={code}
@@ -96,7 +99,7 @@ export default function VerifyEmail() {
             />
             {error && <ErrorMessage>{error}</ErrorMessage>}
             <Button type="submit" disabled={loading}>
-              {loading ? 'Перевіряю…' : 'Підтвердити'}
+              {loading ? t('auth.verify.submitting') : t('auth.verify.submit')}
             </Button>
           </form>
           <div className="mt-4 flex items-center justify-between text-sm">
@@ -105,10 +108,10 @@ export default function VerifyEmail() {
               onClick={handleResend}
               className="text-amber hover:underline"
             >
-              Надіслати код ще раз
+              {t('auth.verify.resend')}
             </button>
             <Link to="/login" className="text-mist hover:text-fg">
-              До входу
+              {t('auth.verify.backToLogin')}
             </Link>
           </div>
         </Card>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Plus, Pencil, Trash2, Wrench } from 'lucide-react';
 import { extractError } from '../api/client';
 import { getCar } from '../api/cars';
@@ -13,15 +14,17 @@ import {
   SPEC_CATEGORIES,
 } from '../api/specs';
 import { canDo } from '../utils/permissions';
+import { specCategoryLabel } from '../i18n/domain';
 import { Button, TextField, SelectField, Card, Spinner, ErrorMessage, ConfirmDialog } from '../components/UI';
 import Toast from '../components/Toast';
 
-const CATEGORY_OPTIONS = SPEC_CATEGORIES.map((c) => ({ value: c, label: c }));
+// Category is a canonical (Ukrainian) value; only its display is localized.
+const CATEGORY_OPTIONS = SPEC_CATEGORIES.map((c) => ({ value: c, label: specCategoryLabel(c) }));
 
 const PRESET_KEY = 'golf7_16tdi';
-const PRESET_LABEL = 'Підставити типові для Golf 7 1.6 TDI';
 
 function SpecForm({ initial, onSubmit, onCancel }) {
+  const { t } = useTranslation();
   const [form, setForm] = useState({
     category: initial?.category || SPEC_CATEGORIES[0],
     name: initial?.name || '',
@@ -35,8 +38,8 @@ function SpecForm({ initial, onSubmit, onCancel }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    if (!form.name.trim()) return setError('Вкажіть назву');
-    if (!form.value.trim()) return setError('Вкажіть значення');
+    if (!form.name.trim()) return setError(t('carSpecs.errNameRequired'));
+    if (!form.value.trim()) return setError(t('carSpecs.errValueRequired'));
 
     setSubmitting(true);
     try {
@@ -46,7 +49,7 @@ function SpecForm({ initial, onSubmit, onCancel }) {
         value: form.value.trim(),
       });
     } catch (err) {
-      setError(extractError(err, 'Не вдалося зберегти рядок'));
+      setError(extractError(err, t('carSpecs.errSaveFailed')));
       setSubmitting(false);
     }
   };
@@ -54,22 +57,22 @@ function SpecForm({ initial, onSubmit, onCancel }) {
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
       <SelectField
-        label="Розділ"
+        label={t('carSpecs.category')}
         value={form.category}
         onChange={set('category')}
         options={CATEGORY_OPTIONS}
       />
       <div className="grid grid-cols-2 gap-3">
-        <TextField label="Назва" required value={form.name} onChange={set('name')} />
-        <TextField label="Значення" required value={form.value} onChange={set('value')} />
+        <TextField label={t('carSpecs.name')} required value={form.name} onChange={set('name')} />
+        <TextField label={t('carSpecs.value')} required value={form.value} onChange={set('value')} />
       </div>
       <ErrorMessage>{error}</ErrorMessage>
       <div className="flex gap-2">
         <Button type="submit" disabled={submitting} className="flex-1">
-          {submitting ? 'Збереження…' : initial ? 'Зберегти зміни' : 'Додати рядок'}
+          {submitting ? t('common.saving') : initial ? t('common.saveChanges') : t('carSpecs.addRow')}
         </Button>
         <Button variant="secondary" onClick={onCancel}>
-          Скасувати
+          {t('common.cancel')}
         </Button>
       </div>
     </form>
@@ -77,6 +80,7 @@ function SpecForm({ initial, onSubmit, onCancel }) {
 }
 
 export default function CarSpecs() {
+  const { t } = useTranslation();
   const { carId } = useParams();
 
   const [car, setCar] = useState(null);
@@ -106,7 +110,7 @@ export default function CarSpecs() {
       .catch((err) => {
         if (cancelled) return;
         setError(
-          err?.response?.status === 404 ? 'Авто не знайдено' : 'Не вдалося завантажити тех. довідку'
+          err?.response?.status === 404 ? t('carSpecs.carNotFound') : t('carSpecs.loadFailed')
         );
       })
       .finally(() => {
@@ -121,14 +125,14 @@ export default function CarSpecs() {
     await createSpec(carId, payload);
     setSpecs(await getSpecs(carId));
     setShowForm(false);
-    setToast('Рядок додано');
+    setToast(t('carSpecs.rowAdded'));
   };
 
   const handleEdit = async (specId, payload) => {
     await updateSpec(specId, payload);
     setSpecs(await getSpecs(carId));
     setEditingId(null);
-    setToast('Рядок оновлено');
+    setToast(t('carSpecs.rowUpdated'));
   };
 
   const confirmDelete = async () => {
@@ -139,9 +143,9 @@ export default function CarSpecs() {
     try {
       await deleteSpec(spec.id);
       setSpecs((prev) => prev.filter((s) => s.id !== spec.id));
-      setToast('Рядок видалено');
+      setToast(t('carSpecs.rowDeleted'));
     } catch (err) {
-      setActionError(extractError(err, 'Не вдалося видалити рядок'));
+      setActionError(extractError(err, t('carSpecs.errDeleteFailed')));
     }
   };
 
@@ -151,9 +155,9 @@ export default function CarSpecs() {
     setPresetLoading(true);
     try {
       setSpecs(await applySpecPreset(carId, PRESET_KEY));
-      setToast('Типові значення підставлено');
+      setToast(t('carSpecs.presetApplied'));
     } catch (err) {
-      setActionError(extractError(err, 'Не вдалося підставити типові значення'));
+      setActionError(extractError(err, t('carSpecs.errPresetFailed')));
     } finally {
       setPresetLoading(false);
     }
@@ -167,7 +171,7 @@ export default function CarSpecs() {
         <ErrorMessage>{error}</ErrorMessage>
         <Link to="/garage" className="inline-flex items-center gap-1.5 text-sm text-mist hover:text-fg">
           <ArrowLeft className="h-4 w-4" />
-          До гаража
+          {t('carSpecs.toGarage')}
         </Link>
       </div>
     );
@@ -181,8 +185,8 @@ export default function CarSpecs() {
 
       <ConfirmDialog
         open={deletingSpec !== null}
-        title="Видалити рядок?"
-        message={deletingSpec ? `Видалити «${deletingSpec.name}» з тех. довідки?` : ''}
+        title={t('carSpecs.deleteRowTitle')}
+        message={deletingSpec ? t('carSpecs.deleteRowMessage', { name: deletingSpec.name }) : ''}
         onConfirm={confirmDelete}
         onCancel={() => setDeletingSpec(null)}
       />
@@ -194,16 +198,16 @@ export default function CarSpecs() {
             className="inline-flex items-center gap-1.5 text-xs text-mist transition-colors hover:text-fg"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
-            До гаража
+            {t('carSpecs.toGarage')}
           </Link>
           <h1 className="mt-1 truncate font-display text-lg font-semibold text-fg">
-            Тех. довідка{car ? ` · ${car.brand} ${car.model}` : ''}
+            {t('carSpecs.title')}{car ? ` · ${car.brand} ${car.model}` : ''}
           </h1>
         </div>
         {!showForm && canManage && (
           <Button variant="secondary" onClick={() => setShowForm(true)} className="flex-shrink-0 px-3 py-1.5">
             <Plus className="h-4 w-4" />
-            Додати
+            {t('common.add')}
           </Button>
         )}
       </div>
@@ -212,7 +216,7 @@ export default function CarSpecs() {
 
       {showForm && (
         <Card>
-          <h2 className="mb-3 font-display text-sm font-semibold text-fg">Новий рядок</h2>
+          <h2 className="mb-3 font-display text-sm font-semibold text-fg">{t('carSpecs.newRow')}</h2>
           <SpecForm onSubmit={handleAdd} onCancel={() => setShowForm(false)} />
         </Card>
       )}
@@ -221,20 +225,18 @@ export default function CarSpecs() {
         <Card className="flex flex-col items-center gap-3 p-8 text-center">
           <Wrench className="h-8 w-8 text-mist/70" />
           <p className="text-sm text-mist">
-            {canManage
-              ? 'Тут живуть моменти затяжки, обʼєми рідин і допуски — усе, що інакше шукаєш у форумах з-під капота.'
-              : 'Власник ще не заповнив тех. довідку цього авто.'}
+            {canManage ? t('carSpecs.emptyManage') : t('carSpecs.emptyViewer')}
           </p>
           {canManage && (
             <Button onClick={handlePreset} disabled={presetLoading} className="w-full">
-              {presetLoading ? 'Підстановка…' : PRESET_LABEL}
+              {presetLoading ? t('carSpecs.applying') : t('carSpecs.presetLabel')}
             </Button>
           )}
         </Card>
       ) : (
         groups.map(({ category, specs: rows }) => (
           <Card key={category}>
-            <h2 className="mb-2 font-display text-sm font-semibold text-fg">{category}</h2>
+            <h2 className="mb-2 font-display text-sm font-semibold text-fg">{specCategoryLabel(category)}</h2>
             <div className="divide-y divide-edge">
               {rows.map((spec) =>
                 editingId === spec.id ? (
@@ -254,7 +256,7 @@ export default function CarSpecs() {
                         <button
                           type="button"
                           onClick={() => setEditingId(spec.id)}
-                          aria-label={`Редагувати ${spec.name}`}
+                          aria-label={t('carSpecs.editAria', { name: spec.name })}
                           className="rounded-lg p-1.5 text-mist/70 transition-colors hover:bg-raised hover:text-fg"
                         >
                           <Pencil className="h-4 w-4" />
@@ -262,7 +264,7 @@ export default function CarSpecs() {
                         <button
                           type="button"
                           onClick={() => setDeletingSpec(spec)}
-                          aria-label={`Видалити ${spec.name}`}
+                          aria-label={t('carSpecs.deleteAria', { name: spec.name })}
                           className="rounded-lg p-1.5 text-mist/70 transition-colors hover:bg-crit/10 hover:text-crit"
                         >
                           <Trash2 className="h-4 w-4" />

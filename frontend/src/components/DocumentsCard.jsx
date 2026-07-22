@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { FileText, Plus, Trash2, Download, Loader2, CalendarClock } from 'lucide-react';
 import { extractError } from '../api/client';
 import {
@@ -18,15 +19,16 @@ import { Button, DateField, TextField, SelectField, Card, Spinner, ErrorMessage,
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 const ACCEPT = 'image/*,application/pdf';
 
-function expiryNotice(doc) {
+function expiryNotice(doc, t) {
   const days = expiresInDays(doc.expires_at);
   if (days === null) return null;
-  if (days < 0) return { text: `Прострочено ${formatDate(doc.expires_at)}`, tone: 'text-crit' };
-  if (days <= 30) return { text: `Діє ще ${days} дн.`, tone: 'text-amber' };
-  return { text: `До ${formatDate(doc.expires_at)}`, tone: 'text-mist' };
+  if (days < 0) return { text: t('documentsCard.expiredOn', { date: formatDate(doc.expires_at) }), tone: 'text-crit' };
+  if (days <= 30) return { text: t('documentsCard.daysLeft', { days }), tone: 'text-amber' };
+  return { text: t('documentsCard.validUntil', { date: formatDate(doc.expires_at) }), tone: 'text-mist' };
 }
 
 function DocumentForm({ onSubmit, onCancel }) {
+  const { t } = useTranslation();
   const [form, setForm] = useState({ kind: 'insurance', title: '', expires_at: '' });
   const [file, setFile] = useState(null);
   const [error, setError] = useState('');
@@ -37,9 +39,9 @@ function DocumentForm({ onSubmit, onCancel }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    if (!file) return setError('Виберіть файл');
-    if (file.size > MAX_UPLOAD_BYTES) return setError('Файл завеликий (максимум 10 МБ)');
-    if (!form.title.trim()) return setError('Вкажіть назву');
+    if (!file) return setError(t('documentsCard.errChooseFile'));
+    if (file.size > MAX_UPLOAD_BYTES) return setError(t('documentsCard.errFileTooLarge'));
+    if (!form.title.trim()) return setError(t('documentsCard.errEnterTitle'));
 
     setSubmitting(true);
     try {
@@ -50,7 +52,7 @@ function DocumentForm({ onSubmit, onCancel }) {
         expiresAt: form.expires_at,
       });
     } catch (err) {
-      setError(extractError(err, 'Не вдалося завантажити документ'));
+      setError(extractError(err, t('documentsCard.errUpload')));
       setSubmitting(false);
     }
   };
@@ -59,22 +61,22 @@ function DocumentForm({ onSubmit, onCancel }) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
-      <SelectField label="Вид" value={form.kind} onChange={set('kind')} options={DOCUMENT_KINDS} />
-      <TextField label="Назва" required value={form.title} onChange={set('title')} />
+      <SelectField label={t('documentsCard.kindLabel')} value={form.kind} onChange={set('kind')} options={DOCUMENT_KINDS} />
+      <TextField label={t('documentsCard.titleLabel')} required value={form.title} onChange={set('title')} />
       <DateField
-        label="Діє до"
+        label={t('documentsCard.validUntilLabel')}
         clearable
         value={form.expires_at}
         onChange={(v) => setForm((f) => ({ ...f, expires_at: v }))}
         hint={
           linksReminder
-            ? 'Нагадаємо за 14 днів до кінця дії'
-            : 'Нагадування створюємо лише для страховки й техогляду'
+            ? t('documentsCard.reminderHint')
+            : t('documentsCard.reminderHintNone')
         }
       />
       <div>
         <label className="mb-1.5 block text-xs text-mist" htmlFor="document-file">
-          Файл (фото або PDF, до 10 МБ)
+          {t('documentsCard.fileFieldLabel')}
         </label>
         <input
           id="document-file"
@@ -87,10 +89,10 @@ function DocumentForm({ onSubmit, onCancel }) {
       <ErrorMessage>{error}</ErrorMessage>
       <div className="flex gap-2">
         <Button type="submit" disabled={submitting} className="flex-1">
-          {submitting ? 'Завантаження…' : 'Завантажити'}
+          {submitting ? t('documentsCard.uploading') : t('documentsCard.upload')}
         </Button>
         <Button variant="secondary" onClick={onCancel}>
-          Скасувати
+          {t('common.cancel')}
         </Button>
       </div>
     </form>
@@ -98,6 +100,7 @@ function DocumentForm({ onSubmit, onCancel }) {
 }
 
 export default function DocumentsCard({ car, onToast, onIntervalLinked }) {
+  const { t } = useTranslation();
   const canManage = canDo(car?.your_role, 'document:manage');
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -117,7 +120,7 @@ export default function DocumentsCard({ car, onToast, onIntervalLinked }) {
         if (!cancelled) setDocuments(data);
       })
       .catch(() => {
-        if (!cancelled) setError('Не вдалося завантажити документи');
+        if (!cancelled) setError(t('documentsCard.errLoad'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -140,8 +143,8 @@ export default function DocumentsCard({ car, onToast, onIntervalLinked }) {
     setShowForm(false);
     onToast(
       created.linked_interval_id
-        ? 'Документ додано, нагадування створено'
-        : 'Документ додано'
+        ? t('documentsCard.addedWithReminder')
+        : t('documentsCard.added')
     );
     if (created.linked_interval_id) await onIntervalLinked();
   };
@@ -158,7 +161,7 @@ export default function DocumentsCard({ car, onToast, onIntervalLinked }) {
       }
       window.open(url, '_blank', 'noopener');
     } catch (err) {
-      setError(extractError(err, 'Не вдалося відкрити документ'));
+      setError(extractError(err, t('documentsCard.errOpen')));
     } finally {
       setOpeningId(null);
     }
@@ -177,9 +180,9 @@ export default function DocumentsCard({ car, onToast, onIntervalLinked }) {
         URL.revokeObjectURL(url);
         delete urlsRef.current[doc.id];
       }
-      onToast('Документ видалено');
+      onToast(t('documentsCard.deleted'));
     } catch (err) {
-      setError(extractError(err, 'Не вдалося видалити документ'));
+      setError(extractError(err, t('documentsCard.errDelete')));
     }
   };
 
@@ -187,10 +190,10 @@ export default function DocumentsCard({ car, onToast, onIntervalLinked }) {
     <Card>
       <ConfirmDialog
         open={deletingDocument !== null}
-        title="Видалити документ?"
+        title={t('documentsCard.confirmDeleteTitle')}
         message={
           deletingDocument
-            ? `Видалити «${deletingDocument.title}»? Нагадування про термін, якщо воно є, лишиться.`
+            ? t('documentsCard.confirmDeleteMessage', { title: deletingDocument.title })
             : ''
         }
         onConfirm={confirmDelete}
@@ -200,12 +203,12 @@ export default function DocumentsCard({ car, onToast, onIntervalLinked }) {
       <div className="mb-2 flex items-center justify-between gap-2">
         <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-fg">
           <FileText className="h-4 w-4 text-mist" />
-          Документи · {car.brand} {car.model}
+          {t('documentsCard.heading')} · {car.brand} {car.model}
         </h2>
         {!showForm && canManage && (
           <Button variant="ghost" onClick={() => setShowForm(true)} className="px-2.5 py-1.5 text-amber">
             <Plus className="h-4 w-4" />
-            Додати
+            {t('common.add')}
           </Button>
         )}
       </div>
@@ -222,13 +225,12 @@ export default function DocumentsCard({ car, onToast, onIntervalLinked }) {
         <Spinner className="py-4" />
       ) : documents.length === 0 ? (
         <p className="py-2 text-sm text-mist">
-          Техпаспорт, поліс, чеки — під рукою й офлайн. Для страховки й техогляду з датою
-          «діє до» створимо нагадування.
+          {t('documentsCard.empty')}
         </p>
       ) : (
         <div className="divide-y divide-edge">
           {documents.map((doc) => {
-            const notice = expiryNotice(doc);
+            const notice = expiryNotice(doc, t);
             return (
               <div key={doc.id} className="flex items-start justify-between gap-3 py-3">
                 <div className="min-w-0">
@@ -248,7 +250,7 @@ export default function DocumentsCard({ car, onToast, onIntervalLinked }) {
                     type="button"
                     onClick={() => handleOpen(doc)}
                     disabled={openingId != null}
-                    aria-label={`Відкрити ${doc.title}`}
+                    aria-label={t('documentsCard.openAria', { title: doc.title })}
                     className="rounded-lg p-1.5 text-mist/70 transition-colors hover:bg-raised hover:text-fg disabled:text-edge"
                   >
                     {openingId === doc.id ? (
@@ -261,7 +263,7 @@ export default function DocumentsCard({ car, onToast, onIntervalLinked }) {
                     <button
                       type="button"
                       onClick={() => setDeletingDocument(doc)}
-                      aria-label={`Видалити ${doc.title}`}
+                      aria-label={t('documentsCard.deleteAria', { title: doc.title })}
                       className="rounded-lg p-1.5 text-mist/70 transition-colors hover:bg-crit/10 hover:text-crit"
                     >
                       <Trash2 className="h-4 w-4" />

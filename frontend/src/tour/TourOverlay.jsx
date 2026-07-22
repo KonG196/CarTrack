@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 
 import { useAuthStore } from '../store/authStore';
 import { useCarStore } from '../store/carStore';
@@ -40,6 +41,7 @@ function place(el, top, left, width, height) {
 }
 
 export default function TourOverlay() {
+  const { t } = useTranslation();
   const { active, tour, index, steps, next, prev, stop, start, wasSeen } = useTour();
   const step = active ? steps[index] : null;
   const navigate = useNavigate();
@@ -281,7 +283,7 @@ export default function TourOverlay() {
               onClick={stop}
               className="text-xs text-mist transition-colors hover:text-fg"
             >
-              Пропустити
+              {t('tour.skip')}
             </button>
           </div>
           <h3 className="font-display text-base font-semibold text-fg">{step.title}</h3>
@@ -297,7 +299,7 @@ export default function TourOverlay() {
                   onClick={prev}
                   className="rounded-lg px-3 py-1.5 text-sm text-mist transition-colors hover:text-fg"
                 >
-                  Назад
+                  {t('tour.back')}
                 </button>
               )}
               <button
@@ -305,7 +307,7 @@ export default function TourOverlay() {
                 onClick={next}
                 className="rounded-lg bg-amber px-4 py-1.5 text-sm font-semibold text-amber-ink transition active:scale-95 motion-reduce:active:scale-100"
               >
-                {isLast ? 'Готово' : 'Далі'}
+                {isLast ? t('tour.done') : t('tour.next')}
               </button>
             </div>
           </div>

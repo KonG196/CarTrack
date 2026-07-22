@@ -1,7 +1,9 @@
+import { useTranslation } from 'react-i18next';
 import { formatMoney, formatKm, formatDate } from '../utils/format';
 import { LOG_TYPE_META, logTitle } from './LogTimelineItem';
 
 export default function PendingTimelineItem({ record }) {
+  const { t } = useTranslation();
   const { payload } = record;
   const meta = LOG_TYPE_META[payload.type] || LOG_TYPE_META.expense;
   const Icon = meta.icon;
@@ -19,7 +21,7 @@ export default function PendingTimelineItem({ record }) {
           {formatDate(payload.date)} · {formatKm(payload.odometer)}
         </p>
         <span className="mt-1.5 inline-flex items-center gap-1 rounded-lg bg-amber/10 px-2 py-0.5 text-[11px] font-medium text-amber">
-          ⏳ Очікує синхронізації
+          ⏳ {t('pendingTimeline.awaitingSync')}
         </span>
       </div>
       <span className="whitespace-nowrap font-mono text-sm font-semibold tabular-nums text-mist">

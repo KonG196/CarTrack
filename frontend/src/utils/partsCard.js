@@ -1,3 +1,5 @@
+import i18n from '../i18n';
+
 // What a parts shop actually asks for, in the order they ask. Everything here
 // already lives in the car and its spec sheet — the point is that ordering
 // filters should not mean hunting through the app for a VIN and an oil
@@ -7,12 +9,12 @@
 // sheet is free-form (the owner writes it), so matching is by substring rather
 // than an exact key.
 const SHOP_RELEVANT = [
-  { match: ['допуск оливи', 'допуск масла'], label: 'Олива' },
-  { match: ['олива двигуна', 'обʼєм оливи', "об'єм оливи"], label: 'Обʼєм оливи' },
-  { match: ['антифриз', 'охолоджуюча'], label: 'Антифриз' },
-  { match: ['код двигуна'], label: 'Двигун' },
-  { match: ['код кпп', 'кпп'], label: 'КПП' },
-  { match: ['код фарби', 'фарба'], label: 'Фарба' },
+  { match: ['допуск оливи', 'допуск масла', 'oil approval'], key: 'oil' },
+  { match: ['олива двигуна', 'обʼєм оливи', "об'єм оливи", 'engine oil'], key: 'oilVolume' },
+  { match: ['антифриз', 'охолоджуюча', 'antifreeze', 'coolant'], key: 'antifreeze' },
+  { match: ['код двигуна', 'engine code'], key: 'engine' },
+  { match: ['код кпп', 'кпп', 'gearbox code', 'gearbox'], key: 'transmission' },
+  { match: ['код фарби', 'фарба', 'paint code'], key: 'paint' },
 ];
 
 // Brand, model, and the generation — «Golf 7 (BA5)», which a parts shop does
@@ -32,7 +34,11 @@ function pickShopSpecs(specs) {
     const spec = (specs || []).find((item) =>
       rule.match.some((needle) => (item.name || '').toLowerCase().includes(needle)),
     );
-    if (spec?.value) found.push(`${rule.label}: ${spec.value}`);
+    if (spec?.value) {
+      // Label resolved here (at call time) so a language switch re-renders it.
+      const label = i18n.t(`partsCard.label.${rule.key}`);
+      found.push(`${label}: ${spec.value}`);
+    }
   }
   return found;
 }

@@ -21,8 +21,10 @@ import {
   Bell,
   Sparkles,
   QrCode,
+  Languages,
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../store/authStore';
 import { useTour } from '../tour/TourContext';
 import { TOURS, TOUR_ORDER } from '../tour/tourSteps';
@@ -37,27 +39,18 @@ import CopyCarName from '../components/CopyCarName';
 import PassportDialog from '../components/PassportDialog';
 import Toast from '../components/Toast';
 import SharingCard from '../components/SharingCard';
+import LanguageToggle from '../components/LanguageToggle';
 
 const FUEL_TYPES = [
-  { value: 'petrol', label: 'Бензин' },
-  { value: 'diesel', label: 'Дизель' },
-  { value: 'lpg', label: 'ГБО' },
-  { value: 'electric', label: 'Електро' },
-  { value: 'hybrid', label: 'Гібрид' },
+  { value: 'petrol', labelKey: 'fuelPetrol' },
+  { value: 'diesel', labelKey: 'fuelDiesel' },
+  { value: 'lpg', labelKey: 'fuelLpg' },
+  { value: 'electric', labelKey: 'fuelElectric' },
+  { value: 'hybrid', labelKey: 'fuelHybrid' },
 ];
 
-const fuelLabel = (value) => FUEL_TYPES.find((f) => f.value === value)?.label || value;
-
-
-function intervalsPlural(n) {
-  const tens = n % 100;
-  const ones = n % 10;
-  if (ones === 1 && tens !== 11) return 'інтервал';
-  if (ones >= 2 && ones <= 4 && (tens < 12 || tens > 14)) return 'інтервали';
-  return 'інтервалів';
-}
-
 function DataCard({ onToast, onImported }) {
+  const { t } = useTranslation();
   const fileInputRef = useRef(null);
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -69,9 +62,9 @@ function DataCard({ onToast, onImported }) {
     setExporting(true);
     try {
       await backupApi.downloadExport();
-      onToast('Експорт JSON завантажено');
+      onToast(t('garage.dataExportDone'));
     } catch (err) {
-      setError(extractError(err, 'Не вдалося експортувати дані'));
+      setError(extractError(err, t('garage.dataExportError')));
     } finally {
       setExporting(false);
     }
@@ -89,8 +82,8 @@ function DataCard({ onToast, onImported }) {
     } catch (err) {
       setError(
         err instanceof SyntaxError
-          ? 'Не вдалося прочитати файл: це не JSON'
-          : err.message || 'Файл не схожий на експорт Kapot Tracker'
+          ? t('garage.importNotJson')
+          : err.message || t('garage.importNotBackup')
       );
     }
   };
@@ -104,11 +97,15 @@ function DataCard({ onToast, onImported }) {
     try {
       const result = await backupApi.importBackup(pending.payload);
       onToast(
-        `Імпортовано: ${result.cars_created} авто, ${result.logs_created} записів, ${result.intervals_created} інтервалів`
+        t('garage.importDone', {
+          cars: result.cars_created,
+          logs: result.logs_created,
+          intervals: result.intervals_created,
+        })
       );
       await onImported();
     } catch (err) {
-      setError(extractError(err, 'Не вдалося імпортувати дані'));
+      setError(extractError(err, t('garage.dataImportError')));
     } finally {
       setImporting(false);
     }
@@ -119,10 +116,10 @@ function DataCard({ onToast, onImported }) {
       <div>
         <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-fg">
           <Database className="h-4 w-4 text-mist" />
-          Дані
+          {t('garage.dataTitle')}
         </h2>
         <p className="mt-1 text-xs text-mist">
-          Резервна копія гаража: експорт у JSON та відновлення з файлу. Фото до експорту не входять.
+          {t('garage.dataDesc')}
         </p>
       </div>
 
@@ -140,7 +137,7 @@ function DataCard({ onToast, onImported }) {
           ) : (
             <FileDown className="h-4 w-4" />
           )}
-          {exporting ? 'Експорт…' : 'Експортувати все (JSON)'}
+          {exporting ? t('garage.exporting') : t('garage.exportAll')}
         </Button>
         <Button
           variant="secondary"
@@ -149,7 +146,7 @@ function DataCard({ onToast, onImported }) {
           className="w-full"
         >
           {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-          {importing ? 'Імпорт…' : 'Імпортувати з файлу'}
+          {importing ? t('garage.importing') : t('garage.importFromFile')}
         </Button>
         <input
           ref={fileInputRef}
@@ -157,19 +154,23 @@ function DataCard({ onToast, onImported }) {
           accept="application/json,.json"
           onChange={handleFileChange}
           className="hidden"
-          aria-label="Файл експорту JSON"
+          aria-label={t('garage.exportFileLabel')}
         />
       </div>
 
       <ConfirmDialog
         open={pendingImport !== null}
-        title="Імпортувати дані?"
+        title={t('garage.importConfirmTitle')}
         message={
           pendingImport
-            ? `Буде додано: ${pendingImport.counts.cars} авто, ${pendingImport.counts.logs} записів, ${pendingImport.counts.intervals} інтервалів. Наявні дані не зміняться.`
+            ? t('garage.importConfirmMessage', {
+                cars: pendingImport.counts.cars,
+                logs: pendingImport.counts.logs,
+                intervals: pendingImport.counts.intervals,
+              })
             : ''
         }
-        confirmLabel="Імпортувати"
+        confirmLabel={t('garage.importConfirmLabel')}
         danger={false}
         onConfirm={confirmImport}
         onCancel={() => setPendingImport(null)}
@@ -182,6 +183,7 @@ function DataCard({ onToast, onImported }) {
 // around a central round button, and a sixth would push it off-centre.
 function DiagnosticsCard() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   return (
     <Card>
@@ -189,10 +191,10 @@ function DiagnosticsCard() {
         <div className="min-w-0">
           <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-fg">
             <Activity className="h-4 w-4 text-amber" />
-            Діагностика OBD
+            {t('garage.diagnosticsTitle')}
           </h2>
           <p className="mt-1 text-xs text-mist">
-            Імпорт CSV-логу з Car Scanner: сажа DPF, корекції форсунок, напруга АКБ.
+            {t('garage.diagnosticsDesc')}
           </p>
         </div>
         <Button
@@ -200,7 +202,7 @@ function DiagnosticsCard() {
           onClick={() => navigate('/diagnostics')}
           className="flex-shrink-0 px-3 py-1.5"
         >
-          Відкрити
+          {t('garage.open')}
         </Button>
       </div>
     </Card>
@@ -235,6 +237,11 @@ function SettingsRow({ to, icon: Icon, tone = 'amber', title, subtitle, tourId }
 }
 
 export default function Garage() {
+  const { t } = useTranslation();
+  const fuelLabel = (value) => {
+    const item = FUEL_TYPES.find((f) => f.value === value);
+    return item ? t(`garage.${item.labelKey}`) : value;
+  };
   const cars = useCarStore((s) => s.cars);
   const carsLoading = useCarStore((s) => s.carsLoading);
   const carsLoaded = useCarStore((s) => s.carsLoaded);
@@ -304,9 +311,9 @@ export default function Garage() {
     setActionError('');
     try {
       await removeCar(car.id);
-      setToast('Авто видалено');
+      setToast(t('garage.carDeleted'));
     } catch (err) {
-      setActionError(extractError(err, 'Не вдалося видалити авто'));
+      setActionError(extractError(err, t('garage.carDeleteError')));
     }
   };
 
@@ -319,9 +326,9 @@ export default function Garage() {
     setReportingCarId(car.id);
     try {
       await downloadCarReport(car.id);
-      setToast('Звіт PDF завантажено');
+      setToast(t('garage.reportDone'));
     } catch (err) {
-      setActionError(extractError(err, 'Не вдалося сформувати PDF-звіт'));
+      setActionError(extractError(err, t('garage.reportError')));
     } finally {
       setReportingCarId(null);
     }
@@ -333,9 +340,9 @@ export default function Garage() {
     setCsvCarId(car.id);
     try {
       await backupApi.downloadCarCsv(car.id);
-      setToast('CSV журналу завантажено');
+      setToast(t('garage.csvDone'));
     } catch (err) {
-      setActionError(extractError(err, 'Не вдалося завантажити CSV журналу'));
+      setActionError(extractError(err, t('garage.csvError')));
     } finally {
       setCsvCarId(null);
     }
@@ -350,10 +357,13 @@ export default function Garage() {
 
       <ConfirmDialog
         open={deletingCar !== null}
-        title="Видалити авто?"
+        title={t('garage.deleteCarTitle')}
         message={
           deletingCar
-            ? `Видалити ${deletingCar.brand} ${deletingCar.model}? Разом з авто буде видалено весь журнал.`
+            ? t('garage.deleteCarMessage', {
+                brand: deletingCar.brand,
+                model: deletingCar.model,
+              })
             : ''
         }
         onConfirm={confirmDeleteCar}
@@ -369,14 +379,14 @@ export default function Garage() {
 
 
       <div className="flex items-center justify-between px-1">
-        <h1 className="font-display text-lg font-semibold text-fg">Налаштування</h1>
+        <h1 className="font-display text-lg font-semibold text-fg">{t('garage.title')}</h1>
         <Button
           variant="secondary"
           onClick={() => navigate('/garage/new')}
           className="px-3 py-1.5"
         >
           <Plus className="h-4 w-4" />
-          Додати авто
+          {t('garage.addCar')}
         </Button>
       </div>
 
@@ -386,7 +396,7 @@ export default function Garage() {
       {carsLoaded && cars.length === 0 && (
         <Card className="flex flex-col items-center gap-3 p-8 text-center">
           <Car className="h-8 w-8 text-mist/70" />
-          <p className="text-sm text-mist">У гаражі поки порожньо. Додайте своє перше авто.</p>
+          <p className="text-sm text-mist">{t('garage.emptyGarage')}</p>
         </Card>
       )}
 
@@ -422,7 +432,7 @@ export default function Garage() {
                     {isActive && (
                       <span className="flex items-center gap-1 rounded-full bg-amber/15 px-2.5 py-1 text-xs font-medium text-amber">
                         <Check className="h-3 w-3" />
-                        Активне
+                        {t('garage.active')}
                       </span>
                     )}
                   </div>
@@ -431,7 +441,7 @@ export default function Garage() {
                   <Gauge className="h-4 w-4 text-mist" />
                   {formatKm(car.current_odometer)}
                   <span className="ml-2 text-xs text-mist/70">
-                    ≈ {Math.round(car.avg_daily_km)} км/день
+                    {t('garage.kmPerDay', { km: Math.round(car.avg_daily_km) })}
                   </span>
                 </div>
                 <div className="mt-3 flex gap-2">
@@ -441,14 +451,14 @@ export default function Garage() {
                       onClick={() => setActiveCar(car.id)}
                       className="flex-1 py-2"
                     >
-                      Зробити активним
+                      {t('garage.makeActive')}
                     </Button>
                   )}
                   <Button
                     variant="ghost"
                     onClick={() => navigate(`/garage/${car.id}/specs`)}
-                    aria-label="Тех. довідка"
-                    title="Тех. довідка"
+                    aria-label={t('garage.techSpecs')}
+                    title={t('garage.techSpecs')}
                     className="px-3 py-2"
                   >
                     <Wrench className="h-4 w-4" />
@@ -457,8 +467,8 @@ export default function Garage() {
                     variant="ghost"
                     onClick={() => handleDownloadReport(car)}
                     disabled={reportingCarId != null}
-                    aria-label="Завантажити звіт PDF"
-                    title="Звіт PDF"
+                    aria-label={t('garage.downloadReportLabel')}
+                    title={t('garage.reportTitleShort')}
                     className="px-3 py-2"
                   >
                     {String(reportingCarId) === String(car.id) ? (
@@ -471,8 +481,8 @@ export default function Garage() {
                     variant="ghost"
                     onClick={() => handleDownloadCsv(car)}
                     disabled={csvCarId != null}
-                    aria-label="Завантажити CSV журналу"
-                    title="CSV журналу"
+                    aria-label={t('garage.downloadCsvLabel')}
+                    title={t('garage.csvTitleShort')}
                     className="px-3 py-2"
                   >
                     {String(csvCarId) === String(car.id) ? (
@@ -486,8 +496,8 @@ export default function Garage() {
                       <Button
                         variant="ghost"
                         onClick={() => setPassportCar(car)}
-                        aria-label="QR-паспорт авто"
-                        title="QR-паспорт"
+                        aria-label={t('garage.qrPassportLabel')}
+                        title={t('garage.qrPassportTitle')}
                         className="px-3 py-2"
                       >
                         <QrCode className="h-4 w-4" />
@@ -495,7 +505,7 @@ export default function Garage() {
                       <Button
                         variant="ghost"
                         onClick={() => navigate(`/garage/${car.id}/edit`)}
-                        aria-label="Редагувати авто"
+                        aria-label={t('garage.editCarLabel')}
                         className="px-3 py-2"
                       >
                         <Pencil className="h-4 w-4" />
@@ -503,7 +513,7 @@ export default function Garage() {
                       <Button
                         variant="danger"
                         onClick={() => setDeletingCar(car)}
-                        aria-label="Видалити авто"
+                        aria-label={t('garage.deleteCarLabel')}
                         className="px-3 py-2"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -520,12 +530,21 @@ export default function Garage() {
           divider is the seam the user asked for: garage above, settings below. */}
       {cars.length > 0 && <div className="border-t border-edge" />}
 
+      <Card>
+        <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-fg">
+          <Languages className="h-4 w-4 text-amber" />
+          {t('garage.languageTitle')}
+        </h2>
+        <p className="mt-1 text-xs text-mist">{t('garage.languageDesc')}</p>
+        <LanguageToggle variant="segmented" className="mt-3" />
+      </Card>
+
       <SettingsRow
         to="/profile"
         icon={UserCircle}
         tone="signal"
-        title="Профіль"
-        subtitle="Імʼя, пошта, пароль і Telegram"
+        title={t('garage.profileTitle')}
+        subtitle={t('garage.profileSubtitle')}
         tourId="settings-profile"
       />
 
@@ -533,19 +552,19 @@ export default function Garage() {
         to="/notifications"
         icon={Bell}
         tone="signal"
-        title="Сповіщення"
-        subtitle="Нагадування про ТО, щотижневий підсумок"
+        title={t('garage.notificationsTitle')}
+        subtitle={t('garage.notificationsSubtitle')}
       />
 
       {activeCar && (
         <SettingsRow
           to="/intervals"
           icon={Wrench}
-          title="Інтервали ТО"
+          title={t('garage.intervalsTitle')}
           subtitle={
             intervals.length
-              ? `${intervals.length} ${intervalsPlural(intervals.length)} · олива, фільтри, ГРМ`
-              : 'Ще не налаштовані'
+              ? t('garage.intervalsSummary', { count: intervals.length })
+              : t('garage.intervalsNotSet')
           }
         />
       )}
@@ -554,13 +573,18 @@ export default function Garage() {
         <SettingsRow
           to="/documents"
           icon={FileText}
-          title="Документи"
-          subtitle="Техпаспорт, поліс, чеки"
+          title={t('garage.documentsTitle')}
+          subtitle={t('garage.documentsSubtitle')}
         />
       )}
 
       {activeCar && (
-        <SettingsRow to="/tires" icon={CircleDot} title="Шини" subtitle="Зимові, літні, всесезонні" />
+        <SettingsRow
+          to="/tires"
+          icon={CircleDot}
+          title={t('garage.tiresTitle')}
+          subtitle={t('garage.tiresSubtitle')}
+        />
       )}
 
       {activeCar && <SharingCard key={`sharing-${activeCar.id}`} car={activeCar} onToast={setToast} />}
@@ -572,10 +596,10 @@ export default function Garage() {
       <Card>
         <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-fg">
           <Sparkles className="h-4 w-4 text-amber" />
-          Тури застосунком
+          {t('garage.toursTitle')}
         </h2>
         <p className="mt-1 text-xs text-mist">
-          Короткі екскурсії розділами — покажуть, що де і як працює.
+          {t('garage.toursDesc')}
         </p>
         <div className="mt-3 divide-y divide-edge">
           {TOUR_ORDER.map((name) => (
@@ -594,7 +618,7 @@ export default function Garage() {
 
       <Button variant="ghost" onClick={handleLogout} className="w-full text-mist">
         <LogOut className="h-4 w-4" />
-        Вийти
+        {t('garage.logout')}
       </Button>
     </div>
   );

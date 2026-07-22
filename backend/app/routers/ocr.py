@@ -10,6 +10,7 @@ from app.auth import get_current_user
 from app.models import User
 from app.schemas import OcrScanResult, OcrWorkOrderResult
 from app.services.ocr_llm import OcrUnavailable, recognize_receipt, recognize_work_order
+from app.i18n import t
 
 router = APIRouter(prefix="/ocr", tags=["ocr"])
 
@@ -26,10 +27,11 @@ _NO_TESSERACT = HTTPException(
 # The vision model is configured but gave no answer (rate-limited / down). A 503
 # lets the app tell the user «скан тимчасово недоступний» rather than blame the
 # photo — the frontend maps this status to entryForm.scanUnavailable.
-_OCR_UNAVAILABLE = HTTPException(
-    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-    detail="Розпізнавання тимчасово недоступне. Введіть дані вручну і спробуйте скан пізніше.",
-)
+def _ocr_unavailable(lang: str = "en") -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail=t("err.ocrUnavailable", lang),
+    )
 
 
 async def _read_image(file: UploadFile) -> bytes:
@@ -63,12 +65,12 @@ async def scan_receipt(
         # Off the event loop: OCR is CPU + a remote call, and running it inline
         # froze every other request until the scan finished.
         parsed = await asyncio.to_thread(
-            recognize_receipt, image_bytes, file.content_type or "image/jpeg"
+            recognize_receipt, image_bytes, file.content_type or "image/jpeg", current_user.language
         )
     except TesseractNotFoundError:
         raise _NO_TESSERACT
     except OcrUnavailable:
-        raise _OCR_UNAVAILABLE
+        raise _ocr_unavailable(current_user.language)
 
     return OcrScanResult(
         liters=parsed.liters,
@@ -88,12 +90,12 @@ async def scan_work_order(
     image_bytes = await _read_image(file)
     try:
         parsed = await asyncio.to_thread(
-            recognize_work_order, image_bytes, file.content_type or "image/jpeg"
+            recognize_work_order, image_bytes, file.content_type or "image/jpeg", current_user.language
         )
     except TesseractNotFoundError:
         raise _NO_TESSERACT
     except OcrUnavailable:
-        raise _OCR_UNAVAILABLE
+        raise _ocr_unavailable(current_user.language)
 
     date = None
     if parsed.date:

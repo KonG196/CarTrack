@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, Bell, X } from 'lucide-react';
 import { getNotifications } from '../api/notifications';
@@ -23,6 +24,7 @@ function NoteBody({ note }) {
 }
 
 export default function NotificationsPanel() {
+  const { t } = useTranslation();
   const [items, setItems] = useState(null); // null = still loading
   const [error, setError] = useState(false);
   const [dismissed, setDismissed] = useState(() => loadDismissed());
@@ -45,12 +47,12 @@ export default function NotificationsPanel() {
     };
   }, []);
 
-  if (error) return <ErrorMessage>Не вдалося завантажити сповіщення</ErrorMessage>;
+  if (error) return <ErrorMessage>{t('notificationsPanel.loadError')}</ErrorMessage>;
   if (items === null) return <Spinner className="py-4" />;
 
   const active = activeNotifications(items, dismissed);
   if (active.length === 0) {
-    return <p className="py-2 text-sm text-mist">Нових сповіщень немає — усе під контролем.</p>;
+    return <p className="py-2 text-sm text-mist">{t('notificationsPanel.empty')}</p>;
   }
 
   const dismiss = (id) => {
@@ -81,7 +83,7 @@ export default function NotificationsPanel() {
             <button
               type="button"
               onClick={() => dismiss(note.id)}
-              aria-label="Приховати сповіщення"
+              aria-label={t('notificationsPanel.dismiss')}
               className="-mr-1 -mt-1 flex-shrink-0 rounded-lg p-1.5 text-mist/60 transition-colors hover:bg-raised hover:text-fg"
             >
               <X className="h-4 w-4" />

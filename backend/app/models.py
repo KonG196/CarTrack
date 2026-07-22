@@ -19,6 +19,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     false,
+    text,
     true,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -39,6 +40,13 @@ class User(Base):
     # How the user is signed under a shared car's entries. NULL means the
     # label falls back to the part of the email before the «@».
     display_name: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    # UI language, which also decides the language of this user's emails,
+    # Telegram messages and API error details. 'en' | 'uk'. New accounts default
+    # to English (the app default); rows that predate this column keep 'uk' via
+    # the server default, so existing users are not switched silently.
+    language: Mapped[str] = mapped_column(
+        String(5), nullable=False, default="en", server_default=text("'uk'")
+    )
     # Unique per app logic: linking re-assigns a chat id instead of duplicating it.
     # An address the user asked to move to, parked until a code sent to it
     # comes back. Login is gated on a verified address, so writing an

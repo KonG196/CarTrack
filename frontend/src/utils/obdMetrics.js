@@ -1,3 +1,8 @@
+import i18n from '../i18n';
+
+// Keys are OBD metric codes (never localized); values are the Ukrainian display
+// labels used as the fallback. English labels live in EN_METRIC_LABELS and are
+// picked live by metricLabel().
 export const METRIC_LABELS = {
   dpf_soot_mass: 'Маса сажі DPF',
   dpf_distance_since_regen: 'Пробіг з останньої регенерації',
@@ -12,6 +17,22 @@ export const METRIC_LABELS = {
   vehicle_speed: 'Швидкість',
   intake_temp: 'Температура впуску',
   fuel_rail_pressure: 'Тиск у паливній рампі',
+};
+
+const EN_METRIC_LABELS = {
+  dpf_soot_mass: 'DPF soot mass',
+  dpf_distance_since_regen: 'Distance since last regen',
+  injector_correction_1: 'Injector 1 correction',
+  injector_correction_2: 'Injector 2 correction',
+  injector_correction_3: 'Injector 3 correction',
+  injector_correction_4: 'Injector 4 correction',
+  battery_voltage: 'Battery voltage',
+  coolant_temp: 'Coolant temp',
+  boost_pressure: 'Boost pressure',
+  engine_rpm: 'Engine RPM',
+  vehicle_speed: 'Speed',
+  intake_temp: 'Intake temp',
+  fuel_rail_pressure: 'Fuel rail pressure',
 };
 
 const METRIC_ORDER = [
@@ -31,6 +52,7 @@ const METRIC_ORDER = [
 ];
 
 export function metricLabel(key) {
+  if (String(i18n.language || 'en').startsWith('en')) return EN_METRIC_LABELS[key] || METRIC_LABELS[key] || key;
   return METRIC_LABELS[key] || key;
 }
 
@@ -47,9 +69,12 @@ export function chartPoints(series) {
 }
 
 export function formatDuration(seconds) {
+  const en = String(i18n.language || 'en').startsWith('en');
+  const s = en ? 's' : 'с';
+  const m = en ? 'min' : 'хв';
   const total = Math.round(Number(seconds) || 0);
-  if (total < 60) return `${total} с`;
+  if (total < 60) return `${total} ${s}`;
   const minutes = Math.floor(total / 60);
   const rest = total % 60;
-  return `${minutes} хв ${String(rest).padStart(2, '0')} с`;
+  return `${minutes} ${m} ${String(rest).padStart(2, '0')} ${s}`;
 }

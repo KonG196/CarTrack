@@ -18,6 +18,7 @@ import datetime as dt
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from app.i18n import normalize_lang, t
 from app.models import Car, LogEntry, User
 from app.services import climate
 from app.services.fuel import compute_stats_per_kind, detect_consumption_spike
@@ -37,7 +38,6 @@ INSURANCE_CRIT_DAYS = 7
 #: (renewed elsewhere, or the car is long gone) rather than an active problem.
 INSURANCE_STALE_DAYS = 60
 
-_SEASON_ACCUSATIVE = {"winter": "зимову", "summer": "літню"}
 _SEVERITY_RANK = {"crit": 0, "warn": 1, "info": 2}
 
 
@@ -45,7 +45,7 @@ def _car_label(car: Car) -> str:
     return f"{car.brand} {car.model}"
 
 
-def _interval_body(status: dict) -> str:
+def _interval_body(status: dict, lang: str) -> str:
     """«прострочено на… / залишилось…», hiding the axis that still has slack.
 
     Same rule as the dashboard row: once overdue, only what is overdue shows.
@@ -56,34 +56,30 @@ def _interval_body(status: dict) -> str:
     parts: list[str] = []
     if km_left is not None:
         if km_left < 0:
-            parts.append(f"прострочено на {abs(km_left)} км")
+            parts.append(t("notif.interval.overdueKm", lang, km=abs(km_left)))
         elif not overdue:
-            parts.append(f"залишилось {km_left} км")
+            parts.append(t("notif.interval.leftKm", lang, km=km_left))
     if days_left is not None:
         if days_left < 0:
-            parts.append(f"{abs(days_left)} дн. тому")
+            parts.append(t("notif.interval.overdueDaysAgo", lang, days=abs(days_left)))
         elif not overdue:
-            parts.append(f"залишилось {days_left} дн.")
+            parts.append(t("notif.interval.leftDays", lang, days=days_left))
     if parts:
         return ", ".join(parts)
-    return "вже прострочено" if overdue else "наближається"
+    return t("notif.interval.alreadyOverdue", lang) if overdue else t("notif.interval.approaching", lang)
 
 
-def _insurance_body(until: dt.date, days_left: int) -> str:
+def _insurance_body(until: dt.date, days_left: int, lang: str) -> str:
+    date = f"{until:%d.%m.%Y}"
     if days_left < 0:
-        return (
-            f"ОСЦПВ була дійсна до {until:%d.%m.%Y} — прострочено на {abs(days_left)} дн. "
-            "Їзда без поліса — штраф і особиста відповідальність за ДТП."
-        )
-    return (
-        f"ОСЦПВ дійсна до {until:%d.%m.%Y} — лишилось {days_left} дн. "
-        "Оновіть поліс, щоб уникнути штрафу."
-    )
+        return t("notif.insurance.bodyExpired", lang, date=date, days=abs(days_left))
+    return t("notif.insurance.bodyExpiring", lang, date=date, days=days_left)
 
 
 def build_notifications(db: Session, user: User, today: dt.date | None = None) -> list[dict]:
     if today is None:
         today = dt.date.today()
+    lang = normalize_lang(user.language)
 
     cars = (
         db.execute(
@@ -121,7 +117,7 @@ def build_notifications(db: Session, user: User, today: dt.date | None = None) -
                     "car_id": car.id,
                     "car_label": label,
                     "title": interval.title,
-                    "body": _interval_body(status),
+                    "body": _interval_body(status, lang),
                     "action": "/intervals",
                 }
             )
@@ -136,11 +132,13 @@ def build_notifications(db: Session, user: User, today: dt.date | None = None) -
                     "severity": "warn",
                     "car_id": car.id,
                     "car_label": label,
-                    "title": "Стрибок витрати пального",
-                    "body": (
-                        f"+{spike.pct_over}% над нормою "
-                        f"({spike.consumption_l_100km:.1f} проти ~{spike.baseline_l_100km:.1f} л/100 км). "
-                        "Перевірте тиск у шинах, фільтри чи свічки."
+                    "title": t("notif.spike.title", lang),
+                    "body": t(
+                        "notif.spike.body",
+                        lang,
+                        pct=spike.pct_over,
+                        actual=f"{spike.consumption_l_100km:.1f}",
+                        baseline=f"{spike.baseline_l_100km:.1f}",
                     ),
                     "action": "/analytics",
                 }
@@ -159,11 +157,8 @@ def build_notifications(db: Session, user: User, today: dt.date | None = None) -
                         "severity": "crit" if age >= TIRE_AGE_CRIT_YEARS else "warn",
                         "car_id": car.id,
                         "car_label": label,
-                        "title": "Вік шин",
-                        "body": (
-                            f"Комплекту «{mounted.name}» вже {age} р. — час перевірити стан "
-                            "і, можливо, замінити."
-                        ),
+                        "title": t("notif.tireAge.title", lang),
+                        "body": t("notif.tireAge.body", lang, name=mounted.name, age=age),
                         "action": "/tires",
                     }
                 )
@@ -180,11 +175,8 @@ def build_notifications(db: Session, user: User, today: dt.date | None = None) -
                             "severity": "warn",
                             "car_id": car.id,
                             "car_label": label,
-                            "title": "Ротація шин",
-                            "body": (
-                                f"{km_since} км від останньої ротації — переставте вісі, "
-                                "щоб протектор зношувався рівномірно."
-                            ),
+                            "title": t("notif.rotation.title", lang),
+                            "body": t("notif.rotation.body", lang, km=km_since),
                             "action": "/tires",
                         }
                     )
@@ -200,8 +192,8 @@ def build_notifications(db: Session, user: User, today: dt.date | None = None) -
                         "severity": "info",
                         "car_id": car.id,
                         "car_label": label,
-                        "title": "Сезон шиномонтажу",
-                        "body": "Додайте свій комплект шин, і я нагадуватиму про заміну, ротацію та вік.",
+                        "title": t("notif.seasonalAdd.title", lang),
+                        "body": t("notif.seasonalAdd.body", lang),
                         "action": "/tires",
                     }
                 )
@@ -217,8 +209,8 @@ def build_notifications(db: Session, user: User, today: dt.date | None = None) -
                         "severity": "info",
                         "car_id": car.id,
                         "car_label": label,
-                        "title": "Час міняти гуму",
-                        "body": f"Пора переходити на {_SEASON_ACCUSATIVE[season]} гуму за сезоном.",
+                        "title": t("notif.seasonalSwitch.title", lang),
+                        "body": t("notif.seasonalSwitch.body", lang, season=t(f"notif.season.{season}", lang)),
                         "action": "/tires",
                     }
                 )
@@ -241,8 +233,10 @@ def build_notifications(db: Session, user: User, today: dt.date | None = None) -
                         "severity": "crit" if days_left <= INSURANCE_CRIT_DAYS else "warn",
                         "car_id": car.id,
                         "car_label": label,
-                        "title": "Страховка спливає" if days_left >= 0 else "Страховка прострочена",
-                        "body": _insurance_body(car.insurance_until, days_left),
+                        "title": t("notif.insurance.titleExpiring", lang)
+                        if days_left >= 0
+                        else t("notif.insurance.titleExpired", lang),
+                        "body": _insurance_body(car.insurance_until, days_left, lang),
                         "action": "/documents",
                     }
                 )

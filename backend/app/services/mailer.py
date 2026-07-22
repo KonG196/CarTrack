@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Optional
 
 from app.config import settings
+from app.i18n import normalize_lang, t
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +102,7 @@ def send_mail(to: str, subject: str, body: str, html: Optional[str] = None) -> b
 
 def _render_email(
     *,
+    lang: str = "en",
     heading: str,
     lede: str,
     code: Optional[str] = None,
@@ -108,6 +110,7 @@ def _render_email(
     note: Optional[str] = None,
 ) -> str:
     """Build the branded HTML letter. `button` is (label, url)."""
+    lang = normalize_lang(lang)
     code_block = (
         f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
         f'style="margin:0 0 20px;"><tr><td align="center" '
@@ -134,8 +137,7 @@ def _render_email(
             # Direct-link fallback: if the client strips the styled button, the
             # raw URL is still there to copy.
             f'<p style="margin:0 0 20px;font-size:13px;line-height:1.6;color:{_MIST};'
-            f'font-family:{_SANS};text-align:center;">Кнопка не відкривається? '
-            f'Перейдіть за посиланням:<br>'
+            f'font-family:{_SANS};text-align:center;">{t("email.button_fallback", lang)}<br>'
             f'<a href="{url}" style="color:{_AMBER};word-break:break-all;'
             f'text-decoration:underline;">{url}</a></p>'
         )
@@ -148,7 +150,7 @@ def _render_email(
 
     return f"""\
 <!doctype html>
-<html lang="uk">
+<html lang="{lang}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -179,8 +181,7 @@ def _render_email(
       </td></tr>
       <tr><td style="padding:20px 28px 26px;border-top:1px solid {_EDGE};">
         <p style="margin:0;font-size:12px;line-height:1.5;color:{_MUTED};
-          font-family:{_SANS};">Kapot&nbsp;Tracker — бортовий журнал авто.
-          Цей лист надіслано автоматично, відповідати на нього не потрібно.</p>
+          font-family:{_SANS};">{t("email.footer", lang)}</p>
       </td></tr>
     </table>
   </td></tr>
@@ -189,70 +190,59 @@ def _render_email(
 </html>"""
 
 
-def send_email_change(to: str, code: str) -> bool:
+def send_email_change(to: str, code: str, lang: str = "en") -> bool:
     """The code goes to the NEW address, which is the whole point of the flow:
     only someone who can read that inbox can move the account to it."""
+    lang = normalize_lang(lang)
     hours = settings.VERIFY_CODE_EXPIRE_HOURS
     return send_mail(
         to,
-        "Kapot Tracker — підтвердження нової пошти",
-        f"Ви змінюєте адресу входу в Kapot Tracker на цю.\n\n"
-        f"Код підтвердження: {code}\n\n"
-        f"Код дійсний {hours} год. "
-        f"Поки код не введено, вхід лишається на старій адресі.\n"
-        f"Якщо ви цього не робили — просто проігноруйте цей лист.",
+        t("email.change.subject", lang),
+        t("email.change.text", lang, code=code, hours=hours),
         html=_render_email(
-            heading="Підтвердження нової пошти",
-            lede="Ви змінюєте адресу входу в Kapot Tracker на цю. "
-            "Введіть код у застосунку, щоб завершити.",
+            lang=lang,
+            heading=t("email.change.heading", lang),
+            lede=t("email.change.lede", lang),
             code=code,
-            note=f"Код дійсний {hours} год. Поки код не введено, вхід лишається "
-            "на старій адресі. Якщо ви цього не робили — просто проігноруйте лист.",
+            note=t("email.change.note", lang, hours=hours),
         ),
     )
 
 
-def send_verification(to: str, code: str) -> bool:
+def send_verification(to: str, code: str, lang: str = "en") -> bool:
+    lang = normalize_lang(lang)
     hours = settings.VERIFY_CODE_EXPIRE_HOURS
     link = f"{settings.PUBLIC_URL.rstrip('/')}/verify?email={to}&code={code}"
     return send_mail(
         to,
-        "Kapot Tracker — підтвердження пошти",
-        f"Вітаємо в Kapot Tracker!\n\n"
-        f"Код підтвердження: {code}\n\n"
-        f"Або просто перейдіть за посиланням:\n{link}\n\n"
-        f"Код дійсний {hours} год. "
-        f"Якщо ви не реєструвалися — просто проігноруйте цей лист.",
+        t("email.verify.subject", lang),
+        t("email.verify.text", lang, code=code, link=link, hours=hours),
         html=_render_email(
-            heading="Вітаємо в Kapot Tracker!",
-            lede="Залишилось підтвердити пошту. Введіть код у застосунку або "
-            "натисніть кнопку нижче.",
+            lang=lang,
+            heading=t("email.verify.heading", lang),
+            lede=t("email.verify.lede", lang),
             code=code,
-            button=("Підтвердити пошту", link),
-            note=f"Код дійсний {hours} год. Якщо ви не реєструвалися — просто "
-            "проігноруйте цей лист.",
+            button=(t("email.verify.button", lang), link),
+            note=t("email.verify.note", lang, hours=hours),
         ),
     )
 
 
-def send_reset_code_mail(to: str, code: str) -> bool:
+def send_reset_code_mail(to: str, code: str, lang: str = "en") -> bool:
     # Magic link: /reset prefills the code and jumps straight to the
     # new-password step, so the letter is one click from resetting.
+    lang = normalize_lang(lang)
     link = f"{settings.PUBLIC_URL.rstrip('/')}/reset?email={to}&code={code}"
     return send_mail(
         to,
-        "Kapot Tracker — відновлення пароля",
-        f"Код для зміни пароля: {code}\n\n"
-        f"Або перейдіть за посиланням, щоб задати новий пароль:\n{link}\n\n"
-        f"Код дійсний 10 хвилин і працює один раз.\n"
-        f"Якщо ви не просили зміну пароля — просто проігноруйте цей лист.",
+        t("email.reset.subject", lang),
+        t("email.reset.text", lang, code=code, link=link),
         html=_render_email(
-            heading="Відновлення пароля",
-            lede="Натисніть кнопку, щоб задати новий пароль, або введіть код "
-            "у застосунку вручну.",
+            lang=lang,
+            heading=t("email.reset.heading", lang),
+            lede=t("email.reset.lede", lang),
             code=code,
-            button=("Задати новий пароль", link),
-            note="Код дійсний 10 хвилин і працює один раз. Якщо ви не просили "
-            "зміну пароля — просто проігноруйте цей лист.",
+            button=(t("email.reset.button", lang), link),
+            note=t("email.reset.note", lang),
         ),
     )

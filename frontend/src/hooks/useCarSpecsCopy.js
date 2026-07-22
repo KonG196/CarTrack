@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { getSpecs } from '../api/specs';
+import i18n from '../i18n';
 import { buildSpecsMessage, hasSomethingToShare } from '../utils/partsCard';
 
 // The copy-the-shop-details behaviour, without a layout. Both the settings card
@@ -36,9 +37,9 @@ export default function useCarSpecsCopy(car, onCopied) {
     try {
       await navigator.clipboard.writeText(message);
       setCopied(true);
-      onCopied?.('Скопійовано — можна слати в магазин');
+      onCopied?.(i18n.t('carSpecsCopy.copiedToShop'));
     } catch {
-      onCopied?.('Не вдалося скопіювати');
+      onCopied?.(i18n.t('carSpecsCopy.copyFailed'));
     }
   };
 

@@ -1,6 +1,20 @@
 import { create } from 'zustand';
+import i18n, { LANG_KEY } from '../i18n';
 import * as authApi from '../api/auth';
 import { TOKEN_KEY, clearTokens, extractError, setTokens } from '../api/client';
+
+// When an account arrives with a saved language and the browser has no explicit
+// choice yet, adopt the account's language so a preference follows the user to a
+// new device. Once they toggle, the local choice is stored and wins from then on.
+function adoptAccountLanguage(user) {
+  try {
+    if (user?.language && !localStorage.getItem(LANG_KEY)) {
+      if (i18n.language !== user.language) i18n.changeLanguage(user.language);
+    }
+  } catch {
+    /* localStorage unavailable — keep the current UI language */
+  }
+}
 
 export const useAuthStore = create((set, get) => ({
   token: localStorage.getItem(TOKEN_KEY),
@@ -13,11 +27,12 @@ export const useAuthStore = create((set, get) => ({
     set({ token: data.access_token });
     const user = await authApi.getMe();
     set({ user });
+    adoptAccountLanguage(user);
     return user;
   },
 
   async register(email, password) {
-    const account = await authApi.register(email, password);
+    const account = await authApi.register(email, password, i18n.language);
     // Logging straight in would 403 while the address is unconfirmed; the
     // caller sends the user to /verify instead.
     if (account?.verification_sent) return { pendingVerification: true };
@@ -31,10 +46,24 @@ export const useAuthStore = create((set, get) => ({
     try {
       const user = await authApi.getMe();
       set({ user, userLoading: false });
+      adoptAccountLanguage(user);
       return user;
     } catch (error) {
       set({ userLoading: false });
       throw error;
+    }
+  },
+
+  // Push a UI language change to the backend so emails, the Telegram bot and API
+  // error details follow it. No-op when signed out or already in sync.
+  async syncLanguage(lng) {
+    const { token, user } = get();
+    if (!token || !user || user.language === lng) return;
+    try {
+      const updated = await authApi.updateProfile({ language: lng });
+      set({ user: updated });
+    } catch {
+      /* best-effort: the UI language still changed locally */
     }
   },
 
@@ -75,6 +104,12 @@ export const useAuthStore = create((set, get) => ({
     set({ token: null, user: null });
   },
 }));
+
+// Keep the backend in step with the UI language once signed in, so emails, the
+// Telegram bot and API errors follow the toggle. Registered once at module load.
+i18n.on('languageChanged', (lng) => {
+  useAuthStore.getState().syncLanguage(lng);
+});
 
 async function purgeApiCache() {
   if (typeof caches === 'undefined') return;

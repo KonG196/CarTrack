@@ -24,7 +24,7 @@ from app.schemas import (
 from app.services.forecast import estimate_interval_cost
 from app.services.intervals import compute_interval_status
 from app.services.intervals_complete import complete_interval
-from app.services.presets import COMPLIANCE_PRESETS, MAINTENANCE_PRESETS
+from app.services.presets import compliance_presets, maintenance_presets
 
 router = APIRouter(tags=["intervals"])
 
@@ -108,9 +108,10 @@ def serialize_interval(
 def list_interval_presets(
     current_user: User = Depends(get_current_user),
 ) -> IntervalPresetsOut:
+    lang = current_user.language
     return IntervalPresetsOut(
-        maintenance=[IntervalPresetOut(**preset._asdict()) for preset in MAINTENANCE_PRESETS],
-        compliance=[IntervalPresetOut(**preset._asdict()) for preset in COMPLIANCE_PRESETS],
+        maintenance=[IntervalPresetOut(**preset._asdict()) for preset in maintenance_presets(lang)],
+        compliance=[IntervalPresetOut(**preset._asdict()) for preset in compliance_presets(lang)],
     )
 
 

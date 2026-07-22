@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   Car,
   Fuel,
@@ -16,6 +17,7 @@ import {
 import { useCarStore } from '../store/carStore';
 import { getRefuelContext } from '../api/logs';
 import { canDo } from '../utils/permissions';
+import { fuelKindLabel } from '../utils/fuelKind';
 import { formatMoney, formatMoneyCompact, formatKm, formatDate } from '../utils/format';
 import { Card, Spinner, ErrorMessage } from '../components/UI';
 import Toast from '../components/Toast';
@@ -23,19 +25,10 @@ import NotificationsBanner from '../components/NotificationsBanner';
 import CompleteIntervalModal from '../components/CompleteIntervalModal';
 import CopyCarName from '../components/CopyCarName';
 
-const FUEL_LABELS = {
-  petrol: 'Бензин',
-  diesel: 'Дизель',
-  lpg: 'ГБО',
-  electric: 'Електро',
-  hybrid: 'Гібрид',
-};
-const fuelLabel = (v) => FUEL_LABELS[v] || v;
-
 const STATUS_STYLES = {
-  ok: { bar: 'bg-ok', text: 'text-ok', label: 'В нормі' },
-  due_soon: { bar: 'bg-amber', text: 'text-amber', label: 'Скоро' },
-  overdue: { bar: 'bg-crit', text: 'text-crit', label: 'Прострочено' },
+  ok: { bar: 'bg-ok', text: 'text-ok', labelKey: 'statusOk' },
+  due_soon: { bar: 'bg-amber', text: 'text-amber', labelKey: 'statusDueSoon' },
+  overdue: { bar: 'bg-crit', text: 'text-crit', labelKey: 'statusOverdue' },
 };
 
 const BUDGET_STYLES = {
@@ -59,13 +52,14 @@ function StatCard({ icon: Icon, label, value }) {
 }
 
 function BudgetCard({ budget }) {
+  const { t } = useTranslation();
   const style = BUDGET_STYLES[budget.status] || BUDGET_STYLES.ok;
   const pct = Math.max(0, Math.min(100, budget.pct_used));
 
   return (
     <Card>
       <div className="flex items-baseline justify-between gap-2">
-        <h2 className="font-display text-sm font-semibold text-fg">Бюджет місяця</h2>
+        <h2 className="font-display text-sm font-semibold text-fg">{t('dashboard.budgetTitle')}</h2>
         <span className={`font-mono text-xs tabular-nums ${style.text}`}>
           {formatMoney(budget.spent_this_month)} / {formatMoney(budget.limit)}
         </span>
@@ -74,9 +68,9 @@ function BudgetCard({ budget }) {
         <div className={`bar-fill h-full rounded-full ${style.bar}`} style={{ width: `${pct}%` }} />
       </div>
       <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-mist">
-        <span>{Math.round(budget.pct_used)}% витрачено</span>
+        <span>{t('dashboard.budgetPctUsed', { pct: Math.round(budget.pct_used) })}</span>
         {budget.projected_month_total != null && (
-          <span>прогноз: {formatMoney(budget.projected_month_total)}</span>
+          <span>{t('dashboard.budgetProjected', { amount: formatMoney(budget.projected_month_total) })}</span>
         )}
       </div>
     </Card>
@@ -84,13 +78,14 @@ function BudgetCard({ budget }) {
 }
 
 function RangeCard({ rangeKm }) {
+  const { t } = useTranslation();
   return (
     <Card className="flex items-center gap-3">
       <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-signal/15">
         <Gauge className="h-5 w-5 text-signal" />
       </span>
       <p className="flex-1 text-sm text-fg">
-        Запас ходу на повному баку:{' '}
+        {t('dashboard.rangeOnFullTank')}{' '}
         <span className="font-mono font-semibold tabular-nums">~{formatKm(rangeKm)}</span>
       </p>
     </Card>
@@ -98,6 +93,7 @@ function RangeCard({ rangeKm }) {
 }
 
 function IntervalRow({ interval, onComplete, canComplete, tourId }) {
+  const { t } = useTranslation();
   const style = STATUS_STYLES[interval.status] || STATUS_STYLES.ok;
   const pct = Math.max(0, Math.min(100, interval.health_pct ?? 0));
 
@@ -108,19 +104,19 @@ function IntervalRow({ interval, onComplete, canComplete, tourId }) {
   const overdue = interval.status === 'overdue';
   const parts = [];
   if (interval.km_left !== null && interval.km_left !== undefined) {
-    if (interval.km_left < 0) parts.push(`прострочено на ${formatKm(Math.abs(interval.km_left))}`);
-    else if (!overdue) parts.push(`${formatKm(interval.km_left)} залишилось`);
+    if (interval.km_left < 0) parts.push(t('dashboard.overdueBy', { distance: formatKm(Math.abs(interval.km_left)) }));
+    else if (!overdue) parts.push(t('dashboard.kmLeft', { distance: formatKm(interval.km_left) }));
   }
   if (interval.days_left !== null && interval.days_left !== undefined) {
-    if (interval.days_left < 0) parts.push(`${Math.abs(interval.days_left)} дн. тому`);
-    else if (!overdue) parts.push(`${interval.days_left} дн.`);
+    if (interval.days_left < 0) parts.push(t('dashboard.daysAgo', { days: Math.abs(interval.days_left) }));
+    else if (!overdue) parts.push(t('dashboard.daysLeft', { days: interval.days_left }));
   }
 
   const body = (
     <>
       <div className="flex items-baseline justify-between gap-2">
         <p className="text-sm font-medium text-fg">{interval.title}</p>
-        <span className={`text-xs font-medium ${style.text}`}>{style.label}</span>
+        <span className={`text-xs font-medium ${style.text}`}>{t(`dashboard.${style.labelKey}`)}</span>
       </div>
       <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-raised">
         <div className={`bar-fill h-full rounded-full ${style.bar}`} style={{ width: `${pct}%` }} />
@@ -132,7 +128,7 @@ function IntervalRow({ interval, onComplete, canComplete, tourId }) {
         {interval.predicted_due_date && (
           <span className="flex items-center gap-1">
             <CalendarClock className="h-3 w-3" />
-            приблизно {formatDate(interval.predicted_due_date)}
+            {t('dashboard.approxDate', { date: formatDate(interval.predicted_due_date) })}
           </span>
         )}
         {canComplete && (
@@ -151,7 +147,7 @@ function IntervalRow({ interval, onComplete, canComplete, tourId }) {
       type="button"
       data-tour={tourId}
       onClick={() => onComplete(interval)}
-      aria-label={`Відмітити виконаним: ${interval.title}`}
+      aria-label={t('dashboard.markDoneAria', { title: interval.title })}
       className="group block w-full py-3 text-left transition first:pt-0 last:pb-0 hover:bg-raised/40 active:bg-raised motion-reduce:active:bg-transparent"
     >
       {body}
@@ -160,6 +156,7 @@ function IntervalRow({ interval, onComplete, canComplete, tourId }) {
 }
 
 export default function Dashboard() {
+  const { t } = useTranslation();
   const cars = useCarStore((s) => s.cars);
   const carsLoading = useCarStore((s) => s.carsLoading);
   const carsLoaded = useCarStore((s) => s.carsLoaded);
@@ -216,15 +213,15 @@ export default function Dashboard() {
         <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-amber/15">
           <Car className="h-7 w-7 text-amber" />
         </span>
-        <h2 className="font-display text-lg font-semibold text-fg">Вітаємо в Kapot Tracker!</h2>
+        <h2 className="font-display text-lg font-semibold text-fg">{t('dashboard.welcomeTitle')}</h2>
         <p className="text-sm text-mist">
-          Додайте своє перше авто, щоб почати вести журнал витрат та обслуговування.
+          {t('dashboard.welcomeSubtitle')}
         </p>
         <Link
           to="/garage"
           className="mt-2 inline-flex items-center gap-1 rounded-xl bg-amber px-5 py-2.5 text-sm font-medium text-amber-ink transition-colors hover:bg-amber-deep"
         >
-          Додати авто
+          {t('dashboard.addCar')}
           <ChevronRight className="h-4 w-4" />
         </Link>
       </Card>
@@ -263,7 +260,7 @@ export default function Dashboard() {
               </h1>
               <p className="mt-0.5 text-xs text-mist">
                 {activeCar.year}
-                {activeCar.engine ? ` · ${activeCar.engine}` : ''} · {fuelLabel(activeCar.fuel_type)}
+                {activeCar.engine ? ` · ${activeCar.engine}` : ''} · {fuelKindLabel(activeCar.fuel_type)}
               </p>
             </div>
             <span className="flex flex-shrink-0 items-center gap-0.5 text-sm text-mist" data-tour="odometer">
@@ -272,7 +269,7 @@ export default function Dashboard() {
                 <button
                   type="button"
                   onClick={() => navigate(`/garage/${activeCar.id}/edit?focus=odometer`)}
-                  aria-label="Змінити пробіг"
+                  aria-label={t('dashboard.editOdometerAria')}
                   className="rounded-lg p-1.5 text-mist/70 transition-colors hover:bg-panel hover:text-fg"
                 >
                   <Pencil className="h-3.5 w-3.5" />
@@ -292,12 +289,12 @@ export default function Dashboard() {
           <div className="grid grid-cols-3 gap-2.5" data-tour="stats">
             <StatCard
               icon={Wallet}
-              label="Цей місяць"
+              label={t('dashboard.statThisMonth')}
               value={formatMoneyCompact(analytics.totals.this_month)}
             />
             <StatCard
               icon={Droplets}
-              label="л/100 км"
+              label={t('dashboard.statConsumption')}
               value={
                 fuel?.avg_consumption_l_100km != null
                   ? fuel.avg_consumption_l_100km.toFixed(1)
@@ -306,7 +303,7 @@ export default function Dashboard() {
             />
             <StatCard
               icon={Route}
-              label="на 100 км"
+              label={t('dashboard.statPer100km')}
               value={
                 analytics.tco?.cost_per_km != null
                   ? `${Math.round(analytics.tco.cost_per_km * 100)} ₴`
@@ -328,7 +325,7 @@ export default function Dashboard() {
               <Fuel className="h-5 w-5 text-amber" />
             </span>
             <p className="flex-1 text-sm text-fg">
-              Додайте першу заправку — і побачите свій реальний розхід
+              {t('dashboard.addFirstRefuel')}
             </p>
             <ChevronRight className="h-4 w-4 flex-shrink-0 text-mist" />
           </Card>
@@ -337,10 +334,10 @@ export default function Dashboard() {
 
       <Card data-tour="intervals">
         <div className="mb-1 flex items-center justify-between">
-          <h2 className="font-display text-sm font-semibold text-fg">Інтервали ТО</h2>
+          <h2 className="font-display text-sm font-semibold text-fg">{t('dashboard.intervalsTitle')}</h2>
           <Link
             to="/intervals"
-            aria-label="Керувати інтервалами ТО"
+            aria-label={t('dashboard.manageIntervalsAria')}
             className="rounded-lg p-1.5 text-mist transition-colors hover:bg-raised hover:text-amber"
           >
             <ArrowUpRight className="h-4 w-4" />
@@ -352,8 +349,8 @@ export default function Dashboard() {
         ) : intervals.length === 0 ? (
           <p className="py-3 text-sm text-mist">
             {canDo(activeCar?.your_role, 'interval:manage')
-              ? 'Немає інтервалів обслуговування. Додайте їх на сторінці інтервалів.'
-              : 'Власник ще не додав інтервалів обслуговування.'}
+              ? t('dashboard.noIntervalsManager')
+              : t('dashboard.noIntervalsViewer')}
           </p>
         ) : (
           <div className="divide-y divide-edge">

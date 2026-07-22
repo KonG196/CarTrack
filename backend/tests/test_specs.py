@@ -196,15 +196,15 @@ def test_preset_carries_the_service_passport_values(
     listed = client.get(f"/api/cars/{car['id']}/specs", headers=auth_headers).json()
 
     assert [(s["category"], s["name"], s["value"]) for s in listed] == [
-        (TORQUE, "Колісні болти", "120 Нм"),
-        (TORQUE, "Пробка масляного піддону", "30 Нм"),
-        (FLUIDS, "Олива двигуна", "~4.6 л"),
-        (FLUIDS, "Антифриз", "G13"),
-        (APPROVALS, "Допуск оливи", "VW 507.00"),
-        (APPROVALS, "Паливо", "ДП Євро-5"),
-        (OTHER, "Код двигуна", "CXXB (EA288)"),
-        (OTHER, "Код КПП", "RTD (5-ст. механіка)"),
-        (OTHER, "Код фарби", "LI7F (Urano Gray)"),
+        (TORQUE, "Wheel bolts", "120 N·m"),
+        (TORQUE, "Oil drain plug", "30 N·m"),
+        (FLUIDS, "Engine oil", "~4.6 L"),
+        (FLUIDS, "Antifreeze", "G13"),
+        (APPROVALS, "Oil approval", "VW 507.00"),
+        (APPROVALS, "Fuel", "Diesel Euro-5"),
+        (OTHER, "Engine code", "CXXB (EA288)"),
+        (OTHER, "Gearbox code", "RTD (5-speed manual)"),
+        (OTHER, "Paint code", "LI7F (Urano Gray)"),
     ]
 
 
@@ -237,15 +237,15 @@ def test_preset_never_overwrites_an_edited_value(
         f"/api/cars/{car['id']}/specs/preset", params={"key": "golf7_16tdi"}, headers=auth_headers
     )
     listed = client.get(f"/api/cars/{car['id']}/specs", headers=auth_headers).json()
-    bolts = next(s for s in listed if s["name"] == "Колісні болти")
-    client.patch(f"/api/specs/{bolts['id']}", json={"value": "140 Нм"}, headers=auth_headers)
+    bolts = next(s for s in listed if s["name"] == "Wheel bolts")
+    client.patch(f"/api/specs/{bolts['id']}", json={"value": "140 N·m"}, headers=auth_headers)
 
     client.post(
         f"/api/cars/{car['id']}/specs/preset", params={"key": "golf7_16tdi"}, headers=auth_headers
     )
 
     again = client.get(f"/api/cars/{car['id']}/specs", headers=auth_headers).json()
-    assert next(s for s in again if s["name"] == "Колісні болти")["value"] == "140 Нм"
+    assert next(s for s in again if s["name"] == "Wheel bolts")["value"] == "140 N·m"
     assert len(again) == 9
 
 
@@ -253,14 +253,14 @@ def test_preset_fills_only_the_gaps(
     client: TestClient, auth_headers: dict, make_car
 ) -> None:
     car = make_car()
-    _create_spec(client, auth_headers, car["id"], category=TORQUE, name="Колісні болти", value="90 Нм")
+    _create_spec(client, auth_headers, car["id"], category=TORQUE, name="Wheel bolts", value="90 N·m")
 
     response = client.post(
         f"/api/cars/{car['id']}/specs/preset", params={"key": "golf7_16tdi"}, headers=auth_headers
     )
     assert len(response.json()) == 9
     values = {s["name"]: s["value"] for s in response.json()}
-    assert values["Колісні болти"] == "90 Нм"  # the user's own row survives
+    assert values["Wheel bolts"] == "90 N·m"  # the user's own row survives
 
 
 def test_unknown_preset_key_404(client: TestClient, auth_headers: dict, make_car) -> None:

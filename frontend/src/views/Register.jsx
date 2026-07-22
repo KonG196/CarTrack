@@ -1,12 +1,15 @@
 import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../store/authStore';
 import { extractError } from '../api/client';
 import { safeNext, withNext } from '../utils/nextPath';
 import { Button, TextField, Card, ErrorMessage } from '../components/UI';
 import Wordmark from '../components/Wordmark';
+import LanguageToggle from '../components/LanguageToggle';
 
 export default function Register() {
+  const { t } = useTranslation();
   const register = useAuthStore((s) => s.register);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -21,11 +24,11 @@ export default function Register() {
     e.preventDefault();
     setError('');
     if (password !== confirm) {
-      setError('Паролі не збігаються');
+      setError(t('auth.register.passwordMismatch'));
       return;
     }
     if (password.length < 6) {
-      setError('Пароль має містити щонайменше 6 символів');
+      setError(t('auth.register.passwordTooShort'));
       return;
     }
     setLoading(true);
@@ -37,7 +40,7 @@ export default function Register() {
       }
       navigate(next, { replace: true });
     } catch (err) {
-      setError(extractError(err, 'Не вдалося зареєструватися'));
+      setError(extractError(err, t('auth.register.failed')));
     } finally {
       setLoading(false);
     }
@@ -46,17 +49,20 @@ export default function Register() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-garage px-4">
       <div className="rise-in w-full max-w-md">
+        <div className="mb-4 flex justify-end">
+          <LanguageToggle />
+        </div>
         <div className="mb-6 flex flex-col items-center gap-2">
           <Wordmark size="lg" />
           <p className="font-mono text-xs uppercase tracking-[0.14em] text-mist">
-            Бортовий журнал авто
+            {t('auth.tagline')}
           </p>
         </div>
         <Card>
-          <h1 className="mb-4 font-display text-lg font-semibold text-fg">Реєстрація</h1>
+          <h1 className="mb-4 font-display text-lg font-semibold text-fg">{t('auth.register.title')}</h1>
           <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
             <TextField
-              label="Email"
+              label={t('auth.register.email')}
               type="email"
               autoComplete="email"
               required
@@ -64,16 +70,16 @@ export default function Register() {
               onChange={(e) => setEmail(e.target.value)}
             />
             <TextField
-              label="Пароль"
+              label={t('auth.register.password')}
               type="password"
               autoComplete="new-password"
               required
-              hint="Мінімум 6 символів"
+              hint={t('auth.register.passwordHint')}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
             <TextField
-              label="Повторіть пароль"
+              label={t('auth.register.confirm')}
               type="password"
               autoComplete="new-password"
               enterKeyHint="done"
@@ -83,13 +89,13 @@ export default function Register() {
             />
             <ErrorMessage>{error}</ErrorMessage>
             <Button type="submit" disabled={loading} className="w-full">
-              {loading ? 'Створення…' : 'Створити акаунт'}
+              {loading ? t('auth.register.submitting') : t('auth.register.submit')}
             </Button>
           </form>
           <p className="mt-4 text-center text-sm text-mist">
-            Вже є акаунт?{' '}
+            {t('auth.register.haveAccount')}{' '}
             <Link to={withNext('/login', next)} className="font-semibold text-amber hover:text-amber-deep">
-              Увійти
+              {t('auth.register.login')}
             </Link>
           </p>
         </Card>

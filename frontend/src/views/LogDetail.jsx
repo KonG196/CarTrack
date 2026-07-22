@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Pencil, CopyPlus, Trash2, Plus, Loader2, Check, X } from 'lucide-react';
 import { useCarStore } from '../store/carStore';
@@ -10,9 +11,18 @@ import { canDo, carIsShared } from '../utils/permissions';
 import EntryForm from '../components/EntryForm';
 import { LOG_TYPE_META, AuthorChip, authorLabel } from '../components/LogTimelineItem';
 import { formatMoney, formatKm, formatDate } from '../utils/format';
+import { maintenanceItemLabel, repairCategoryLabel } from '../i18n/domain';
 import { warrantyStatus } from '../utils/warranty';
 import { Button, Card, Spinner, ErrorMessage, Modal, ConfirmDialog } from '../components/UI';
 import Toast from '../components/Toast';
+
+// Entry type → logDetail translation key for the plain display label.
+const TYPE_LABEL_KEYS = {
+  refuel: 'typeRefuel',
+  maintenance: 'typeMaintenance',
+  repair: 'typeRepair',
+  expense: 'typeExpense',
+};
 
 function DetailRow({ label, value }) {
   return (
@@ -24,6 +34,7 @@ function DetailRow({ label, value }) {
 }
 
 export default function LogDetail() {
+  const { t } = useTranslation();
   const { id } = useParams();
   const navigate = useNavigate();
   const cars = useCarStore((s) => s.cars);
@@ -61,8 +72,8 @@ export default function LogDetail() {
         if (!cancelled) {
           setError(
             err?.response?.status === 404
-              ? 'Запис не знайдено'
-              : 'Не вдалося завантажити запис'
+              ? t('logDetail.notFound')
+              : t('logDetail.loadFailed')
           );
         }
       })
@@ -115,7 +126,7 @@ export default function LogDetail() {
       const updated = await editLog(log.id, payload);
       setLog(updated);
       setEditing(false);
-      setToast('Зміни збережено');
+      setToast(t('logDetail.changesSaved'));
     } finally {
       setSubmitting(false);
     }
@@ -126,9 +137,9 @@ export default function LogDetail() {
     setActionError('');
     try {
       await removeLog(log.id);
-      navigate('/logbook', { state: { toast: 'Запис видалено' } });
+      navigate('/logbook', { state: { toast: t('logDetail.entryDeleted') } });
     } catch (err) {
-      setActionError(extractError(err, 'Не вдалося видалити запис'));
+      setActionError(extractError(err, t('logDetail.deleteFailed')));
     }
   };
 
@@ -142,9 +153,9 @@ export default function LogDetail() {
       await uploadPhoto(log.id, file);
       const updated = await getLog(log.id);
       setLog(updated);
-      setToast('Фото додано');
+      setToast(t('logDetail.photoAdded'));
     } catch (err) {
-      setActionError(extractError(err, 'Не вдалося додати фото'));
+      setActionError(extractError(err, t('logDetail.photoAddFailed')));
     } finally {
       setUploading(false);
     }
@@ -171,9 +182,9 @@ export default function LogDetail() {
       setLog((prev) =>
         prev ? { ...prev, photos: (prev.photos || []).filter((p) => p.id !== photo.id) } : prev
       );
-      setToast('Фото видалено');
+      setToast(t('logDetail.photoDeleted'));
     } catch (err) {
-      setActionError(extractError(err, 'Не вдалося видалити фото'));
+      setActionError(extractError(err, t('logDetail.photoDeleteFailed')));
     }
   };
 
@@ -182,13 +193,13 @@ export default function LogDetail() {
   if (error || !log) {
     return (
       <div className="stagger space-y-4">
-        <ErrorMessage>{error || 'Запис не знайдено'}</ErrorMessage>
+        <ErrorMessage>{error || t('logDetail.notFound')}</ErrorMessage>
         <Link
           to="/logbook"
           className="inline-flex items-center gap-1.5 text-sm font-medium text-amber hover:text-amber-deep"
         >
           <ArrowLeft className="h-4 w-4" />
-          До журналу
+          {t('logDetail.toLogbook')}
         </Link>
       </div>
     );
@@ -196,6 +207,7 @@ export default function LogDetail() {
 
   const meta = LOG_TYPE_META[log.type] || LOG_TYPE_META.expense;
   const Icon = meta.icon;
+  const typeLabel = t(`logDetail.${TYPE_LABEL_KEYS[log.type] || TYPE_LABEL_KEYS.expense}`);
 
   const warranty =
     log.type === 'repair' && log.repair
@@ -212,8 +224,8 @@ export default function LogDetail() {
 
       <ConfirmDialog
         open={confirmingDelete}
-        title="Видалити запис?"
-        message="Видалити цей запис? Дію не можна скасувати."
+        title={t('logDetail.deleteEntryTitle')}
+        message={t('logDetail.deleteEntryMessage')}
         onConfirm={handleDelete}
         onCancel={() => setConfirmingDelete(false)}
       />
@@ -224,9 +236,9 @@ export default function LogDetail() {
           className="inline-flex items-center gap-1.5 text-sm font-medium text-mist transition-colors hover:text-fg"
         >
           <ArrowLeft className="h-4 w-4" />
-          Журнал
+          {t('logDetail.logbook')}
         </Link>
-        <span className="text-xs text-mist/70">Запис #{log.id}</span>
+        <span className="text-xs text-mist/70">{t('logDetail.entryNumber', { id: log.id })}</span>
       </div>
 
       {actionError && <ErrorMessage>{actionError}</ErrorMessage>}
@@ -237,7 +249,7 @@ export default function LogDetail() {
             <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${meta.bg}`}>
               <Icon className={`h-4 w-4 ${meta.color}`} />
             </span>
-            <h1 className="font-display text-base font-semibold text-fg">Редагувати · {meta.label}</h1>
+            <h1 className="font-display text-base font-semibold text-fg">{t('common.edit')} · {typeLabel}</h1>
           </div>
           <EntryForm
             mode="edit"
@@ -261,7 +273,7 @@ export default function LogDetail() {
                   <Icon className={`h-5 w-5 ${meta.color}`} />
                 </span>
                 <div>
-                  <p className="text-base font-semibold text-fg">{meta.label}</p>
+                  <p className="text-base font-semibold text-fg">{typeLabel}</p>
                   <p className="mt-0.5 text-xs text-mist">
                     {formatDate(log.date)} · {formatKm(log.odometer)}
                   </p>
@@ -275,27 +287,32 @@ export default function LogDetail() {
             <div className="mt-3 divide-y divide-edge border-t border-edge pt-1">
               {log.type === 'refuel' && log.refuel && (
                 <>
-                  <DetailRow label="Літри" value={`${Number(log.refuel.liters).toFixed(2)} л`} />
                   <DetailRow
-                    label="Ціна за літр"
+                    label={t('logDetail.liters')}
+                    value={t('logDetail.litersValue', {
+                      value: Number(log.refuel.liters).toFixed(2),
+                    })}
+                  />
+                  <DetailRow
+                    label={t('logDetail.pricePerLiter')}
                     value={formatMoney(log.refuel.price_per_liter)}
                   />
                   <DetailRow
-                    label="Повний бак"
+                    label={t('logDetail.fullTank')}
                     value={
                       log.refuel.is_full_tank ? (
                         <span className="inline-flex items-center gap-1 text-ok">
-                          <Check className="h-3.5 w-3.5" /> так
+                          <Check className="h-3.5 w-3.5" /> {t('common.yes')}
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 text-mist">
-                          <X className="h-3.5 w-3.5" /> ні
+                          <X className="h-3.5 w-3.5" /> {t('common.no')}
                         </span>
                       )
                     }
                   />
                   {log.refuel.gas_station && (
-                    <DetailRow label="АЗС" value={log.refuel.gas_station} />
+                    <DetailRow label={t('logDetail.gasStation')} value={log.refuel.gas_station} />
                   )}
                 </>
               )}
@@ -303,7 +320,7 @@ export default function LogDetail() {
               {log.type === 'maintenance' && log.maintenance && (
                 <>
                   <div className="py-1.5">
-                    <span className="text-sm text-mist">Що замінено</span>
+                    <span className="text-sm text-mist">{t('logDetail.whatReplaced')}</span>
                     {(log.maintenance.items || []).length > 0 ? (
                       <ul className="mt-1.5 space-y-1">
                         {log.maintenance.items.map((item) => (
@@ -312,7 +329,7 @@ export default function LogDetail() {
                             className="flex items-center gap-2 text-sm text-fg"
                           >
                             <Check className="h-3.5 w-3.5 flex-shrink-0 text-ok" />
-                            {item}
+                            {maintenanceItemLabel(item)}
                           </li>
                         ))}
                       </ul>
@@ -320,35 +337,44 @@ export default function LogDetail() {
                       <p className="mt-1 text-sm text-mist">—</p>
                     )}
                   </div>
-                  <DetailRow label="Запчастини" value={formatMoney(log.maintenance.parts_cost)} />
-                  <DetailRow label="Робота" value={formatMoney(log.maintenance.labor_cost)} />
+                  <DetailRow label={t('logDetail.parts')} value={formatMoney(log.maintenance.parts_cost)} />
+                  <DetailRow label={t('logDetail.labor')} value={formatMoney(log.maintenance.labor_cost)} />
                 </>
               )}
 
               {log.type === 'repair' && log.repair && (
                 <>
-                  <DetailRow label="Категорія" value={log.repair.category} />
+                  <DetailRow label={t('logDetail.category')} value={repairCategoryLabel(log.repair.category)} />
                   {log.repair.part_name && (
-                    <DetailRow label="Деталь" value={log.repair.part_name} />
+                    <DetailRow label={t('logDetail.part')} value={log.repair.part_name} />
                   )}
                   {log.repair.warranty_months != null && (
-                    <DetailRow label="Гарантія" value={`${log.repair.warranty_months} міс.`} />
+                    <DetailRow
+                      label={t('logDetail.warranty')}
+                      value={t('logDetail.warrantyMonths', { months: log.repair.warranty_months })}
+                    />
                   )}
                   {log.repair.warranty_km != null && (
-                    <DetailRow label="Гарантія, км" value={formatKm(log.repair.warranty_km)} />
+                    <DetailRow label={t('logDetail.warrantyKm')} value={formatKm(log.repair.warranty_km)} />
                   )}
                   {warranty && (
                     <DetailRow
-                      label="Статус гарантії"
+                      label={t('logDetail.warrantyStatus')}
                       value={
                         warranty.active ? (
                           <span className="font-medium text-ok">
-                            Діє
-                            {warranty.expiry ? ` до ${formatDate(warranty.expiry.toISOString())}` : ''}
-                            {warranty.kmLeft != null ? ` · ще ~${formatKm(warranty.kmLeft)}` : ''}
+                            {t('logDetail.warrantyActive')}
+                            {warranty.expiry
+                              ? t('logDetail.warrantyUntil', {
+                                  date: formatDate(warranty.expiry.toISOString()),
+                                })
+                              : ''}
+                            {warranty.kmLeft != null
+                              ? t('logDetail.warrantyKmLeft', { km: formatKm(warranty.kmLeft) })
+                              : ''}
                           </span>
                         ) : (
-                          <span className="text-mist">Вичерпана</span>
+                          <span className="text-mist">{t('logDetail.warrantyExpired')}</span>
                         )
                       }
                     />
@@ -358,16 +384,16 @@ export default function LogDetail() {
 
               {log.notes && (
                 <div className="py-1.5">
-                  <span className="text-sm text-mist">Нотатки</span>
+                  <span className="text-sm text-mist">{t('logDetail.notes')}</span>
                   <p className="mt-1 whitespace-pre-wrap text-sm text-fg">{log.notes}</p>
                 </div>
               )}
 
-              <DetailRow label="Створено" value={formatDate(log.created_at)} />
+              <DetailRow label={t('logDetail.created')} value={formatDate(log.created_at)} />
 
               {author && (
                 <div className="flex items-baseline justify-between gap-3 py-1.5">
-                  <span className="flex-shrink-0 text-sm text-mist">Автор</span>
+                  <span className="flex-shrink-0 text-sm text-mist">{t('logDetail.author')}</span>
                   <AuthorChip label={author} />
                 </div>
               )}
@@ -375,17 +401,17 @@ export default function LogDetail() {
           </Card>
 
           <Card>
-            <h2 className="mb-2 font-display text-sm font-semibold text-fg">Фото</h2>
+            <h2 className="mb-2 font-display text-sm font-semibold text-fg">{t('logDetail.photos')}</h2>
             <div className="grid grid-cols-3 gap-2">
               {photos.length === 0 && !canManagePhotos && (
-                <p className="col-span-3 py-2 text-sm text-mist">Фото до цього запису немає.</p>
+                <p className="col-span-3 py-2 text-sm text-mist">{t('logDetail.noPhotos')}</p>
               )}
               {photos.map((photo) => (
                 <button
                   key={photo.id}
                   type="button"
                   onClick={() => setLightboxPhoto(photo)}
-                  aria-label={`Відкрити фото ${photo.filename}`}
+                  aria-label={t('logDetail.openPhoto', { name: photo.filename })}
                   className="h-24 overflow-hidden rounded-xl border border-edge bg-garage"
                 >
                   {photoUrls[photo.id] ? (
@@ -421,7 +447,7 @@ export default function LogDetail() {
                   ) : (
                     <Plus className="h-4 w-4" />
                   )}
-                  Додати фото
+                  {t('logDetail.addPhoto')}
                 </label>
               )}
             </div>
@@ -431,7 +457,7 @@ export default function LogDetail() {
             <div className="flex gap-2">
               <Button variant="secondary" onClick={() => setEditing(true)} className="flex-1">
                 <Pencil className="h-4 w-4" />
-                Редагувати
+                {t('common.edit')}
               </Button>
               <Button
                 variant="secondary"
@@ -439,12 +465,12 @@ export default function LogDetail() {
                 className="flex-1"
               >
                 <CopyPlus className="h-4 w-4" />
-                Повторити
+                {t('logDetail.repeat')}
               </Button>
               <Button
                 variant="danger"
                 onClick={() => setConfirmingDelete(true)}
-                aria-label="Видалити запис"
+                aria-label={t('logDetail.deleteEntry')}
                 className="px-3"
               >
                 <Trash2 className="h-4 w-4" />
@@ -466,7 +492,7 @@ export default function LogDetail() {
               className="flex-1"
             >
               <Trash2 className="h-4 w-4" />
-              Видалити фото
+              {t('logDetail.deletePhoto')}
             </Button>
           ) : null
         }
@@ -484,8 +510,8 @@ export default function LogDetail() {
 
       <ConfirmDialog
         open={confirmingPhotoDelete}
-        title="Видалити фото?"
-        message="Видалити це фото? Дію не можна скасувати."
+        title={t('logDetail.deletePhotoTitle')}
+        message={t('logDetail.deletePhotoMessage')}
         onConfirm={handleDeletePhoto}
         onCancel={() => setConfirmingPhotoDelete(false)}
       />

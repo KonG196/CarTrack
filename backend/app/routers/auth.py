@@ -19,6 +19,7 @@ from app.auth import (
 )
 from app.config import settings
 from app.database import get_db
+from app.i18n import lang_from_accept, t
 from app.models import User
 from app.ratelimit import RateLimiter, client_ip
 from app.schemas import (
@@ -63,11 +64,11 @@ verify_resend_limiter = RateLimiter(limit=3, window_seconds=15 * 60)
 sensitive_limiter = RateLimiter(limit=5, window_seconds=15 * 60)
 
 
-def _enforce_rate_limit(limiter: RateLimiter, key) -> None:
+def _enforce_rate_limit(limiter: RateLimiter, key, lang: str = "en") -> None:
     if not limiter.check(key):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Забагато спроб. Спробуйте пізніше.",
+            detail=t("err.tooManyAttempts", lang),
             headers={"Retry-After": str(limiter.retry_after(key))},
         )
 
@@ -75,15 +76,19 @@ def _enforce_rate_limit(limiter: RateLimiter, key) -> None:
 @router.post("/register", response_model=RegisterOut, status_code=status.HTTP_201_CREATED)
 def register(payload: UserCreate, request: Request, db: Session = Depends(get_db)) -> RegisterOut:
     _enforce_rate_limit(register_limiter, client_ip(request))
+    # The account's language comes from the client (the UI the user signed up in);
+    # it also localizes this endpoint's own error and the verification email.
+    lang = payload.language or lang_from_accept(request.headers.get("accept-language"))
     existing = db.execute(select(User).where(User.email == payload.email)).scalar_one_or_none()
     if existing is not None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered",
+            detail=t("auth.email_taken", lang),
         )
     user = User(
         email=payload.email,
         hashed_password=hash_password(payload.password),
+        language=lang,
         # Without a mail server nobody could ever confirm, so the gate stays open.
         email_verified=not verification_required(),
     )
@@ -115,13 +120,13 @@ def login(
     if user is None or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
+            detail=t("auth.bad_credentials", lang_from_accept(request.headers.get("accept-language"))),
             headers={"WWW-Authenticate": "Bearer"},
         )
     if not user.email_verified:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Підтвердіть пошту — ми надіслали код на вашу адресу.",
+            detail=t("auth.verify_email_first", user.language),
         )
     # A legitimate owner should not stay locked out by their earlier typos.
     login_limiter.reset(limit_key)
@@ -174,6 +179,8 @@ def update_me(
     updates = payload.model_dump(exclude_unset=True)
     if "display_name" in updates:
         current_user.display_name = updates["display_name"]
+    if updates.get("language"):
+        current_user.language = updates["language"]
     for flag in (
         "digest_enabled",
         "reminders_enabled",
@@ -208,7 +215,7 @@ def delete_me(
     _enforce_rate_limit(sensitive_limiter, current_user.id)
     if not verify_password(payload.password, current_user.hashed_password):
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Пароль невірний"
+            status_code=status.HTTP_400_BAD_REQUEST, detail=t("err.passwordWrong", current_user.language)
         )
     user_uploads = Path(settings.UPLOADS_DIR) / str(current_user.id)
     if user_uploads.exists():
@@ -237,7 +244,7 @@ def change_password(
     _enforce_rate_limit(sensitive_limiter, current_user.id)
     if not verify_password(payload.current_password, current_user.hashed_password):
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Поточний пароль невірний"
+            status_code=status.HTTP_400_BAD_REQUEST, detail=t("err.currentPasswordWrong", current_user.language)
         )
     current_user.hashed_password = hash_password(payload.new_password)
     current_user.token_version += 1
@@ -262,23 +269,23 @@ def request_email_change(
     _enforce_rate_limit(sensitive_limiter, current_user.id)
     if not verify_password(payload.password, current_user.hashed_password):
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Пароль невірний"
+            status_code=status.HTTP_400_BAD_REQUEST, detail=t("err.passwordWrong", current_user.language)
         )
     if new_email == current_user.email.lower():
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Це вже ваша адреса"
+            status_code=status.HTTP_400_BAD_REQUEST, detail=t("err.alreadyYourAddress", current_user.language)
         )
     taken = db.execute(
         select(User).where(func.lower(User.email) == new_email, User.id != current_user.id)
     ).scalar_one_or_none()
     if taken is not None:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Ця адреса вже зайнята"
+            status_code=status.HTTP_400_BAD_REQUEST, detail=t("err.emailTaken", current_user.language)
         )
     if not mail_enabled():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Пошта не налаштована на сервері — зміна адреси недоступна",
+            detail=t("err.mailNotConfigured", current_user.language),
         )
     issue_email_change(db, current_user, new_email)
     db.commit()
@@ -294,7 +301,7 @@ def confirm_email(
     if not confirm_email_change(db, current_user, payload.code):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Код невірний або протермінований",
+            detail=t("err.codeInvalidOrExpired", current_user.language),
         )
     db.refresh(current_user)
     return current_user
@@ -311,7 +318,8 @@ async def request_password_reset(
         reset_request_limiter, (client_ip(request), payload.email.strip().lower())
     )
     await initiate_reset(db, payload.email, payload.channel)
-    return {"detail": "Якщо акаунт існує — ми надіслали код."}
+    lang = lang_from_accept(request.headers.get("accept-language"))
+    return {"detail": t("msg.resetCodeSentIfExists", lang)}
 
 
 @router.post("/reset/confirm")
@@ -323,13 +331,14 @@ def confirm_password_reset(
     _enforce_rate_limit(
         reset_confirm_limiter, (client_ip(request), payload.email.strip().lower())
     )
+    lang = lang_from_accept(request.headers.get("accept-language"))
     if not confirm_reset(db, payload.email, payload.code, payload.new_password):
         # One message for every failure mode: nothing to learn from probing.
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Невірний або прострочений код",
+            detail=t("err.codeInvalidOrExpired", lang),
         )
-    return {"detail": "Пароль змінено"}
+    return {"detail": t("msg.passwordChanged", lang)}
 
 
 @router.post("/verify/confirm")
@@ -341,12 +350,13 @@ def confirm_email(
     _enforce_rate_limit(
         reset_confirm_limiter, (client_ip(request), payload.email.strip().lower())
     )
+    lang = lang_from_accept(request.headers.get("accept-language"))
     if not confirm_verification(db, payload.email, payload.code):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Невірний або прострочений код",
+            detail=t("err.codeInvalidOrExpired", lang),
         )
-    return {"detail": "Пошту підтверджено"}
+    return {"detail": t("msg.emailConfirmed", lang)}
 
 
 @router.post("/verify/resend", status_code=status.HTTP_202_ACCEPTED)

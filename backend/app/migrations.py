@@ -18,6 +18,7 @@ BASELINE_REVISION = "0001"
 # (table, column, SQL type spelled so both SQLite and PostgreSQL accept it)
 EXPECTED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     ("users", "telegram_chat_id", "VARCHAR(50)"),
+    ("users", "language", "VARCHAR(5) DEFAULT 'uk'"),
     ("service_intervals", "last_notified_at", "DATE"),
 )
 

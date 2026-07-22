@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import useAnimatedPresence from '../../hooks/useAnimatedPresence';
 
 const CLOSE_MS = 200;
@@ -22,6 +23,7 @@ export default function Modal({
   ariaLabel,
   bodyClassName = '',
 }) {
+  const { t } = useTranslation();
   const backdropRef = useRef(null);
   const pressedBackdrop = useRef(false);
   const { mounted, closing, requestClose } = useAnimatedPresence(open, onClose, CLOSE_MS);
@@ -86,7 +88,7 @@ export default function Modal({
               <button
                 type="button"
                 onClick={requestClose}
-                aria-label="Закрити"
+                aria-label={t('common.close')}
                 className="-mr-1 rounded-lg p-1.5 text-mist transition-colors hover:bg-raised hover:text-fg"
               >
                 <X className="h-4 w-4" />

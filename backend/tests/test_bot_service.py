@@ -14,6 +14,7 @@ def test_interval_line_hides_slack_axis_when_overdue() -> None:
     line = service.format_interval_line(
         ServiceInterval(title="Гальмівна рідина"),
         {"km_left": 10873, "days_left": -596, "health_pct": 0.0},
+        lang="uk",
     )
     assert "прострочено на 596 дн." in line
     assert "залишилось" not in line
@@ -24,6 +25,7 @@ def test_interval_line_reports_overdue_distance() -> None:
     line = service.format_interval_line(
         ServiceInterval(title="Колодки"),
         {"km_left": -1000, "days_left": None, "health_pct": 0.0},
+        lang="uk",
     )
     assert "прострочено на 1000 км" in line
 
@@ -32,6 +34,7 @@ def test_interval_line_shows_both_remaining_when_on_track() -> None:
     line = service.format_interval_line(
         ServiceInterval(title="Олива"),
         {"km_left": 5000, "days_left": 100, "health_pct": 60.0},
+        lang="uk",
     )
     assert "залишилось 5000 км" in line
     assert "залишилось 100 дн." in line
@@ -40,7 +43,7 @@ def test_interval_line_shows_both_remaining_when_on_track() -> None:
 def _make_user_with_car(
     db: Session, email: str = "owner@example.com", odometer: int = 50000
 ) -> tuple[User, Car]:
-    user = User(email=email, hashed_password="x", telegram_chat_id="42")
+    user = User(email=email, hashed_password="x", telegram_chat_id="42", language="uk")
     db.add(user)
     db.flush()
     car = Car(

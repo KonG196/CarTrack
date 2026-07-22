@@ -1,11 +1,15 @@
 import { forwardRef, useId } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Search, X } from 'lucide-react';
 
 const SearchField = forwardRef(function SearchField(
-  { value, onChange, onClear, label = 'Пошук', placeholder = 'Пошук…', className = '', ...props },
+  { value, onChange, onClear, label, placeholder, className = '', ...props },
   ref,
 ) {
+  const { t } = useTranslation();
   const id = useId();
+  const resolvedLabel = label ?? t('uiSearchField.label');
+  const resolvedPlaceholder = placeholder ?? t('uiSearchField.placeholder');
 
   return (
     <div className={`relative ${className}`}>
@@ -19,8 +23,8 @@ const SearchField = forwardRef(function SearchField(
         type="search"
         value={value}
         onChange={onChange}
-        placeholder={placeholder}
-        aria-label={label}
+        placeholder={resolvedPlaceholder}
+        aria-label={resolvedLabel}
         className="w-full rounded-xl border border-edge-soft bg-raised py-3 pl-10 pr-10 text-sm text-fg outline-none transition-colors placeholder:text-mist focus:border-amber"
         {...props}
       />
@@ -28,7 +32,7 @@ const SearchField = forwardRef(function SearchField(
         <button
           type="button"
           onClick={onClear}
-          aria-label="Очистити пошук"
+          aria-label={t('uiSearchField.clear')}
           className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-mist transition-colors hover:bg-panel hover:text-fg"
         >
           <X className="h-4 w-4" />

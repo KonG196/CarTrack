@@ -131,4 +131,4 @@ def get_year_review(
     logs = _car_logs(db, car)
     years = available_years(logs)
     chosen = year if year is not None else (years[0] if years else dt.date.today().year)
-    return YearReviewOut(**build_year_review(car, logs, chosen))
+    return YearReviewOut(**build_year_review(car, logs, chosen, current_user.language))

@@ -2,6 +2,8 @@
 // consumption it actually shows and the price actually paid last time — not a
 // brochure figure and not today's average at the pumps.
 
+import i18n from '../i18n';
+
 export function computeTripCost({ distanceKm, consumption, pricePerLiter, people = 1 }) {
   const distance = Number(String(distanceKm).replace(',', '.'));
   if (!Number.isFinite(distance) || distance <= 0) return null;
@@ -33,13 +35,23 @@ function tidy(value) {
 // wants to send to the group chat, in plain words.
 export function buildTripShareText({ carName, distanceKm, consumption, pricePerLiter, result }) {
   if (!result) return '';
-  const on = carName ? ` на ${carName}` : '';
+  const on = carName ? i18n.t('tripCostUtil.onCar', { name: carName }) : '';
   const parts = [
-    `🚐 Поїздка${on}: відстань ${tidy(distanceKm)} км, розхід ${tidy(consumption)} л/100 км, ціна пального ${tidy(pricePerLiter)} ₴.`,
-    `Всього: ${tidy(Math.round(result.cost))} ₴.`,
+    i18n.t('tripCostUtil.tripLine', {
+      on,
+      distance: tidy(distanceKm),
+      consumption: tidy(consumption),
+      price: tidy(pricePerLiter),
+    }),
+    i18n.t('tripCostUtil.total', { amount: tidy(Math.round(result.cost)) }),
   ];
   if (result.people > 1) {
-    parts.push(`З кожного (${result.people} ос.) — по ${tidy(Math.round(result.perPerson))} ₴.`);
+    parts.push(
+      i18n.t('tripCostUtil.perPerson', {
+        people: result.people,
+        amount: tidy(Math.round(result.perPerson)),
+      }),
+    );
   }
   return parts.join(' ');
 }

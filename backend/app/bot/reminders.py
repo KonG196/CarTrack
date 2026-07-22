@@ -14,6 +14,7 @@ from app import backup
 from app.bot import service
 from app.config import settings
 from app.database import SessionLocal
+from app.i18n import normalize_lang, t
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +27,6 @@ NUDGE_AFTER_DAYS = 7
 # that is cheaper than a second loop to keep alive.
 DIGEST_WEEKDAY = 6
 
-DONE_BUTTON = "Виконано"
-SNOOZE_BUTTON = "Нагадати через 7 днів"
-
 # Telegram truncates long button labels anyway; keep them readable instead.
 _MAX_BUTTON_TITLE = 20
 
@@ -36,13 +34,19 @@ _MAX_BUTTON_TITLE = 20
 def _build_reminder_text(
     db, user, items: list[service.ReminderItem], today: dt.date
 ) -> str:
-    lines = ["Нагадування Kapot Tracker: наближається або вже прострочене ТО."]
+    lang = normalize_lang(user.language)
+    lines = [t("bot.rem.header", lang)]
     last_car_id: int | None = None
     for item in items:
         if item.car.id != last_car_id:
             lines.append(
-                f"\n{item.car.brand} {item.car.model} "
-                f"(пробіг {item.car.current_odometer} км):"
+                t(
+                    "bot.rem.car_header",
+                    lang,
+                    brand=item.car.brand,
+                    model=item.car.model,
+                    odo=item.car.current_odometer,
+                )
             )
             last_car_id = item.car.id
         lines.append(service.format_interval_line(item.interval, item.computed))
@@ -50,10 +54,7 @@ def _build_reminder_text(
     # Weekly odometer nudge: appended to the reminder only, never sent alone.
     latest = service.latest_log_date(db, user)
     if latest is None or (today - latest).days > NUDGE_AFTER_DAYS:
-        lines.append(
-            "\nІ ще: давно не було нових записів. Надішліть «пробіг 240054» "
-            "— так прогнози будуть точнішими."
-        )
+        lines.append(t("bot.rem.odometer_nudge", lang))
     return "\n".join(lines)
 
 
@@ -63,20 +64,24 @@ def _short_title(title: str) -> str:
     return f"{title[: _MAX_BUTTON_TITLE - 1].rstrip()}…"
 
 
-def build_reminder_keyboard(items: list[service.ReminderItem]) -> InlineKeyboardMarkup:
+def build_reminder_keyboard(
+    items: list[service.ReminderItem], lang: str = "en"
+) -> InlineKeyboardMarkup:
+    done_label = t("bot.rem.done_button", lang)
     name_intervals = len(items) > 1
     rows = [
         [
             InlineKeyboardButton(
                 text=(
-                    f"{DONE_BUTTON}: {_short_title(item.interval.title)}"
+                    f"{done_label}: {_short_title(item.interval.title)}"
                     if name_intervals
-                    else DONE_BUTTON
+                    else done_label
                 ),
                 callback_data=f"done:{item.interval.id}",
             ),
             InlineKeyboardButton(
-                text=SNOOZE_BUTTON, callback_data=f"snooze:{item.interval.id}"
+                text=t("bot.rem.snooze_button", lang),
+                callback_data=f"snooze:{item.interval.id}",
             ),
         ]
         for item in items
@@ -95,11 +100,12 @@ async def send_due_reminders(bot: Bot) -> None:
     with SessionLocal() as db:
         for user, items in service.reminder_targets(db, today=today):
             try:
+                lang = normalize_lang(user.language)
                 text = _build_reminder_text(db, user, items, today)
                 await bot.send_message(
                     chat_id=user.telegram_chat_id,
                     text=text,
-                    reply_markup=build_reminder_keyboard(items),
+                    reply_markup=build_reminder_keyboard(items, lang),
                 )
                 service.stamp_notified(
                     db, [item.interval.id for item in items], today=today
@@ -110,24 +116,27 @@ async def send_due_reminders(bot: Bot) -> None:
 
 #: The fuel a spike is about, in the genitive so it reads «стрибок витрати газу».
 _FUEL_WORD = {
-    "petrol": "бензину",
-    "diesel": "дизеля",
-    "lpg": "газу",
-    "electric": "електрики",
-    "hybrid": "пального",
+    "petrol": "fuel_petrol",
+    "diesel": "fuel_diesel",
+    "lpg": "fuel_lpg",
+    "electric": "fuel_electric",
+    "hybrid": "fuel_hybrid",
 }
 
 
-def _build_consumption_text(alert: service.ConsumptionAlert) -> str:
+def _build_consumption_text(alert: service.ConsumptionAlert, lang: str) -> str:
     car = alert.car
     spike = alert.spike
-    fuel = _FUEL_WORD.get(spike.fuel_kind, "пального")
-    return (
-        f"⛽ {car.brand} {car.model}: помічено стрибок витрати {fuel} на "
-        f"{spike.pct_over}% — {spike.consumption_l_100km:.1f} л/100 км проти "
-        f"звичних ~{spike.baseline_l_100km:.1f}.\n"
-        "Якщо стиль їзди не змінювався, варто перевірити тиск у шинах, а також "
-        "стан сажового фільтра чи свічок."
+    fuel = t(f"bot.rem.{_FUEL_WORD.get(spike.fuel_kind, 'fuel_default')}", lang)
+    return t(
+        "bot.rem.consumption",
+        lang,
+        brand=car.brand,
+        model=car.model,
+        fuel=fuel,
+        pct=spike.pct_over,
+        cons=f"{spike.consumption_l_100km:.1f}",
+        baseline=f"{spike.baseline_l_100km:.1f}",
     )
 
 
@@ -141,9 +150,10 @@ async def send_consumption_alerts(bot: Bot) -> None:
     with SessionLocal() as db:
         for user, alert in service.consumption_alert_targets(db):
             try:
+                lang = normalize_lang(user.language)
                 await bot.send_message(
                     chat_id=user.telegram_chat_id,
-                    text=_build_consumption_text(alert),
+                    text=_build_consumption_text(alert, lang),
                 )
                 service.stamp_consumption_alert(db, alert.car, alert.spike.log_id)
             except Exception:
@@ -169,24 +179,13 @@ def build_tires_link_keyboard(text: str) -> InlineKeyboardMarkup:
     )
 
 
-def _build_seasonal_text(reminder: service.SeasonalReminder) -> str:
+def _build_seasonal_text(reminder: service.SeasonalReminder, lang: str) -> str:
     car = reminder.car
     if reminder.kind == "tires":
-        return (
-            f"🛞 {car.brand} {car.model}: наближається зима, а на авто досі літня "
-            "гума. Варто записатися на шиномонтаж, поки немає двотижневих черг."
-        )
+        return t("bot.rem.seasonal_tires", lang, brand=car.brand, model=car.model)
     if reminder.kind == "tires_add":
-        return (
-            f"🛞 {car.brand} {car.model}: сезон шиномонтажу — час подбати про гуму. "
-            "Додайте свій комплект шин у застосунку, і я нагадуватиму про сезонну "
-            "заміну, ротацію вісей і вік шин."
-        )
-    return (
-        "🥶 Наближаються перші нічні заморозки у вашому регіоні. Не забудьте "
-        "вибризкати літню воду й залити зимову рідину (-20 °C), щоб не розірвало "
-        "трубки й моторчик омивача скла."
-    )
+        return t("bot.rem.seasonal_tires_add", lang, brand=car.brand, model=car.model)
+    return t("bot.rem.seasonal_washer", lang)
 
 
 async def send_seasonal_reminders(bot: Bot) -> None:
@@ -200,14 +199,15 @@ async def send_seasonal_reminders(bot: Bot) -> None:
     with SessionLocal() as db:
         for user, reminder in service.seasonal_reminder_targets(db, today=today):
             try:
+                lang = normalize_lang(user.language)
                 reply_markup = (
-                    build_tires_link_keyboard("🛞 Додати шини")
+                    build_tires_link_keyboard(t("bot.rem.btn_add_tires", lang))
                     if reminder.kind == "tires_add"
                     else None
                 )
                 await bot.send_message(
                     chat_id=user.telegram_chat_id,
-                    text=_build_seasonal_text(reminder),
+                    text=_build_seasonal_text(reminder, lang),
                     reply_markup=reply_markup,
                 )
                 service.stamp_seasonal(db, reminder.car, reminder.kind, today.year)
@@ -217,27 +217,37 @@ async def send_seasonal_reminders(bot: Bot) -> None:
                 )
 
 
-_SEASON_WORD = {"summer": "літній", "winter": "зимовий", "all_season": "всесезонний"}
+_SEASON_WORD = {
+    "summer": "season_summer",
+    "winter": "season_winter",
+    "all_season": "season_all",
+}
 
 
-def _build_rotation_text(reminder: service.RotationReminder) -> str:
+def _build_rotation_text(reminder: service.RotationReminder, lang: str) -> str:
     car = reminder.car
-    season = _SEASON_WORD.get(reminder.tire_set.season, "")
-    which = f"{season} комплект шин".strip()
-    return (
-        f"🛞 {car.brand} {car.model}: {which} проїхав уже "
-        f"{reminder.km_since_rotation} км від останньої ротації. Рекомендовано "
-        "переставити колеса місцями (задню вісь наперед), щоб протектор "
-        "зношувався рівномірно. Зробили — тапніть кнопку нижче."
+    key = _SEASON_WORD.get(reminder.tire_set.season)
+    season = t(f"bot.rem.{key}", lang) if key else ""
+    which = t("bot.rem.tire_set_named", lang, season=season).strip()
+    return t(
+        "bot.rem.rotation",
+        lang,
+        brand=car.brand,
+        model=car.model,
+        which=which,
+        km=reminder.km_since_rotation,
     )
 
 
-def build_rotation_keyboard(tire_set_id: int) -> InlineKeyboardMarkup:
+def build_rotation_keyboard(
+    tire_set_id: int, lang: str = "en"
+) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="🛞 Зробити ротацію", callback_data=f"rotate:{tire_set_id}"
+                    text=t("bot.rem.btn_do_rotation", lang),
+                    callback_data=f"rotate:{tire_set_id}",
                 )
             ]
         ]
@@ -253,10 +263,11 @@ async def send_rotation_reminders(bot: Bot) -> None:
     with SessionLocal() as db:
         for user, reminder in service.rotation_reminder_targets(db):
             try:
+                lang = normalize_lang(user.language)
                 await bot.send_message(
                     chat_id=user.telegram_chat_id,
-                    text=_build_rotation_text(reminder),
-                    reply_markup=build_rotation_keyboard(reminder.tire_set.id),
+                    text=_build_rotation_text(reminder, lang),
+                    reply_markup=build_rotation_keyboard(reminder.tire_set.id, lang),
                 )
                 service.stamp_rotation(db, reminder.tire_set, reminder.due_km)
             except Exception:
@@ -265,12 +276,15 @@ async def send_rotation_reminders(bot: Bot) -> None:
                 )
 
 
-def _build_tire_age_text(reminder: service.TireAgeReminder) -> str:
+def _build_tire_age_text(reminder: service.TireAgeReminder, lang: str) -> str:
     car = reminder.car
-    return (
-        f"🛞 {car.brand} {car.model}: комплекту «{reminder.tire_set.name}» уже "
-        f"{reminder.age_years} р. Гума з віком твердне й тріскається — варто "
-        "перевірити стан і, можливо, замінити, навіть якщо протектор ще лишився."
+    return t(
+        "bot.rem.tire_age",
+        lang,
+        brand=car.brand,
+        model=car.model,
+        name=reminder.tire_set.name,
+        age=reminder.age_years,
     )
 
 
@@ -284,10 +298,11 @@ async def send_tire_age_reminders(bot: Bot) -> None:
     with SessionLocal() as db:
         for user, reminder in service.tire_age_reminder_targets(db, today=today):
             try:
+                lang = normalize_lang(user.language)
                 await bot.send_message(
                     chat_id=user.telegram_chat_id,
-                    text=_build_tire_age_text(reminder),
-                    reply_markup=build_tires_link_keyboard("🛞 Відкрити шини"),
+                    text=_build_tire_age_text(reminder, lang),
+                    reply_markup=build_tires_link_keyboard(t("bot.rem.btn_open_tires", lang)),
                 )
                 service.stamp_tire_age(db, reminder.tire_set, today.year)
             except Exception:

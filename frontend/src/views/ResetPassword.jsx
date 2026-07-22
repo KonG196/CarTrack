@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { requestPasswordReset, confirmPasswordReset } from '../api/auth';
 import { extractError } from '../api/client';
 import { Button, TextField, Card, ErrorMessage } from '../components/UI';
 import Toast from '../components/Toast';
 import Wordmark from '../components/Wordmark';
+import LanguageToggle from '../components/LanguageToggle';
 
 export default function ResetPassword() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [step, setStep] = useState(1);
@@ -30,9 +33,9 @@ export default function ResetPassword() {
       setEmail(mail);
       setCode(value);
       setStep(2);
-      setInfo('Залишилось задати новий пароль.');
+      setInfo(t('auth.reset.onlyNewPassword'));
     }
-  }, [searchParams]);
+  }, [searchParams, t]);
 
   const handleRequest = async (e) => {
     e.preventDefault();
@@ -40,10 +43,10 @@ export default function ResetPassword() {
     setLoading(true);
     try {
       const data = await requestPasswordReset(email.trim(), channel);
-      setInfo(data?.detail || 'Якщо акаунт існує — ми надіслали код.');
+      setInfo(data?.detail || t('auth.reset.codeSentGeneric'));
       setStep(2);
     } catch (err) {
-      setError(extractError(err, 'Не вдалося надіслати код'));
+      setError(extractError(err, t('auth.reset.sendFailed')));
     } finally {
       setLoading(false);
     }
@@ -53,19 +56,19 @@ export default function ResetPassword() {
     e.preventDefault();
     setError('');
     if (password !== confirm) {
-      setError('Паролі не збігаються');
+      setError(t('auth.reset.passwordMismatch'));
       return;
     }
     if (password.length < 8) {
-      setError('Пароль має містити щонайменше 8 символів');
+      setError(t('auth.reset.passwordTooShort'));
       return;
     }
     setLoading(true);
     try {
       await confirmPasswordReset(email.trim(), code.trim(), password);
-      setToast('Пароль змінено. Увійдіть з новим паролем.');
+      setToast(t('auth.reset.success'));
     } catch (err) {
-      setError(extractError(err, 'Невірний або прострочений код'));
+      setError(extractError(err, t('auth.reset.invalidCode')));
       setLoading(false);
     }
   };
@@ -81,25 +84,26 @@ export default function ResetPassword() {
     <div className="flex min-h-screen items-center justify-center bg-garage px-4">
       <Toast message={toast} onDone={() => navigate('/login', { replace: true })} />
       <div className="rise-in w-full max-w-md">
+        <div className="mb-4 flex justify-end">
+          <LanguageToggle />
+        </div>
         <div className="mb-6 flex flex-col items-center gap-2">
           <Wordmark size="lg" />
           <p className="font-mono text-xs uppercase tracking-[0.14em] text-mist">
-            Бортовий журнал авто
+            {t('auth.tagline')}
           </p>
         </div>
         <Card>
-          <h1 className="mb-4 font-display text-lg font-semibold text-fg">Скидання пароля</h1>
+          <h1 className="mb-4 font-display text-lg font-semibold text-fg">{t('auth.reset.title')}</h1>
           {step === 1 ? (
             <form onSubmit={handleRequest} className="flex flex-col gap-3.5">
-              <p className="text-sm text-mist">
-                Вкажіть email акаунта — надішлемо 6-значний код.
-              </p>
+              <p className="text-sm text-mist">{t('auth.reset.intro')}</p>
               <div className="flex flex-col gap-1.5">
-                <span className="text-xs text-mist">Куди надіслати код</span>
+                <span className="text-xs text-mist">{t('auth.reset.channelLabel')}</span>
                 <div className="flex gap-2">
                   {[
-                    { value: 'email', label: 'На пошту' },
-                    { value: 'telegram', label: 'У Telegram' },
+                    { value: 'email', label: t('auth.reset.channelEmail') },
+                    { value: 'telegram', label: t('auth.reset.channelTelegram') },
                   ].map((option) => (
                     <button
                       key={option.value}
@@ -115,12 +119,10 @@ export default function ResetPassword() {
                     </button>
                   ))}
                 </div>
-                <span className="text-xs text-mist">
-                  Telegram спрацює, лише якщо ви привʼязали бота — інакше код прийде на пошту.
-                </span>
+                <span className="text-xs text-mist">{t('auth.reset.channelHint')}</span>
               </div>
               <TextField
-                label="Email"
+                label={t('auth.reset.email')}
                 type="email"
                 autoComplete="email"
                 enterKeyHint="done"
@@ -130,14 +132,14 @@ export default function ResetPassword() {
               />
               <ErrorMessage>{error}</ErrorMessage>
               <Button type="submit" disabled={loading} className="w-full">
-                {loading ? 'Надсилання…' : 'Надіслати код'}
+                {loading ? t('auth.reset.sending') : t('auth.reset.sendCode')}
               </Button>
             </form>
           ) : (
             <form onSubmit={handleConfirm} className="flex flex-col gap-3.5">
               {info && <p className="text-sm text-ok">{info}</p>}
               <TextField
-                label="Код з листа або Telegram"
+                label={t('auth.reset.codeLabel')}
                 inputMode="numeric"
                 enterKeyHint="next"
                 autoComplete="one-time-code"
@@ -147,16 +149,16 @@ export default function ResetPassword() {
                 onChange={(e) => setCode(e.target.value)}
               />
               <TextField
-                label="Новий пароль"
+                label={t('auth.reset.newPassword')}
                 type="password"
                 autoComplete="new-password"
                 required
-                hint="Мінімум 8 символів"
+                hint={t('auth.reset.passwordHint')}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
               <TextField
-                label="Повторіть пароль"
+                label={t('auth.reset.confirm')}
                 type="password"
                 autoComplete="new-password"
                 enterKeyHint="done"
@@ -166,17 +168,17 @@ export default function ResetPassword() {
               />
               <ErrorMessage>{error}</ErrorMessage>
               <Button type="submit" disabled={loading} className="w-full">
-                {loading ? 'Зміна пароля…' : 'Змінити пароль'}
+                {loading ? t('auth.reset.changing') : t('auth.reset.changePassword')}
               </Button>
               <Button variant="ghost" onClick={backToRequest} disabled={loading} className="w-full">
-                Надіслати код ще раз
+                {t('auth.reset.resendCode')}
               </Button>
             </form>
           )}
           <p className="mt-4 text-center text-sm text-mist">
-            Згадали пароль?{' '}
+            {t('auth.reset.remembered')}{' '}
             <Link to="/login" className="font-semibold text-amber hover:text-amber-deep">
-              Увійти
+              {t('auth.reset.login')}
             </Link>
           </p>
         </Card>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Car, MailQuestion } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useCarStore } from '../store/carStore';
@@ -8,18 +9,19 @@ import { extractError } from '../api/client';
 import { roleLabel } from '../utils/permissions';
 import { Button, Card, Spinner, ErrorMessage } from '../components/UI';
 import Wordmark from '../components/Wordmark';
+import LanguageToggle from '../components/LanguageToggle';
 
-const DEAD_INVITE =
-  'Запрошення недійсне, прострочене або вже використане. Попросіть власника надіслати нове.';
-
-function Shell({ children }) {
+function Shell({ children, tagline }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-garage px-4">
       <div className="rise-in w-full max-w-md">
+        <div className="mb-4 flex justify-end">
+          <LanguageToggle />
+        </div>
         <div className="mb-6 flex flex-col items-center gap-2">
           <Wordmark size="lg" />
           <p className="font-mono text-xs uppercase tracking-[0.14em] text-mist">
-            Бортовий журнал авто
+            {tagline}
           </p>
         </div>
         <Card>{children}</Card>
@@ -29,12 +31,15 @@ function Shell({ children }) {
 }
 
 export default function JoinCar() {
+  const { t } = useTranslation();
   const { token: inviteToken } = useParams();
   const navigate = useNavigate();
   const authToken = useAuthStore((s) => s.token);
   const logout = useAuthStore((s) => s.logout);
   const fetchCars = useCarStore((s) => s.fetchCars);
   const setActiveCar = useCarStore((s) => s.setActiveCar);
+
+  const deadInvite = t('auth.join.deadInvite');
 
   const [invite, setInvite] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -57,9 +62,9 @@ export default function JoinCar() {
           logout();
           setNeedsAuth(true);
         } else if (status === 404) {
-          setError(DEAD_INVITE);
+          setError(deadInvite);
         } else {
-          setError('Не вдалося завантажити запрошення. Спробуйте ще раз.');
+          setError(t('auth.join.loadFailed'));
         }
       })
       .finally(() => {
@@ -68,7 +73,7 @@ export default function JoinCar() {
     return () => {
       cancelled = true;
     };
-  }, [inviteToken, logout]);
+  }, [inviteToken, logout, deadInvite, t]);
 
   const handleAccept = async () => {
     setError('');
@@ -77,11 +82,11 @@ export default function JoinCar() {
       const membership = await acceptInvite(inviteToken);
       await fetchCars();
       if (membership?.car_id != null) setActiveCar(membership.car_id);
-      navigate('/garage', { replace: true, state: { toast: 'Ви приєдналися до авто' } });
+      navigate('/garage', { replace: true, state: { toast: t('auth.join.joined') } });
     } catch (err) {
       const status = err?.response?.status;
       setError(
-        status === 404 ? DEAD_INVITE : extractError(err, 'Не вдалося прийняти запрошення')
+        status === 404 ? deadInvite : extractError(err, t('auth.join.acceptFailed'))
       );
       setAccepting(false);
     }
@@ -89,7 +94,7 @@ export default function JoinCar() {
 
   if (loading) {
     return (
-      <Shell>
+      <Shell tagline={t('auth.tagline')}>
         <Spinner className="py-8" />
       </Shell>
     );
@@ -97,13 +102,13 @@ export default function JoinCar() {
 
   if (error && !invite && !needsAuth) {
     return (
-      <Shell>
+      <Shell tagline={t('auth.tagline')}>
         <ErrorMessage>{error}</ErrorMessage>
         <Link
           to="/"
           className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-amber hover:text-amber-deep"
         >
-          На головну
+          {t('common.toHome')}
         </Link>
       </Shell>
     );
@@ -114,7 +119,7 @@ export default function JoinCar() {
   const next = `/join/${encodeURIComponent(inviteToken)}`;
 
   return (
-    <Shell>
+    <Shell tagline={t('auth.tagline')}>
       <div className="flex flex-col items-center gap-3 text-center">
         <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-amber/15">
           {car ? <Car className="h-7 w-7 text-amber" /> : <MailQuestion className="h-7 w-7 text-amber" />}
@@ -123,21 +128,19 @@ export default function JoinCar() {
         {carName ? (
           <>
             <h1 className="font-display text-lg font-semibold text-fg">
-              Вас запрошують до {carName}
+              {t('auth.join.invitedToCar', { car: carName })}
             </h1>
             <p className="text-sm text-mist">
-              {invite.inviter_label} відкриває вам доступ як {roleLabel(invite.role)}
-              {invite.role === 'editor'
-                ? ' — ви зможете вести журнал цього авто.'
-                : ' — ви зможете переглядати журнал цього авто.'}
+              {t(invite.role === 'editor' ? 'auth.join.accessEditor' : 'auth.join.accessViewer', {
+                inviter: invite.inviter_label,
+                role: roleLabel(invite.role),
+              })}
             </p>
           </>
         ) : (
           <>
-            <h1 className="font-display text-lg font-semibold text-fg">Вас запрошують до авто</h1>
-            <p className="text-sm text-mist">
-              Увійдіть або створіть акаунт — і побачите, до якого авто вас кличуть.
-            </p>
+            <h1 className="font-display text-lg font-semibold text-fg">{t('auth.join.invitedGeneric')}</h1>
+            <p className="text-sm text-mist">{t('auth.join.signInPrompt')}</p>
           </>
         )}
       </div>
@@ -147,27 +150,29 @@ export default function JoinCar() {
       {needsAuth ? (
         <div className="mt-5 space-y-2">
           <Link to={`/login?next=${encodeURIComponent(next)}`} className="block">
-            <Button className="w-full">Увійти</Button>
+            <Button className="w-full">{t('auth.join.signIn')}</Button>
           </Link>
           <Link to={`/register?next=${encodeURIComponent(next)}`} className="block">
             <Button variant="secondary" className="w-full">
-              Зареєструватися
+              {t('auth.join.register')}
             </Button>
           </Link>
           <p className="pt-1 text-center text-xs text-mist/70">
-            Після входу ви повернетесь сюди й зможете прийняти запрошення.
+            {t('auth.join.afterLogin')}
           </p>
         </div>
       ) : (
         <div className="mt-5 space-y-2">
           <Button onClick={handleAccept} disabled={accepting} className="w-full">
             {accepting
-              ? 'Приєднання…'
-              : `Приєднатися${carName ? ` до ${carName}` : ''} як ${roleLabel(invite?.role)}`}
+              ? t('auth.join.accepting')
+              : carName
+                ? t('auth.join.acceptWithCar', { car: carName, role: roleLabel(invite?.role) })
+                : t('auth.join.acceptGeneric', { role: roleLabel(invite?.role) })}
           </Button>
           <Link to="/" className="block">
             <Button variant="ghost" className="w-full">
-              Не зараз
+              {t('auth.join.notNow')}
             </Button>
           </Link>
         </div>

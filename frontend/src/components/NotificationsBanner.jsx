@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Bell, ChevronRight } from 'lucide-react';
 import { getNotifications } from '../api/notifications';
 import { loadDismissed, activeNotifications } from '../utils/notificationsDismiss';
@@ -8,6 +9,7 @@ import { Card } from './UI';
 // Dashboard entry point to the notification centre: a compact «N need attention»
 // banner, hidden when there is nothing (or every nudge was dismissed locally).
 export default function NotificationsBanner() {
+  const { t } = useTranslation();
   const [count, setCount] = useState(0);
 
   useEffect(() => {
@@ -30,7 +32,7 @@ export default function NotificationsBanner() {
         <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-amber/15">
           <Bell className="h-4 w-4 text-amber" />
         </span>
-        <p className="flex-1 text-sm font-medium text-fg">Сповіщення потребують уваги</p>
+        <p className="flex-1 text-sm font-medium text-fg">{t('notificationsBanner.needAttention')}</p>
         <span className="flex-shrink-0 rounded-full bg-amber px-2 py-0.5 font-mono text-xs font-semibold tabular-nums text-amber-ink">
           {count}
         </span>

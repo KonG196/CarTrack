@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { BookOpen, PlusCircle, SearchX, X } from 'lucide-react';
 import { useCarStore } from '../store/carStore';
 import { getLogs } from '../api/logs';
@@ -10,14 +11,15 @@ import Toast from '../components/Toast';
 import { Spinner, ErrorMessage, Card, ConfirmDialog, SearchField } from '../components/UI';
 
 const FILTERS = [
-  { value: '', label: 'Всі' },
-  { value: 'refuel', label: 'Заправки' },
-  { value: 'maintenance', label: 'ТО' },
-  { value: 'repair', label: 'Ремонт' },
-  { value: 'expense', label: 'Інше' },
+  { value: '', labelKey: 'filterAll' },
+  { value: 'refuel', labelKey: 'filterRefuel' },
+  { value: 'maintenance', labelKey: 'filterMaintenance' },
+  { value: 'repair', labelKey: 'filterRepair' },
+  { value: 'expense', labelKey: 'filterExpense' },
 ];
 
 export default function Logbook() {
+  const { t } = useTranslation();
   const cars = useCarStore((s) => s.cars);
   const activeCarId = useCarStore((s) => s.activeCarId);
   const carsLoaded = useCarStore((s) => s.carsLoaded);
@@ -96,10 +98,10 @@ export default function Logbook() {
     if (!log) return;
     try {
       await removeLog(log.id, { type: filter || undefined, q: debouncedQ || undefined });
-      setToast('Запис видалено');
+      setToast(t('logbook.toastDeleted'));
     } catch {
       setToast('');
-      window.alert('Не вдалося видалити запис');
+      window.alert(t('logbook.deleteFailed'));
     }
   };
 
@@ -107,11 +109,11 @@ export default function Logbook() {
     return (
       <Card className="rise-in mt-8 p-8 text-center">
         <p className="text-sm text-mist">
-          Спершу додайте авто в розділі{' '}
+          {t('logbook.emptyCarBefore')}
           <Link to="/garage" className="text-amber hover:text-amber-deep">
-            «Налаштування»
+            {t('logbook.emptyCarLink')}
           </Link>
-          .
+          {t('logbook.emptyCarAfter')}
         </p>
       </Card>
     );
@@ -123,16 +125,16 @@ export default function Logbook() {
 
       <ConfirmDialog
         open={deletingLog !== null}
-        title="Видалити запис?"
-        message="Видалити цей запис? Дію не можна скасувати."
+        title={t('logbook.confirmDeleteTitle')}
+        message={t('logbook.confirmDeleteMessage')}
         onConfirm={confirmDelete}
         onCancel={() => setDeletingLog(null)}
       />
 
       <div data-tour="logbook-search">
         <SearchField
-          label="Пошук у журналі"
-          placeholder="Пошук у журналі…"
+          label={t('logbook.searchLabel')}
+          placeholder={t('logbook.searchPlaceholder')}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onClear={() => setQuery('')}
@@ -152,7 +154,7 @@ export default function Logbook() {
                   : 'border border-edge-soft bg-panel text-mist hover:text-fg'
               }`}
             >
-              {f.label}
+              {t(`logbook.${f.labelKey}`)}
             </button>
           ))}
         </div>
@@ -167,7 +169,7 @@ export default function Logbook() {
           <Card className="flex flex-col items-center gap-3 p-8 text-center">
             <SearchX className="h-8 w-8 text-mist/70" />
             <p className="text-sm text-mist">
-              Нічого не знайдено за запитом «{debouncedQ}». Спробуйте інші слова.
+              {t('logbook.noResults', { query: debouncedQ })}
             </p>
             <button
               type="button"
@@ -175,7 +177,7 @@ export default function Logbook() {
               className="inline-flex items-center gap-1.5 text-sm font-medium text-amber hover:text-amber-deep"
             >
               <X className="h-4 w-4" />
-              Очистити пошук
+              {t('logbook.clearSearch')}
             </button>
           </Card>
         ) : (
@@ -183,10 +185,10 @@ export default function Logbook() {
             <BookOpen className="h-8 w-8 text-mist/70" />
             <p className="text-sm text-mist">
               {filter
-                ? 'Немає записів цього типу.'
+                ? t('logbook.emptyOfType')
                 : canCreate
-                  ? 'Журнал порожній. Додайте перший запис!'
-                  : 'Журнал цього авто поки порожній.'}
+                  ? t('logbook.emptyCreate')
+                  : t('logbook.emptyViewer')}
             </p>
             {canCreate && (
               <Link
@@ -194,7 +196,7 @@ export default function Logbook() {
                 className="inline-flex items-center gap-1.5 text-sm font-medium text-amber hover:text-amber-deep"
               >
                 <PlusCircle className="h-4 w-4" />
-                Додати запис
+                {t('logbook.addEntry')}
               </Link>
             )}
           </Card>
@@ -203,8 +205,8 @@ export default function Logbook() {
         <div className="stagger-pass stagger space-y-2.5">
           {searchActive && (
             <p className="px-1 text-xs text-mist">
-              Знайдено {logs.total}
-              {baseTotal != null ? ` з ${baseTotal}` : ''}
+              {t('logbook.found', { total: logs.total })}
+              {baseTotal != null ? t('logbook.foundOf', { base: baseTotal }) : ''}
             </p>
           )}
           {visiblePending.map((record) => (
@@ -221,7 +223,7 @@ export default function Logbook() {
           ))}
           {logs.total > logs.items.length && (
             <p className="pt-1 text-center text-xs text-mist/70">
-              Показано {logs.items.length} з {logs.total} записів
+              {t('logbook.showing', { shown: logs.items.length, total: logs.total })}
             </p>
           )}
         </div>

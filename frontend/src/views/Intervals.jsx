@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import {
   CalendarDays,
@@ -39,6 +40,7 @@ const STATUS_TEXT = {
 };
 
 function IntervalForm({ car, initial, onSubmit, onCancel }) {
+  const { t } = useTranslation();
   const [form, setForm] = useState({
     title: initial?.title || '',
     interval_km: initial?.interval_km != null ? String(initial.interval_km) : '',
@@ -65,8 +67,8 @@ function IntervalForm({ car, initial, onSubmit, onCancel }) {
     const intervalDays = parseInt(form.interval_days, 10);
     const hasKm = Number.isFinite(intervalKm) && intervalKm > 0;
     const hasDays = Number.isFinite(intervalDays) && intervalDays > 0;
-    if (!form.title.trim()) return setError('Вкажіть назву');
-    if (!hasKm && !hasDays) return setError('Вкажіть інтервал у км або днях');
+    if (!form.title.trim()) return setError(t('intervals.errTitleRequired'));
+    if (!hasKm && !hasDays) return setError(t('intervals.errIntervalRequired'));
 
     // For edits, cleared fields go as explicit null so PATCH erases them.
     const payload = { title: form.title.trim() };
@@ -85,7 +87,10 @@ function IntervalForm({ car, initial, onSubmit, onCancel }) {
       await onSubmit(payload);
     } catch (err) {
       setError(
-        extractError(err, initial ? 'Не вдалося зберегти інтервал' : 'Не вдалося створити інтервал')
+        extractError(
+          err,
+          initial ? t('intervals.errSave') : t('intervals.errCreate')
+        )
       );
       setSubmitting(false);
     }
@@ -94,14 +99,14 @@ function IntervalForm({ car, initial, onSubmit, onCancel }) {
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
       <TextField
-        label="Назва"
+        label={t('intervals.fieldTitle')}
         required
         value={form.title}
         onChange={set('title')}
       />
       <div className="grid grid-cols-2 gap-3">
         <TextField
-          label="Інтервал, км"
+          label={t('intervals.fieldIntervalKm')}
           type="number"
           inputMode="numeric"
           enterKeyHint="next"
@@ -111,7 +116,7 @@ function IntervalForm({ car, initial, onSubmit, onCancel }) {
           onChange={set('interval_km')}
         />
         <TextField
-          label="Інтервал, дні"
+          label={t('intervals.fieldIntervalDays')}
           type="number"
           inputMode="numeric"
           enterKeyHint="next"
@@ -123,7 +128,7 @@ function IntervalForm({ car, initial, onSubmit, onCancel }) {
       </div>
       <div className="grid grid-cols-2 gap-3">
         <TextField
-          label="Останнє ТО, км"
+          label={t('intervals.fieldLastOdometer')}
           type="number"
           inputMode="numeric"
           enterKeyHint="next"
@@ -133,7 +138,7 @@ function IntervalForm({ car, initial, onSubmit, onCancel }) {
           onChange={set('last_odometer')}
         />
         <DateField
-          label="Дата останнього ТО"
+          label={t('intervals.fieldLastDate')}
           value={form.last_date}
           onChange={(v) => setForm((f) => ({ ...f, last_date: v }))}
         />
@@ -141,10 +146,14 @@ function IntervalForm({ car, initial, onSubmit, onCancel }) {
       <ErrorMessage>{error}</ErrorMessage>
       <div className="flex gap-2">
         <Button type="submit" disabled={submitting} className="flex-1">
-          {submitting ? 'Збереження…' : initial ? 'Зберегти зміни' : 'Додати інтервал'}
+          {submitting
+            ? t('common.saving')
+            : initial
+              ? t('common.saveChanges')
+              : t('intervals.addInterval')}
         </Button>
         <Button variant="secondary" onClick={onCancel}>
-          Скасувати
+          {t('common.cancel')}
         </Button>
       </div>
     </form>
@@ -154,22 +163,23 @@ function IntervalForm({ car, initial, onSubmit, onCancel }) {
 const PRESET_GROUPS = {
   maintenance: {
     icon: Sparkles,
-    label: 'Типові інтервали ТО',
-    toast: 'Типові інтервали створено',
-    error: 'Не вдалося створити типові інтервали',
+    labelKey: 'presetMaintenanceLabel',
+    toastKey: 'presetMaintenanceToast',
+    errorKey: 'presetMaintenanceError',
   },
   compliance: {
     icon: ShieldCheck,
-    label: 'Страховки та документи',
-    toast: 'Страховки та документи створено',
-    error: 'Не вдалося створити страховки та документи',
+    labelKey: 'presetComplianceLabel',
+    toastKey: 'presetComplianceToast',
+    errorKey: 'presetComplianceError',
   },
 };
 
 function PresetButtons({ variant, className = '', loadingGroup, onPresets }) {
+  const { t } = useTranslation();
   return (
     <div className={`grid grid-cols-2 gap-2 ${className}`}>
-      {Object.entries(PRESET_GROUPS).map(([group, { icon: Icon, label }]) => (
+      {Object.entries(PRESET_GROUPS).map(([group, { icon: Icon, labelKey }]) => (
         <Button
           key={group}
           variant={variant}
@@ -178,7 +188,7 @@ function PresetButtons({ variant, className = '', loadingGroup, onPresets }) {
           className="w-full"
         >
           <Icon className="h-4 w-4" />
-          {loadingGroup === group ? 'Створення…' : label}
+          {loadingGroup === group ? t('intervals.creating') : t(`intervals.${labelKey}`)}
         </Button>
       ))}
     </div>
@@ -186,6 +196,7 @@ function PresetButtons({ variant, className = '', loadingGroup, onPresets }) {
 }
 
 export default function Intervals() {
+  const { t } = useTranslation();
   const cars = useCarStore((s) => s.cars);
   const carsLoaded = useCarStore((s) => s.carsLoaded);
   const carsLoading = useCarStore((s) => s.carsLoading);
@@ -225,13 +236,13 @@ export default function Intervals() {
   const handleAddInterval = async (payload) => {
     await addInterval(payload);
     setShowIntervalForm(false);
-    setToast('Інтервал додано');
+    setToast(t('intervals.toastAdded'));
   };
 
   const handleEditInterval = async (intervalId, payload) => {
     await editInterval(intervalId, payload);
     setEditingIntervalId(null);
-    setToast('Інтервал оновлено');
+    setToast(t('intervals.toastUpdated'));
   };
 
   const confirmDeleteInterval = async () => {
@@ -242,7 +253,7 @@ export default function Intervals() {
     try {
       await removeInterval(interval.id);
     } catch (err) {
-      setActionError(extractError(err, 'Не вдалося видалити інтервал'));
+      setActionError(extractError(err, t('intervals.errDelete')));
     }
   };
 
@@ -255,9 +266,13 @@ export default function Intervals() {
       const added = await addIntervalPresets(activeCar, presets[group] || []);
       // Say what actually happened. «Створено» when a car adds a full set for
       // the first time is a lie the day some of them already exist.
-      setToast(added ? PRESET_GROUPS[group].toast : 'Ці інтервали вже додано');
+      setToast(
+        added
+          ? t(`intervals.${PRESET_GROUPS[group].toastKey}`)
+          : t('intervals.presetsAlreadyAdded')
+      );
     } catch (err) {
-      setActionError(extractError(err, PRESET_GROUPS[group].error));
+      setActionError(extractError(err, t(`intervals.${PRESET_GROUPS[group].errorKey}`)));
     } finally {
       setPresetsLoading(null);
     }
@@ -270,14 +285,14 @@ export default function Intervals() {
       <div className="space-y-4">
         <Card>
           <p className="text-sm text-mist">
-            Спочатку додайте авто — інтервали ведуться по кожному окремо.
+            {t('intervals.noCarPrompt')}
           </p>
           <Link
             to="/garage/new"
             className="mt-3 inline-flex items-center gap-1 rounded-xl bg-amber px-4 py-2 text-sm font-medium text-amber-ink"
           >
             <Plus className="h-4 w-4" />
-            Додати авто
+            {t('intervals.addCar')}
           </Link>
         </Card>
       </div>
@@ -289,9 +304,13 @@ export default function Intervals() {
       <Toast message={toast} onDone={() => setToast('')} />
       <ConfirmDialog
         open={deletingInterval !== null}
-        title="Видалити інтервал"
-        message={deletingInterval ? `Видалити інтервал «${deletingInterval.title}»?` : ''}
-        confirmLabel="Видалити"
+        title={t('intervals.deleteDialogTitle')}
+        message={
+          deletingInterval
+            ? t('intervals.deleteDialogMessage', { title: deletingInterval.title })
+            : ''
+        }
+        confirmLabel={t('common.delete')}
         onConfirm={confirmDeleteInterval}
         onCancel={() => setDeletingInterval(null)}
       />
@@ -303,14 +322,14 @@ export default function Intervals() {
         onToast={setToast}
       />
 
-      <BackLink to="/garage">Інтервали ТО</BackLink>
+      <BackLink to="/garage">{t('intervals.title')}</BackLink>
 
       {actionError && <ErrorMessage>{actionError}</ErrorMessage>}
 
         <Card>
           <div className="mb-2 flex items-center justify-between gap-2">
             <h2 className="font-display text-sm font-semibold text-fg">
-              Інтервали ТО · {activeCar.brand} {activeCar.model}
+              {t('intervals.title')} · {activeCar.brand} {activeCar.model}
             </h2>
             {!showIntervalForm && canManageIntervals && (
               <Button
@@ -319,7 +338,7 @@ export default function Intervals() {
                 className="px-2.5 py-1.5 text-amber"
               >
                 <Plus className="h-4 w-4" />
-                Додати
+                {t('common.add')}
               </Button>
             )}
           </div>
@@ -342,8 +361,8 @@ export default function Intervals() {
             <div className="py-2">
               <p className={canManageIntervals ? 'mb-3 text-sm text-mist' : 'text-sm text-mist'}>
                 {canManageIntervals
-                  ? 'Немає інтервалів обслуговування. Створіть власні або скористайтеся типовим набором.'
-                  : 'Власник ще не додав інтервалів обслуговування.'}
+                  ? t('intervals.emptyManage')
+                  : t('intervals.emptyViewer')}
               </p>
               {canManageIntervals && (
                 <PresetButtons
@@ -383,18 +402,18 @@ export default function Intervals() {
                               {interval.interval_km != null && (
                                 <span className="flex items-center gap-1">
                                   <Gauge className="h-3 w-3" />
-                                  кожні {formatKm(interval.interval_km)}
+                                  {t('intervals.everyKm', { km: formatKm(interval.interval_km) })}
                                 </span>
                               )}
                               {interval.interval_days != null && (
                                 <span className="flex items-center gap-1">
                                   <CalendarDays className="h-3 w-3" />
-                                  кожні {interval.interval_days} дн.
+                                  {t('intervals.everyDays', { days: interval.interval_days })}
                                 </span>
                               )}
                             </p>
                             <p className="mt-0.5 text-xs text-mist/70">
-                              Останнє:{' '}
+                              {t('intervals.last')}{' '}
                               {interval.last_odometer != null ? formatKm(interval.last_odometer) : '—'} ·{' '}
                               {formatDate(interval.last_date)}
                             </p>
@@ -406,7 +425,7 @@ export default function Intervals() {
                           <button
                             type="button"
                             onClick={() => setCompletingInterval(interval)}
-                            aria-label={`Відмітити виконаним: ${interval.title}`}
+                            aria-label={t('intervals.markDoneAria', { title: interval.title })}
                             className="group min-w-0 flex-1 rounded-lg text-left transition active:opacity-70 motion-reduce:active:opacity-100"
                           >
                             {info}
@@ -421,7 +440,7 @@ export default function Intervals() {
                             <button
                               type="button"
                               onClick={() => setEditingIntervalId(interval.id)}
-                              aria-label={`Редагувати інтервал ${interval.title}`}
+                              aria-label={t('intervals.editAria', { title: interval.title })}
                               className="rounded-lg p-1.5 text-mist/70 transition-colors hover:bg-raised hover:text-fg"
                             >
                               <Pencil className="h-4 w-4" />
@@ -429,7 +448,7 @@ export default function Intervals() {
                             <button
                               type="button"
                               onClick={() => setDeletingInterval(interval)}
-                              aria-label={`Видалити інтервал ${interval.title}`}
+                              aria-label={t('intervals.deleteAria', { title: interval.title })}
                               className="rounded-lg p-1.5 text-mist/70 transition-colors hover:bg-crit/10 hover:text-crit"
                             >
                               <Trash2 className="h-4 w-4" />
