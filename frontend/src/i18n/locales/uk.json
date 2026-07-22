@@ -271,7 +271,8 @@
     "last": "Останнє:",
     "markDoneAria": "Відмітити виконаним: {{title}}",
     "editAria": "Редагувати інтервал {{title}}",
-    "deleteAria": "Видалити інтервал {{title}}"
+    "deleteAria": "Видалити інтервал {{title}}",
+    "lastServiceHint": "Коли ТО реально робили востаннє — лишіть порожнім, якщо не знаєте"
   },
   "carEditor": {
     "fuelType": {

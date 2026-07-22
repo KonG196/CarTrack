@@ -5,6 +5,9 @@ from __future__ import annotations
 import datetime as dt
 from collections.abc import Sequence
 
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
 from app.models import Car, LogEntry, ServiceInterval
 
 DEFAULT_AVG_DAILY_KM = 40.0
@@ -72,6 +75,56 @@ def effective_avg_daily_km(
     if override is not None and override > 0:
         return float(override)
     return compute_avg_daily_km(logs, today=today)
+
+
+def sync_intervals_from_log(db: Session, log: LogEntry) -> list[ServiceInterval]:
+    """Advance any service interval a maintenance log fulfils.
+
+    A logbook entry that records a service ("Engine oil" at 168 000 km) should
+    move the matching interval forward, the same way the one-tap «Done» button
+    does — otherwise the journal and the intervals drift apart, and the owner
+    who logs their oil change the ordinary way still sees the old due distance.
+
+    Matching reuses the cost estimator's keyword rule (title keywords vs the
+    log's service text), so what counts as "the oil-change interval" is decided
+    in exactly one place. An interval is only ever moved *forward*: a log older
+    than what the interval already records leaves it untouched, so backfilling
+    ancient history can't un-service a car. Does not commit — the caller owns
+    the transaction.
+    """
+    # Local import: forecast imports nothing from here, but keep the dependency
+    # one-way and lazy so module import order never matters.
+    from app.services.forecast import _log_service_text, normalize_keywords
+
+    if log.type != "maintenance":
+        return []
+    log_keywords = normalize_keywords(_log_service_text(log))
+    if not log_keywords:
+        return []
+
+    intervals = (
+        db.execute(select(ServiceInterval).where(ServiceInterval.car_id == log.car_id))
+        .scalars()
+        .all()
+    )
+    advanced: list[ServiceInterval] = []
+    for interval in intervals:
+        # Compliance-only intervals (insurance, roadworthiness) are date rules a
+        # service entry never satisfies; skip anything without a km rule.
+        if interval.interval_km is None:
+            continue
+        if not (normalize_keywords(interval.title) & log_keywords):
+            continue
+        # Forward only, on either axis we track.
+        newer_odo = interval.last_odometer is None or log.odometer > interval.last_odometer
+        newer_date = interval.last_date is None or log.date >= interval.last_date
+        if newer_odo and newer_date:
+            interval.last_odometer = log.odometer
+            interval.last_date = log.date
+            interval.last_notified_at = None
+            interval.snoozed_until = None
+            advanced.append(interval)
+    return advanced
 
 
 def compute_interval_status(

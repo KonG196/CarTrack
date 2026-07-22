@@ -45,15 +45,13 @@ function IntervalForm({ car, initial, onSubmit, onCancel }) {
     title: initial?.title || '',
     interval_km: initial?.interval_km != null ? String(initial.interval_km) : '',
     interval_days: initial?.interval_days != null ? String(initial.interval_days) : '',
+    // Left blank on create: prefilling the car's *current* odometer / today
+    // reads as "the service was just done", which quietly zeroes the interval
+    // even when the last service was long ago. The owner states when it was
+    // actually last done (and may leave it blank if they don't know).
     last_odometer:
-      initial != null
-        ? initial.last_odometer != null
-          ? String(initial.last_odometer)
-          : ''
-        : car
-          ? String(car.current_odometer)
-          : '',
-    last_date: initial ? initial.last_date || '' : new Date().toISOString().slice(0, 10),
+      initial != null && initial.last_odometer != null ? String(initial.last_odometer) : '',
+    last_date: initial ? initial.last_date || '' : '',
   });
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -136,6 +134,7 @@ function IntervalForm({ car, initial, onSubmit, onCancel }) {
           numeric
           value={form.last_odometer}
           onChange={set('last_odometer')}
+          hint={initial ? undefined : t('intervals.lastServiceHint')}
         />
         <DateField
           label={t('intervals.fieldLastDate')}

@@ -145,6 +145,88 @@ def test_interval_without_any_limit_422(
     assert response.status_code == 422
 
 
+def _add_maintenance(client, headers, car_id, *, odometer, items, date=None):
+    resp = client.post(
+        f"/api/cars/{car_id}/logs",
+        json={
+            "type": "maintenance",
+            "odometer": odometer,
+            "date": (date or TODAY).isoformat(),
+            "total_cost": 100,
+            "maintenance": {"parts_cost": 60, "labor_cost": 40, "items": items},
+        },
+        headers=headers,
+    )
+    assert resp.status_code == 201, resp.text
+    return resp.json()
+
+
+def _get_interval(client, headers, car_id, interval_id):
+    resp = client.get(f"/api/cars/{car_id}/intervals", headers=headers)
+    assert resp.status_code == 200
+    return next(i for i in resp.json() if i["id"] == interval_id)
+
+
+def test_logging_a_service_advances_the_matching_interval(
+    client: TestClient, auth_headers: dict, make_car
+) -> None:
+    """Юра's case: an oil change logged in the journal moves the oil interval,
+    without a second «Done» tap."""
+    car = make_car(current_odometer=45000)
+    interval = _create_interval(
+        client,
+        auth_headers,
+        car["id"],
+        {"title": "Oil change", "interval_km": 10000, "last_odometer": 40000},
+    )
+    assert interval["km_left"] == 5000  # 40000+10000-45000
+
+    _add_maintenance(client, auth_headers, car["id"], odometer=45000, items=["Oil change"])
+
+    updated = _get_interval(client, auth_headers, car["id"], interval["id"])
+    assert updated["last_odometer"] == 45000
+    assert updated["due_odometer"] == 55000
+    assert updated["km_left"] == 10000  # freshly serviced -> full interval ahead
+
+
+def test_logging_a_service_never_moves_an_interval_backwards(
+    client: TestClient, auth_headers: dict, make_car
+) -> None:
+    car = make_car(current_odometer=60000)
+    interval = _create_interval(
+        client,
+        auth_headers,
+        car["id"],
+        {"title": "Oil change", "interval_km": 10000, "last_odometer": 55000},
+    )
+    # Backfilling an older oil change (at 30000) must not un-service the car.
+    _add_maintenance(
+        client,
+        auth_headers,
+        car["id"],
+        odometer=30000,
+        items=["Oil change"],
+        date=TODAY - dt.timedelta(days=400),
+    )
+    updated = _get_interval(client, auth_headers, car["id"], interval["id"])
+    assert updated["last_odometer"] == 55000  # unchanged
+
+
+def test_unrelated_service_does_not_touch_the_interval(
+    client: TestClient, auth_headers: dict, make_car
+) -> None:
+    car = make_car(current_odometer=45000)
+    interval = _create_interval(
+        client,
+        auth_headers,
+        car["id"],
+        {"title": "Oil change", "interval_km": 10000, "last_odometer": 40000},
+    )
+    _add_maintenance(client, auth_headers, car["id"], odometer=45000, items=["Air filter"])
+    updated = _get_interval(client, auth_headers, car["id"], interval["id"])
+    assert updated["last_odometer"] == 40000  # oil interval untouched
+
+
 def test_interval_without_anchor_has_null_derived_fields(
     client: TestClient, auth_headers: dict, make_car
 ) -> None:

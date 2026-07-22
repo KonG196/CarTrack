@@ -271,7 +271,8 @@
     "last": "Last:",
     "markDoneAria": "Mark as done: {{title}}",
     "editAria": "Edit interval {{title}}",
-    "deleteAria": "Delete interval {{title}}"
+    "deleteAria": "Delete interval {{title}}",
+    "lastServiceHint": "When the service was last actually done — leave blank if unknown"
   },
   "carEditor": {
     "fuelType": {

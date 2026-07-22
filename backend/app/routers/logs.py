@@ -34,6 +34,7 @@ from app.schemas import (
     RefuelDetailsIn,
     RepairDetailsIn,
 )
+from app.services.intervals import sync_intervals_from_log
 from app.services.stats import consumption_by_log_id
 
 router = APIRouter(tags=["logs"])
@@ -311,6 +312,12 @@ def create_log(
     if payload.odometer > car.current_odometer:
         car.current_odometer = payload.odometer
 
+    # A logged service advances the interval it fulfils, so the journal and the
+    # intervals agree without a second "Done" tap. Needs the detail row flushed
+    # so its items are visible to the matcher.
+    db.flush()
+    sync_intervals_from_log(db, log)
+
     db.commit()
     db.refresh(log)
     # A new full tank can close a segment, so the created row carries the same
@@ -462,6 +469,12 @@ def update_log(
     # Explicit stamp: column-level onupdate fires only when the log row itself
     # changes, missing detail-only edits — offline sync keys on this stamp.
     log.updated_at = utcnow()
+
+    # A corrected odometer or item list can now match (or better fit) an
+    # interval, so re-run the same advance the create path does.
+    db.flush()
+    sync_intervals_from_log(db, log)
+
     db.commit()
     db.refresh(log)
     # Editing liters or a tank flag re-opens the segment, so the response
