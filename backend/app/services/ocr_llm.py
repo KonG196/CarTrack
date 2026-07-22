@@ -312,26 +312,21 @@ def recognize_receipt(image_bytes: bytes, content_type: str = "image/jpeg") -> P
     because someone else's API is down.
     """
     if settings.GEMINI_API_KEY:
-        # One fast tesseract pass, then the model for whatever it missed. The
-        # model reads angled/crumpled receipts better and in ~10s, so skip both
-        # tesseract's slow multi-pass upscale (~80s on the prod CPU) and the slow
-        # demo OCR.space rung (~45s) — together those blew past the client
-        # timeout and «failed» a receipt the model reads fine.
-        quick = parse_receipt_text(extract_text(image_bytes, retries=False))
-        if quick.found_in_text >= 2:
-            return quick
+        # Vision-first. Measured on the prod CPU a single tesseract pass costs
+        # ~27s and still reads NOTHING off a real phone photo, while the model
+        # reads the same receipt in ~11s — so a tesseract pre-pass only added
+        # latency. Go straight to the model.
         try:
             llm_parsed = recognize_receipt_llm(image_bytes, content_type)
         except Exception:
-            logger.warning("Vision fallback failed, keeping the local result", exc_info=True)
+            logger.warning("Vision OCR failed", exc_info=True)
             llm_parsed = None
-        if llm_parsed is not None and llm_parsed.found_in_text > quick.found_in_text:
+        if llm_parsed is not None:
             return llm_parsed
-        # Model down/rate-limited/short: return the fast tesseract read rather
-        # than spin on the slow multi-pass + OCR.space rungs. A hard photo won't
-        # read there either, and the user types it in seconds instead of waiting
-        # a minute — the scan must never hang, even when the model is unavailable.
-        return quick
+        # Model down/rate-limited: fail fast to manual entry rather than grind
+        # tesseract for ~27s only to read nothing. An empty parse tells the app
+        # «не вдалося» in a second, and the user types the three numbers in.
+        return parse_receipt_text("")
 
     # No vision model configured at all: the full free rungs are the only option.
     return parse_receipt_text(read_text(image_bytes, content_type, _receipt_score, 2))
@@ -442,27 +437,20 @@ def recognize_work_order(
     costs money.
     """
     if settings.GEMINI_API_KEY:
-        # One fast tesseract pass, then the model (same reasoning as receipts:
-        # it reads the table better, and the slow multi-pass + OCR.space rungs
-        # pushed the scan past the client timeout).
-        quick = parse_work_order(extract_text(image_bytes, retries=False))
-        if _score_of(quick) >= _ORDER_ENOUGH:
-            return quick
+        # Vision-first, same reasoning as receipts: a tesseract pass costs ~27s
+        # on the prod CPU and reads a photographed наряд poorly, while the model
+        # reads the table cleanly in ~11s. Go straight to the model.
         try:
             data = _ask_gemini(_ORDER_PROMPT, image_bytes, content_type)
         except Exception:
-            logger.warning("Vision fallback failed, keeping the local result", exc_info=True)
+            logger.warning("Vision OCR failed", exc_info=True)
             data = None
         if data is not None:
             llm_parsed = parsed_work_order_from_llm(data)
             if llm_parsed is not None:
-                # Keep the tesseract text: a wrong answer is diagnosed from it.
-                llm_parsed.raw_text = quick.raw_text
-                if _score_of(llm_parsed) > _score_of(quick):
-                    return llm_parsed
-        # Model down/short: return the fast tesseract read rather than spin on
-        # the slow multi-pass + OCR.space rungs (the scan must never hang).
-        return quick
+                return llm_parsed
+        # Model down/short: fail fast to manual entry rather than grind tesseract.
+        return parse_work_order("")
 
     # No vision model configured at all: the full free rungs are the only option.
     return parse_work_order(

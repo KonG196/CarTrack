@@ -151,18 +151,21 @@ def test_llm_not_called_without_key(
     assert _post_scan(client, auth_headers).status_code == 200
 
 
-def test_llm_not_called_when_tesseract_succeeded(
+def test_model_reads_the_receipt_and_tesseract_is_skipped(
     client: TestClient, auth_headers: dict, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(
-        "app.services.ocr_llm.extract_text",
-        lambda b, **kw: "45.50 Л x 54.99\nСУМА 2502.05 ГРН",
-    )
+    # Vision-first: with a key the receipt goes straight to the model, and the
+    # slow tesseract pass is not run at all.
+    def no_tesseract(*args, **kwargs):
+        raise AssertionError("tesseract must not run on the vision-first path")
+
+    monkeypatch.setattr("app.services.ocr_llm.extract_text", no_tesseract)
     monkeypatch.setattr(ocr_llm.settings, "GEMINI_API_KEY", "test-key")
-
-    def must_not_be_called(image_bytes: bytes, content_type: str) -> ParsedReceipt:
-        raise AssertionError("LLM fallback must not run when tesseract succeeded")
-
-    monkeypatch.setattr("app.services.ocr_llm.recognize_receipt_llm", must_not_be_called)
+    monkeypatch.setattr(
+        "app.services.ocr_llm.recognize_receipt_llm",
+        lambda image_bytes, content_type: ocr_llm.parse_receipt_text(
+            "45.50 Л x 54.99\nСУМА 2502.05 ГРН"
+        ),
+    )
     body = _post_scan(client, auth_headers).json()
     assert body["liters"] == 45.5

@@ -334,23 +334,29 @@ def test_the_model_reads_the_order_when_the_free_rungs_cannot(
     assert parsed.total_cost == 19200
     assert parsed.labor_cost == 16000
     assert "Діагностика" in parsed.items
-    # The text the free rungs read is kept: the model returns none, and it is
-    # what a wrong answer is diagnosed from.
-    assert parsed.raw_text == "розмито"
 
 
-def test_the_model_is_not_asked_when_the_free_rungs_succeeded(
+def test_the_model_is_asked_first_and_tesseract_is_skipped(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """It is the only rung that costs money."""
-    monkeypatch.setattr("app.services.ocr_llm.extract_text", lambda image_bytes, **kw: ALEX_SO)
+    # Vision-first: with a key the наряд goes straight to the model and the slow
+    # tesseract pass is not run.
+    def no_tesseract(*args, **kwargs):
+        raise AssertionError("tesseract must not run on the vision-first path")
+
+    monkeypatch.setattr("app.services.ocr_llm.extract_text", no_tesseract)
     monkeypatch.setattr(ocr_llm.settings, "GEMINI_API_KEY", "test-key")
-
-    def must_not_be_called(*args, **kwargs):
-        raise AssertionError("the paid rung ran on an order the free ones read")
-
-    monkeypatch.setattr("app.services.ocr_llm._ask_gemini", must_not_be_called)
-    assert ocr_llm.recognize_work_order(b"img").total_cost == 8223.38
+    monkeypatch.setattr(
+        "app.services.ocr_llm._ask_gemini",
+        lambda *args, **kwargs: {
+            "parts_cost": 3200,
+            "labor_cost": 5000,
+            "total_cost": 8200,
+            "date": None,
+            "items": ["Робота"],
+        },
+    )
+    assert ocr_llm.recognize_work_order(b"img").total_cost == 8200
 
 
 def test_the_model_is_not_asked_without_a_key(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -389,8 +395,7 @@ def test_a_model_date_from_the_future_is_refused() -> None:
 
 
 def test_the_model_survives_a_dead_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A depleted balance must not cost the user their local reading."""
-    monkeypatch.setattr("app.services.ocr_llm.extract_text", lambda image_bytes, **kw: "розмито")
+    """A dead/rate-limited key must not crash — it fast-fails to manual entry."""
     monkeypatch.setattr(ocr_llm.settings, "GEMINI_API_KEY", "dead-key")
 
     def boom(*args, **kwargs):
@@ -398,4 +403,5 @@ def test_the_model_survives_a_dead_key(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr("app.services.ocr_llm._ask_gemini", boom)
     parsed = ocr_llm.recognize_work_order(b"img")
-    assert parsed.raw_text == "розмито"
+    # Survives (no exception) and returns an empty reading for manual entry.
+    assert parsed.total_cost is None
