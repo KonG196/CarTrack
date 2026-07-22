@@ -1,12 +1,36 @@
-# Kapot Tracker
+<p align="center">
+  <img src="docs/media/logo.png" alt="Kapot Tracker" height="72">
+</p>
 
-**English** · [Українська](README.uk.md)
+<p align="center"><b>English</b> · <a href="README.uk.md">Українська</a></p>
 
+<p align="center">
 A car logbook and expense tracker built for drivers — fuel, service, repairs and
-documents in one place, with photo OCR, smart reminders and a Telegram bot.
+documents in one place, with photo OCR, smart reminders and a Telegram bot.<br>
 Mobile-first PWA, Ukrainian and English.
+</p>
 
-**Live app:** https://kapot-tracker.vercel.app · **API:** https://kapot-tracker.duckdns.org
+<p align="center">
+<b>Live app:</b> <a href="https://kapot-tracker.vercel.app">kapot-tracker.vercel.app</a> ·
+<b>API:</b> <a href="https://kapot-tracker.duckdns.org">kapot-tracker.duckdns.org</a>
+</p>
+
+---
+
+## Screenshots
+
+<p align="center">
+  <img src="docs/media/en/dashboard.png" alt="Dashboard" width="30%">
+  <img src="docs/media/en/analytics.png" alt="Analytics" width="30%">
+  <img src="docs/media/en/year.png" alt="Your year with Kapot" width="30%">
+</p>
+<p align="center">
+  <img src="docs/media/en/notifications.png" alt="Notification centre" width="30%">
+  <img src="docs/media/en/tires.png" alt="Tyres" width="30%">
+  <img src="docs/media/en/logbook.png" alt="Logbook" width="30%">
+</p>
+
+<p align="center"><i>Dashboard · analytics · year in review · notification centre · tyres · logbook</i></p>
 
 ---
 

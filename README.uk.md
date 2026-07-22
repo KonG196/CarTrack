@@ -1,12 +1,36 @@
-# Kapot Tracker
+<p align="center">
+  <img src="docs/media/logo.png" alt="Kapot Tracker" height="72">
+</p>
 
-[English](README.md) · **Українська**
+<p align="center"><a href="README.md">English</a> · <b>Українська</b></p>
 
+<p align="center">
 Бортовий журнал і облік витрат для водіїв — паливо, ТО, ремонти й документи в одному
-місці, з розпізнаванням чеків з фото, розумними нагадуваннями та Telegram-ботом.
+місці, з розпізнаванням чеків з фото, розумними нагадуваннями та Telegram-ботом.<br>
 Mobile-first PWA, українською та англійською.
+</p>
 
-**Живий застосунок:** https://kapot-tracker.vercel.app · **API:** https://kapot-tracker.duckdns.org
+<p align="center">
+<b>Живий застосунок:</b> <a href="https://kapot-tracker.vercel.app">kapot-tracker.vercel.app</a> ·
+<b>API:</b> <a href="https://kapot-tracker.duckdns.org">kapot-tracker.duckdns.org</a>
+</p>
+
+---
+
+## Скриншоти
+
+<p align="center">
+  <img src="docs/media/uk/dashboard.png" alt="Головна" width="30%">
+  <img src="docs/media/uk/analytics.png" alt="Аналітика" width="30%">
+  <img src="docs/media/uk/year.png" alt="Ваш рік з Kapot" width="30%">
+</p>
+<p align="center">
+  <img src="docs/media/uk/notifications.png" alt="Центр сповіщень" width="30%">
+  <img src="docs/media/uk/tires.png" alt="Шини" width="30%">
+  <img src="docs/media/uk/logbook.png" alt="Журнал" width="30%">
+</p>
+
+<p align="center"><i>Головна · аналітика · рік у підсумку · центр сповіщень · шини · журнал</i></p>
 
 ---
 
