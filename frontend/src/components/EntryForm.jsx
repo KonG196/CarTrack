@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Fuel, Wrench, Hammer, Receipt, Plus, Camera, Loader2, AlertTriangle } from 'lucide-react';
+import { Fuel, Wrench, Hammer, Receipt, Plus, Camera, Loader2, AlertTriangle, Lock } from 'lucide-react';
 import { extractError } from '../api/client';
 import { scanReceipt, scanWorkOrder } from '../api/ocr';
 import { getRefuelContext } from '../api/logs';
+import { useAuthStore } from '../store/authStore';
 import { num, deriveRefuel } from '../utils/refuelMath';
 import { formatDate } from '../utils/format';
 import { expenseCategoryFrom } from '../utils/expenseCategory';
@@ -32,7 +33,20 @@ export const ENTRY_TYPES = [
 
 const NO_TOAST = { message: '', variant: 'ok' };
 
-function ScanButton({ scanning, onFile, idle, busy }) {
+function ScanButton({ scanning, onFile, idle, busy, locked, lockedLabel }) {
+  // Locked = the account's email isn't verified. Scanning is a paid feature
+  // (Gemini OCR), so it stays behind a verified email — show a hint, no picker.
+  if (locked) {
+    return (
+      <div
+        data-tour="add-scan"
+        className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-edge-soft px-3.5 py-3.5 text-sm font-medium text-mist/70"
+      >
+        <Lock className="h-4 w-4" />
+        {lockedLabel}
+      </div>
+    );
+  }
   return (
     <label
       data-tour="add-scan"
@@ -135,7 +149,9 @@ export default function EntryForm({
   const [error, setError] = useState('');
   const [toast, setToast] = useState(NO_TOAST);
 
-  // receipt scanning
+  // receipt scanning — locked until the email is verified (paid Gemini OCR).
+  // false only for a genuinely unverified account; undefined must not lock.
+  const scanLocked = useAuthStore((s) => s.user?.email_verified) === false;
   const [scanning, setScanning] = useState(false);
   const scanningRef = useRef(false);
   const editedDuringScanRef = useRef(new Set());
@@ -241,9 +257,14 @@ export default function EntryForm({
           : { message: failure, variant: 'warn' }
       );
     } catch (err) {
+      const status = err?.response?.status;
       setToast({
         message:
-          err?.response?.status === 503 ? t('entryForm.scanUnavailable') : failure,
+          status === 403
+            ? t('entryForm.scanNeedsVerify')
+            : status === 503
+              ? t('entryForm.scanUnavailable')
+              : failure,
         variant: 'warn',
       });
     } finally {
@@ -532,6 +553,8 @@ export default function EntryForm({
           <>
             <ScanButton
               scanning={scanning}
+              locked={scanLocked}
+              lockedLabel={t('entryForm.scanNeedsVerify')}
               onFile={handleReceiptFile}
               idle={t('entryForm.scanReceipt')}
               busy={t('entryForm.scanningReceipt')}
@@ -622,6 +645,8 @@ export default function EntryForm({
           <>
             <ScanButton
               scanning={scanning}
+              locked={scanLocked}
+              lockedLabel={t('entryForm.scanNeedsVerify')}
               onFile={handleWorkOrderFile}
               idle={t('entryForm.scanWorkOrder')}
               busy={t('entryForm.scanningWorkOrder')}
@@ -698,6 +723,8 @@ export default function EntryForm({
           <>
             <ScanButton
               scanning={scanning}
+              locked={scanLocked}
+              lockedLabel={t('entryForm.scanNeedsVerify')}
               onFile={handleRepairOrderFile}
               idle={t('entryForm.scanWorkOrder')}
               busy={t('entryForm.scanningWorkOrder')}
@@ -746,6 +773,8 @@ export default function EntryForm({
           <>
             <ScanButton
               scanning={scanning}
+              locked={scanLocked}
+              lockedLabel={t('entryForm.scanNeedsVerify')}
               onFile={handleExpenseReceiptFile}
               idle={t('entryForm.scanReceipt')}
               busy={t('entryForm.scanningReceipt')}

@@ -9,6 +9,7 @@ import { lookupPlate } from '../api/cars';
 import { Button, Card, DateField, ErrorMessage, SelectField, TextField } from '../components/UI';
 import BackLink from '../components/BackLink';
 import { useCarStore } from '../store/carStore';
+import { useAuthStore } from '../store/authStore';
 
 export const FUEL_TYPES = [
   { value: 'petrol', label: 'Бензин' },
@@ -61,6 +62,9 @@ function CarForm({ initial, onSubmit, onCancel, focusField }) {
   const [submitting, setSubmitting] = useState(false);
   const [looking, setLooking] = useState(false);
   const [lookupNote, setLookupNote] = useState('');
+  // Plate lookup calls the paid baza-gai API, so it stays behind a verified
+  // email. false only for a genuinely unverified account; undefined must not lock.
+  const lookupLocked = useAuthStore((s) => s.user?.email_verified) === false;
   const [stolen, setStolen] = useState(null);
   // Which fields the register filled, so they can say so. Cleared per field the
   // moment the user edits it: the green mark claims «you did not type this»,
@@ -89,6 +93,7 @@ function CarForm({ initial, onSubmit, onCancel, focusField }) {
   };
 
   const handleLookup = async () => {
+    if (lookupLocked) return setError(t('carEditor.lookupNeedsVerify'));
     const query = (form.plate || form.vin).trim();
     if (!query) return setError(t('carEditor.errPlateOrVin'));
     setError('');
@@ -126,7 +131,11 @@ function CarForm({ initial, onSubmit, onCancel, focusField }) {
         .join(' · ');
       setLookupNote(bits ? t('carEditor.foundColon', { bits }) : t('carEditor.foundInRegistry'));
     } catch (err) {
-      setError(extractError(err, t('carEditor.errLookupFailed')));
+      setError(
+        err?.response?.status === 403
+          ? t('carEditor.lookupNeedsVerify')
+          : extractError(err, t('carEditor.errLookupFailed'))
+      );
     } finally {
       setLooking(false);
     }
@@ -201,7 +210,7 @@ function CarForm({ initial, onSubmit, onCancel, focusField }) {
             type="button"
             variant="secondary"
             onClick={handleLookup}
-            disabled={looking || (!form.plate.trim() && !form.vin.trim())}
+            disabled={looking || lookupLocked || (!form.plate.trim() && !form.vin.trim())}
             className="h-14 flex-shrink-0 px-4"
           >
             {looking ? (
@@ -214,8 +223,8 @@ function CarForm({ initial, onSubmit, onCancel, focusField }) {
             )}
           </Button>
         </div>
-        <p className="mt-2 text-xs text-mist">
-          {t('carEditor.lookupHint')}
+        <p className={`mt-2 text-xs ${lookupLocked ? 'text-amber' : 'text-mist'}`}>
+          {lookupLocked ? t('carEditor.lookupNeedsVerify') : t('carEditor.lookupHint')}
         </p>
         {lookupNote && <p className="mt-1.5 text-xs text-mist">{lookupNote}</p>}
         {stolen === true && (

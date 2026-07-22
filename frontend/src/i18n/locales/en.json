@@ -326,7 +326,8 @@
     "toastUpdated": "Car updated",
     "toastAdded": "Car added",
     "editTitle": "Edit car",
-    "newTitle": "New car"
+    "newTitle": "New car",
+    "lookupNeedsVerify": "Verify your email to look up a plate"
   },
   "profile": {
     "title": "Profile",
@@ -1054,7 +1055,8 @@
     "errTotalCost": "Enter the total cost",
     "errLiters": "Enter the number of liters",
     "errPricePerLiter": "Enter the price per liter",
-    "saveFailed": "Couldn't save the entry"
+    "saveFailed": "Couldn't save the entry",
+    "scanNeedsVerify": "Verify your email to scan receipts"
   },
   "layout": {
     "recordsSynced_one": "{{count}} record synced",

@@ -326,7 +326,8 @@
     "toastUpdated": "Авто оновлено",
     "toastAdded": "Авто додано",
     "editTitle": "Редагувати авто",
-    "newTitle": "Нове авто"
+    "newTitle": "Нове авто",
+    "lookupNeedsVerify": "Підтвердіть пошту, щоб шукати за номером"
   },
   "profile": {
     "title": "Профіль",
@@ -1056,7 +1057,8 @@
     "errTotalCost": "Вкажіть загальну вартість",
     "errLiters": "Вкажіть кількість літрів",
     "errPricePerLiter": "Вкажіть ціну за літр",
-    "saveFailed": "Не вдалося зберегти запис"
+    "saveFailed": "Не вдалося зберегти запис",
+    "scanNeedsVerify": "Підтвердіть пошту, щоб сканувати чеки"
   },
   "layout": {
     "recordsSynced_one": "{{count}} запис синхронізовано",
