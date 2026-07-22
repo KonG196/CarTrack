@@ -45,15 +45,16 @@ Mobile-first PWA, Ukrainian and English.
 
 ### Photo OCR & AI (Google Gemini)
 - Scan a **fuel receipt**, an **СТО work order** or **any expense receipt** — the photo
-  auto-fills the form. Vision-first (Gemini reads angled phone photos in any language),
-  with local tesseract / OCR.space as the no-key fallback.
+  auto-fills the form. Vision-first (Gemini reads angled phone photos from **any country
+  in any language** and returns the fields in **your** language), with local tesseract /
+  OCR.space as the no-key fallback. Web scan and the bot share the same vision path.
 - Graceful degradation: when the model is rate-limited the app says **«scan unavailable,
   enter manually»** instead of blaming the photo.
 - **Free-text logging in the Telegram bot** — «залив 40 л на окко за 2200» / «filled 40 L
   at Shell for 60»: the model classifies the message and fills the right entry.
 
 ### Analytics & insights
-- Spend **by category and by month**, spending **forecast**, total cost of ownership (**₴/km**).
+- Spend **by category and by month**, spending **forecast**, total cost of ownership (**cost/km**).
 - Fuel consumption trend, fuel-**price history**, per-station stats and the **cheapest station**.
 - **Monthly budget** with pacing and projection; a **consumption-spike** watchdog
   («+18 % over your baseline — check tyre pressure»).
@@ -84,7 +85,12 @@ Mobile-first PWA, Ukrainian and English.
 
 ### Platform
 - **PWA** — installable, works offline, icon badge.
-- **Bilingual** — Ukrainian and English.
+- **Localized** — **English by default** with a one-tap **Ukrainian** toggle on every screen
+  (auth screens and Settings). The language follows the account across the **UI, emails,
+  Telegram bot and API errors**.
+- **Display currency** — pick from **10 currencies** (USD by default, ₴ second); every amount
+  shows your symbol in the app, PDF report and bot. Amounts are stored as entered — **the
+  symbol changes, values are never converted**.
 - **Telegram bot** — quick logging, reminders, weekly digest, on-demand backup.
 
 ---
