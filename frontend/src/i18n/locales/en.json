@@ -629,7 +629,11 @@
     "intervalsTitle": "Service intervals",
     "manageIntervalsAria": "Manage service intervals",
     "noIntervalsManager": "No service intervals yet. Add them on the intervals page.",
-    "noIntervalsViewer": "The owner hasn't added any service intervals yet."
+    "noIntervalsViewer": "The owner hasn't added any service intervals yet.",
+    "verifyBannerTitle": "Verify your email to unlock receipt scanning & plate lookup",
+    "verifyBannerCta": "Send link",
+    "verifyBannerSent": "Verification email sent — check your inbox (and spam)",
+    "verifyBannerFailed": "Couldn't send the email, try again later"
   },
   "carPassport": {
     "notFound": "Passport not found. The link may have been revoked.",

@@ -22,6 +22,7 @@ import { formatMoney, formatMoneyCompact, formatKm, formatDate } from '../utils/
 import { Card, Spinner, ErrorMessage } from '../components/UI';
 import Toast from '../components/Toast';
 import NotificationsBanner from '../components/NotificationsBanner';
+import VerifyEmailBanner from '../components/VerifyEmailBanner';
 import CompleteIntervalModal from '../components/CompleteIntervalModal';
 import CopyCarName from '../components/CopyCarName';
 
@@ -233,6 +234,7 @@ export default function Dashboard() {
   return (
     <div className="stagger space-y-4">
       <Toast message={toast} onDone={() => setToast('')} />
+      <VerifyEmailBanner />
       <NotificationsBanner />
 
       <CompleteIntervalModal
