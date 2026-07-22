@@ -12,6 +12,11 @@ export default function Menu({
   align = 'right',
   ariaLabel,
   buttonClassName = '',
+  // Disables the trigger — the panel can't be opened.
+  disabled = false,
+  // Stretch the panel to the trigger's width instead of the default min-width.
+  // Used when the menu stands in for a full-width form field.
+  matchWidth = false,
   // An action to offer under the choices — «add one» belongs next to the list
   // of what there is. It renders outside the listbox on purpose: a screen
   // reader is told these options are values one of which is selected, and an
@@ -52,6 +57,7 @@ export default function Menu({
         aria-haspopup="listbox"
         aria-expanded={mounted && !closing}
         aria-label={ariaLabel}
+        disabled={disabled}
         onClick={() => (mounted && !closing ? requestClose() : setOpen(true))}
         className={buttonClassName}
       >
@@ -61,9 +67,9 @@ export default function Menu({
       {mounted && (
         <div
           data-closing={closing ? 'true' : undefined}
-          className={`menu-pop absolute z-50 mt-2 max-h-72 min-w-[12rem] origin-top overflow-y-auto rounded-xl border border-edge bg-panel p-1 shadow-xl shadow-black/50 ${
-            align === 'right' ? 'right-0' : 'left-0'
-          }`}
+          className={`menu-pop absolute z-50 mt-2 max-h-72 origin-top overflow-y-auto rounded-xl border border-edge bg-panel p-1 shadow-xl shadow-black/50 ${
+            matchWidth ? 'w-full' : 'min-w-[12rem]'
+          } ${align === 'right' ? 'right-0' : 'left-0'}`}
         >
           <div role="listbox" aria-label={ariaLabel}>
             {items.map((item) => {
