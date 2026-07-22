@@ -34,15 +34,15 @@ export const useAuthStore = create((set, get) => ({
   },
 
   async register(email, password) {
-    const account = await authApi.register(
+    await authApi.register(
       email,
       password,
       i18n.language,
       useCurrencyStore.getState().currency,
     );
-    // Logging straight in would 403 while the address is unconfirmed; the
-    // caller sends the user to /verify instead.
-    if (account?.verification_sent) return { pendingVerification: true };
+    // Login no longer depends on a verified email, so we sign the new user
+    // straight in. A verification email still goes out; confirming it later
+    // unlocks receipt scan and plate lookup (see the dashboard banner).
     await get().login(email, password);
     return { pendingVerification: false };
   },

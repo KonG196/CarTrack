@@ -33,11 +33,10 @@ export default function Register() {
     }
     setLoading(true);
     try {
-      const { pendingVerification } = await register(email.trim(), password);
-      if (pendingVerification) {
-        navigate(`/verify?email=${encodeURIComponent(email.trim())}`, { replace: true });
-        return;
-      }
+      // Register signs the user straight in now (verification no longer gates
+      // login), so go to the app. Confirming the email later unlocks scan and
+      // plate lookup — the dashboard nudges them to do it.
+      await register(email.trim(), password);
       navigate(next, { replace: true });
     } catch (err) {
       setError(extractError(err, t('auth.register.failed')));
