@@ -1,4 +1,6 @@
 import i18n from '../i18n';
+import { currencyInfo } from '../currency';
+import { currentCurrency } from '../store/currencyStore';
 
 const THIN_SPACE = ' '; // narrow no-break space for thousands grouping (uk)
 
@@ -46,12 +48,19 @@ function isEn() {
 
 const units = () =>
   isEn()
-    ? { km: 'km', thousand: 'k', million: 'M', currency: '₴' }
-    : { km: 'км', thousand: 'тис', million: 'млн', currency: '₴' };
+    ? { km: 'km', thousand: 'k', million: 'M' }
+    : { km: 'км', thousand: 'тис', million: 'млн' };
 
 function groupThousands(digits) {
   const sep = isEn() ? ',' : THIN_SPACE;
   return digits.replace(/\B(?=(\d{3})+(?!\d))/g, sep);
+}
+
+// The user's display currency decides the symbol AND its side: prefix ("$1,250")
+// or suffix ("1 250 ₴"). The value is never converted — this is symbol only.
+function withCurrency(sign, body) {
+  const { symbol, prefix } = currencyInfo(currentCurrency());
+  return prefix ? `${sign}${symbol}${body}` : `${sign}${body}${UNIT_GAP}${symbol}`;
 }
 
 export function formatMoney(n) {
@@ -63,7 +72,7 @@ export function formatMoney(n) {
   const grouped = groupThousands(intPart);
   const decimal = isEn() ? '.' : ',';
   const frac = fracPart === '00' ? '' : `${decimal}${fracPart}`;
-  return `${sign}${grouped}${frac}${UNIT_GAP}${units().currency}`;
+  return withCurrency(sign, `${grouped}${frac}`);
 }
 
 // Short money for tight spots (dashboard stat tiles) where the full grouped
@@ -79,12 +88,12 @@ export function formatMoneyCompact(n) {
   if (abs >= 1_000_000) {
     const m = abs / 1_000_000;
     const s = m >= 10 ? String(Math.round(m)) : m.toFixed(1).replace('.', decimal);
-    return `${sign}${s}${UNIT_GAP}${u.million}${UNIT_GAP}${u.currency}`;
+    return withCurrency(sign, `${s}${UNIT_GAP}${u.million}`);
   }
   if (abs >= 100_000) {
-    return `${sign}${groupThousands(String(Math.round(abs / 1000)))}${UNIT_GAP}${u.thousand}${UNIT_GAP}${u.currency}`;
+    return withCurrency(sign, `${groupThousands(String(Math.round(abs / 1000)))}${UNIT_GAP}${u.thousand}`);
   }
-  return `${sign}${groupThousands(String(Math.round(abs)))}${UNIT_GAP}${u.currency}`;
+  return withCurrency(sign, groupThousands(String(Math.round(abs))));
 }
 
 export function formatKm(n) {

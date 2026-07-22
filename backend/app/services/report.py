@@ -18,6 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.domain_labels import fuel_type_label, maintenance_item_label, repair_category_label
+from app.currency import currency_symbol, format_money as _money
 from app.i18n import normalize_lang, t
 from app.models import Car, LogEntry, ServiceInterval
 from app.services.fuel import compute_fuel_stats
@@ -62,8 +63,8 @@ def _fmt_number(value: float) -> str:
     return f"{value:,.2f}".replace(",", " ")
 
 
-def _fmt_money(value: float, lang: str) -> str:
-    return f"{_fmt_number(round(value, 2))} {t('report.unitUah', lang)}"
+def _fmt_money(value: float, currency: str) -> str:
+    return _money(value, currency)
 
 
 def _fmt_km(value: int | float | None, lang: str) -> str:
@@ -154,7 +155,7 @@ def _service_log_description(log: LogEntry, lang: str) -> str:
     return " — ".join(parts) if parts else "—"
 
 
-def build_car_report(db: Session, car: Car, lang: str = "en") -> bytes:
+def build_car_report(db: Session, car: Car, lang: str = "en", currency: str = "USD") -> bytes:
     lang = normalize_lang(lang)
     _register_fonts()
     styles = _styles()
@@ -237,20 +238,20 @@ def build_car_report(db: Session, car: Car, lang: str = "en") -> bytes:
             else "—"
         )
         cost_per_km = (
-            f"{fuel_stats.avg_cost_per_km:.2f} {t('report.unitUahPerKm', lang)}"
+            f"{fuel_stats.avg_cost_per_km:.2f} {currency_symbol(currency)}/{t('report.unitKm', lang)}"
             if fuel_stats.avg_cost_per_km is not None
             else "—"
         )
         first_date, last_date = logs[0].date, logs[-1].date
         spending_lines = [
-            t("report.totalAllTime", lang, money=_fmt_money(all_time, lang)),
+            t("report.totalAllTime", lang, money=_fmt_money(all_time, currency)),
             t(
                 "report.byTypeLine",
                 lang,
-                refuel=_fmt_money(by_type["refuel"], lang),
-                maintenance=_fmt_money(by_type["maintenance"], lang),
-                repair=_fmt_money(by_type["repair"], lang),
-                expense=_fmt_money(by_type["expense"], lang),
+                refuel=_fmt_money(by_type["refuel"], currency),
+                maintenance=_fmt_money(by_type["maintenance"], currency),
+                repair=_fmt_money(by_type["repair"], currency),
+                expense=_fmt_money(by_type["expense"], currency),
             ),
             t("report.avgConsumption", lang, value=avg_consumption),
             t("report.costPerKm", lang, value=cost_per_km),
@@ -281,7 +282,7 @@ def build_car_report(db: Session, car: Car, lang: str = "en") -> bytes:
                     Paragraph(_fmt_date(log.date), styles["cell"]),
                     Paragraph(_fmt_km(log.odometer, lang), styles["cell"]),
                     Paragraph(escape(_service_log_description(log, lang)), styles["cell"]),
-                    Paragraph(_fmt_money(float(log.total_cost or 0), lang), styles["cell"]),
+                    Paragraph(_fmt_money(float(log.total_cost or 0), currency), styles["cell"]),
                 ]
             )
         table = Table(rows, colWidths=[22 * mm, 24 * mm, 95 * mm, 26 * mm], repeatRows=1)
@@ -305,7 +306,7 @@ def build_car_report(db: Session, car: Car, lang: str = "en") -> bytes:
                     lang,
                     count=len(refuel_logs),
                     liters=_fmt_number(round(total_liters, 2)),
-                    money=_fmt_money(total_cost, lang),
+                    money=_fmt_money(total_cost, currency),
                 ),
                 styles["body"],
             )

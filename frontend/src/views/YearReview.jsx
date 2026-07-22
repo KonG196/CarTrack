@@ -166,7 +166,7 @@ export default function YearReview() {
                 label={t('yearReview.per100km')}
                 value={
                   review.cost_per_km != null
-                    ? t('yearReview.costPerKmValue', { value: Math.round(review.cost_per_km * 100) })
+                    ? formatMoney(Math.round(review.cost_per_km * 100))
                     : '—'
                 }
               />
@@ -182,7 +182,7 @@ export default function YearReview() {
                   </p>
                 </div>
                 <span className="flex-shrink-0 font-mono text-sm font-medium tabular-nums text-fg">
-                  {t('yearReview.pricePerLiter', { value: review.cheapest_station.avg_price_per_liter })}
+                  {`${formatMoney(review.cheapest_station.avg_price_per_liter)}/${t('analytics.unitLiters')}`}
                 </span>
               </Card>
             )}

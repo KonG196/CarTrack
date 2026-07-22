@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Loader2, Search } from 'lucide-react';
 
 import { extractError } from '../api/client';
+import { currentCurrencySymbol } from '../store/currencyStore';
 import { lookupPlate } from '../api/cars';
 import { Button, Card, DateField, ErrorMessage, SelectField, TextField } from '../components/UI';
 import BackLink from '../components/BackLink';
@@ -314,7 +315,7 @@ function CarForm({ initial, onSubmit, onCancel, focusField }) {
           onChange={set('tank_liters')}
         />
         <TextField
-          label={t('carEditor.monthlyBudget')}
+          label={t('carEditor.monthlyBudget', { currency: currentCurrencySymbol() })}
           hint={t('carEditor.hintBudget')}
           type="number"
           inputMode="decimal"

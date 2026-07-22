@@ -1,9 +1,9 @@
 import client from './client';
 
-export async function register(email, password, language) {
-  // Sending the UI language makes the account (and its verification email)
-  // speak the same language the person signed up in.
-  const { data } = await client.post('/auth/register', { email, password, language });
+export async function register(email, password, language, currency) {
+  // Sending the UI language + currency makes the account (and its verification
+  // email) match what the person signed up with.
+  const { data } = await client.post('/auth/register', { email, password, language, currency });
   return data;
 }
 

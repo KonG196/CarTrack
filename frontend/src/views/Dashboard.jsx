@@ -306,7 +306,7 @@ export default function Dashboard() {
               label={t('dashboard.statPer100km')}
               value={
                 analytics.tco?.cost_per_km != null
-                  ? `${Math.round(analytics.tco.cost_per_km * 100)} ₴`
+                  ? formatMoney(Math.round(analytics.tco.cost_per_km * 100))
                   : '—'
               }
             />

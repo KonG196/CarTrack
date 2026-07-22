@@ -47,6 +47,12 @@ class User(Base):
     language: Mapped[str] = mapped_column(
         String(5), nullable=False, default="en", server_default=text("'uk'")
     )
+    # Display currency (symbol only — amounts are never converted). New accounts
+    # default to USD; rows that predate this column keep UAH (their amounts were
+    # entered as hryvnia). One of app.currency.CURRENCY_CODES.
+    currency: Mapped[str] = mapped_column(
+        String(3), nullable=False, default="USD", server_default=text("'UAH'")
+    )
     # Unique per app logic: linking re-assigns a chat id instead of duplicating it.
     # An address the user asked to move to, parked until a code sent to it
     # comes back. Login is gated on a verified address, so writing an

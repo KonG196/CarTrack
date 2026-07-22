@@ -270,8 +270,8 @@ def test_report_totals_match_analytics_totals(
     text = _extract_text(
         client.get(f"/api/cars/{car['id']}/report", headers=auth_headers).content
     )
-    assert "6 775 UAH" in text  # all-time total, analytics figure
-    assert "2 475 UAH" in text  # refuel total, analytics figure
+    assert "$6,775" in text  # all-time total, analytics figure
+    assert "$2,475" in text  # refuel total, analytics figure
 
 
 def test_report_query_count_does_not_scale_with_logs(

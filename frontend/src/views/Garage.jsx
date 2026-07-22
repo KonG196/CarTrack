@@ -40,6 +40,7 @@ import PassportDialog from '../components/PassportDialog';
 import Toast from '../components/Toast';
 import SharingCard from '../components/SharingCard';
 import LanguageToggle from '../components/LanguageToggle';
+import CurrencySelect from '../components/CurrencySelect';
 
 const FUEL_TYPES = [
   { value: 'petrol', labelKey: 'fuelPetrol' },
@@ -537,6 +538,10 @@ export default function Garage() {
         </h2>
         <p className="mt-1 text-xs text-mist">{t('garage.languageDesc')}</p>
         <LanguageToggle variant="segmented" className="mt-3" />
+        <div className="mt-4">
+          <span className="text-xs text-mist">{t('garage.currencyLabel')}</span>
+          <CurrencySelect className="mt-1.5" />
+        </div>
       </Card>
 
       <SettingsRow

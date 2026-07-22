@@ -33,6 +33,7 @@ from app.bot.parsers import (
 )
 from app import backup
 from app.config import settings
+from app.currency import currency_symbol
 from app.database import SessionLocal
 from app.i18n import normalize_lang, t
 from app.models import User
@@ -132,6 +133,10 @@ def _not_linked(message: Message) -> str:
     """
     lang = normalize_lang(getattr(message.from_user, "language_code", None))
     return t("bot.h.notLinkedIntro", lang) + "\n\n" + t("bot.h.linkHint", lang)
+
+
+def _cur(user: Optional[User]) -> str:
+    return currency_symbol(user.currency if user else "USD")
 
 
 def _car_label(car, user: Optional[User] = None) -> str:
@@ -460,7 +465,7 @@ async def handle_photo(message: Message, bot: Bot) -> None:
                 # the alternative is the user retyping a receipt we half read.
                 if parsed.total_cost:
                     await progress.finish(
-                        t("bot.h.ocrPartialTotal", lang, total=parsed.total_cost)
+                        t("bot.h.ocrPartialTotal", lang, total=parsed.total_cost, currency=_cur(user))
                     )
                     return
                 await progress.finish(t("bot.h.ocrFailed", lang))
@@ -509,7 +514,8 @@ async def _send_report(
     lang = normalize_lang(user.language) if user else normalize_lang(
         getattr(message.from_user, "language_code", None)
     )
-    pdf_bytes = await asyncio.to_thread(service.build_report, db, car, lang)
+    currency = user.currency if user else "USD"
+    pdf_bytes = await asyncio.to_thread(service.build_report, db, car, lang, currency)
     document = BufferedInputFile(
         pdf_bytes, filename=f"kapot-tracker-report-{car.id}.pdf"
     )
@@ -699,7 +705,7 @@ async def _handle_expense(
         await _ask_expense_confirm(message, cars[0], pending, user)
         return
     await message.answer(
-        t("bot.h.whichCarExpense", lang, title=title, amount=amount),
+        t("bot.h.whichCarExpense", lang, title=title, amount=amount, currency=_cur(user)),
         reply_markup=_car_choice_keyboard(cars, "exp", user),
     )
 
@@ -712,6 +718,7 @@ async def _ask_expense_confirm(
         t(
             "bot.h.expenseConfirm",
             lang,
+            currency=_cur(user),
             title=pending.title,
             amount=pending.amount,
             label=_car_label(car, user),
@@ -738,7 +745,7 @@ async def _handle_refuel(
         pending.car_id = cars[0].id
         await _ask_refuel_confirm(message, cars[0], pending, user, progress)
         return
-    text = t("bot.h.whichCarRefuel", lang, total=pending.total_cost)
+    text = t("bot.h.whichCarRefuel", lang, total=pending.total_cost, currency=_cur(user))
     keyboard = _car_choice_keyboard(cars, "ref", user)
     if progress is not None:
         await progress.finish(text, reply_markup=keyboard)
@@ -758,6 +765,7 @@ async def _ask_refuel_confirm(
         t(
             "bot.h.refuelLine",
             lang,
+            currency=_cur(user),
             liters=pending.liters,
             price=pending.price_per_liter,
             total=pending.total_cost,
@@ -896,6 +904,7 @@ async def cb_expense_confirm(callback: CallbackQuery) -> None:
             t(
                 "bot.h.expenseSaved",
                 lang,
+                currency=_cur(user),
                 title=pending.title,
                 amount=pending.amount,
                 date=log.date.isoformat(),
@@ -946,7 +955,7 @@ async def _handle_maintenance(
         pending.car_id = cars[0].id
         await _ask_maintenance_confirm(message, cars[0], pending, user, progress)
         return
-    text = t("bot.h.whichCarMaintenance", lang, total=pending.total_cost)
+    text = t("bot.h.whichCarMaintenance", lang, total=pending.total_cost, currency=_cur(user))
     keyboard = _car_choice_keyboard(cars, "mnt", user)
     if progress is not None:
         await progress.finish(text, reply_markup=keyboard)
@@ -967,12 +976,13 @@ async def _ask_maintenance_confirm(
     progress: Optional["_Progress"] = None,
 ) -> None:
     lang = normalize_lang(user.language) if user else normalize_lang(None)
-    lines = [t("bot.h.maintenanceHeader", lang, total=pending.total_cost)]
+    lines = [t("bot.h.maintenanceHeader", lang, total=pending.total_cost, currency=_cur(user))]
     if pending.parts_cost and pending.labor_cost:
         lines.append(
             t(
                 "bot.h.maintenancePartsLabor",
                 lang,
+                currency=_cur(user),
                 parts=pending.parts_cost,
                 labor=pending.labor_cost,
             )
@@ -1057,6 +1067,7 @@ async def cb_maintenance_confirm(callback: CallbackQuery) -> None:
             t(
                 "bot.h.maintenanceSaved",
                 lang,
+                currency=_cur(user),
                 total=pending.total_cost,
                 count=len(pending.items),
                 date=log.date.isoformat(),
@@ -1136,6 +1147,7 @@ async def cb_refuel_confirm(callback: CallbackQuery) -> None:
             t(
                 "bot.h.refuelSaved",
                 lang,
+                currency=_cur(user),
                 liters=pending.liters,
                 total=pending.total_cost,
                 date=log.date.isoformat(),

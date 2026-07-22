@@ -451,8 +451,8 @@ def recognize_photo(image_bytes: bytes, lang: str = "en") -> PhotoReading:
         raise OcrUnavailableError("vision OCR is unavailable") from exc
 
 
-def build_report(db: Session, car: Car, lang: str = "en") -> bytes:
-    return build_car_report(db, car, lang)
+def build_report(db: Session, car: Car, lang: str = "en", currency: str = "USD") -> bytes:
+    return build_car_report(db, car, lang, currency)
 
 
 # Ukrainian summaries

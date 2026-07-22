@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from './store/authStore';
+import { useCurrencyStore } from './store/currencyStore';
 import { safeNext } from './utils/nextPath';
 import Layout from './components/Layout';
 import Login from './views/Login';
@@ -39,10 +40,11 @@ function PublicOnly({ children }) {
 }
 
 export default function App() {
-  // Subscribe the root to the active language. A switch re-renders the whole
-  // tree, so components that render domain-label helpers (fuel kind, categories,
-  // OBD metrics) without their own useTranslation still refresh.
+  // Subscribe the root to the active language and currency. A change re-renders
+  // the whole tree, so components that render domain-label helpers or money
+  // (via format.js) without their own hook still refresh.
   useTranslation();
+  useCurrencyStore((s) => s.currency);
   return (
     <Routes>
       <Route

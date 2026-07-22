@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import i18n, { LANG_KEY } from '../i18n';
 import * as authApi from '../api/auth';
+import { useCurrencyStore } from './currencyStore';
 import { TOKEN_KEY, clearTokens, extractError, setTokens } from '../api/client';
 
 // When an account arrives with a saved language and the browser has no explicit
@@ -28,11 +29,17 @@ export const useAuthStore = create((set, get) => ({
     const user = await authApi.getMe();
     set({ user });
     adoptAccountLanguage(user);
+    useCurrencyStore.getState().adoptAccountCurrency(user?.currency);
     return user;
   },
 
   async register(email, password) {
-    const account = await authApi.register(email, password, i18n.language);
+    const account = await authApi.register(
+      email,
+      password,
+      i18n.language,
+      useCurrencyStore.getState().currency,
+    );
     // Logging straight in would 403 while the address is unconfirmed; the
     // caller sends the user to /verify instead.
     if (account?.verification_sent) return { pendingVerification: true };
@@ -47,6 +54,7 @@ export const useAuthStore = create((set, get) => ({
       const user = await authApi.getMe();
       set({ user, userLoading: false });
       adoptAccountLanguage(user);
+    useCurrencyStore.getState().adoptAccountCurrency(user?.currency);
       return user;
     } catch (error) {
       set({ userLoading: false });

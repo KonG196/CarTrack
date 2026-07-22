@@ -89,6 +89,7 @@ def register(payload: UserCreate, request: Request, db: Session = Depends(get_db
         email=payload.email,
         hashed_password=hash_password(payload.password),
         language=lang,
+        currency=payload.currency or "USD",
         # Without a mail server nobody could ever confirm, so the gate stays open.
         email_verified=not verification_required(),
     )
@@ -181,6 +182,8 @@ def update_me(
         current_user.display_name = updates["display_name"]
     if updates.get("language"):
         current_user.language = updates["language"]
+    if updates.get("currency"):
+        current_user.currency = updates["currency"]
     for flag in (
         "digest_enabled",
         "reminders_enabled",

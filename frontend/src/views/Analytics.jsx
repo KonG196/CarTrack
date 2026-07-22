@@ -31,6 +31,7 @@ import { expenseCategoryLabel } from '../i18n/domain';
 import { extractError } from '../api/client';
 import { downloadCarReport } from '../api/reports';
 import { formatMoney, formatMoneyCompact, formatKm, formatDate, monthLabel } from '../utils/format';
+import { currentCurrencySymbol } from '../store/currencyStore';
 import { expenseCategoryRows, shouldShowStations } from '../utils/analyticsBreakdown';
 import {
   consumptionChartRows,
@@ -97,7 +98,7 @@ function PriceTooltip({ active, payload, label }) {
             className="inline-block h-2 w-2 rounded-full"
             style={{ backgroundColor: entry.color || entry.stroke }}
           />
-          {entry.name}: {Number(entry.value).toFixed(2)} {t('analytics.unitUahPerL')}
+          {entry.name}: {Number(entry.value).toFixed(2)} {t('analytics.unitUahPerL', { currency: currentCurrencySymbol() })}
           {entry.payload?.[`${entry.dataKey}__station`] && (
             <span className="text-mist">· {entry.payload[`${entry.dataKey}__station`]}</span>
           )}
@@ -443,7 +444,7 @@ export default function Analytics() {
       </Card>
 
       <Card data-tour="analytics-charts">
-        <h2 className="mb-3 font-display text-sm font-semibold text-fg">{t('analytics.monthlySpending')}</h2>
+        <h2 className="mb-3 font-display text-sm font-semibold text-fg">{t('analytics.monthlySpending', { currency: currentCurrencySymbol() })}</h2>
         {!hasSpending ? (
           <p className="py-6 text-center text-sm text-mist">
             {t('analytics.noSpendingYet')}
@@ -645,7 +646,7 @@ export default function Analytics() {
 
       {showPriceChart && (
         <Card>
-          <h2 className="mb-3 font-display text-sm font-semibold text-fg">{t('analytics.pricePerLiterTitle')}</h2>
+          <h2 className="mb-3 font-display text-sm font-semibold text-fg">{t('analytics.pricePerLiterTitle', { currency: currentCurrencySymbol() })}</h2>
           <div className="h-56">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={priceRows} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
@@ -715,7 +716,7 @@ export default function Analytics() {
                     {station.avg_price_per_liter != null && (
                       <span className="text-mist/70">
                         {' '}
-                        · {station.avg_price_per_liter.toFixed(2)} {t('analytics.unitUahPerL')}
+                        · {station.avg_price_per_liter.toFixed(2)} {t('analytics.unitUahPerL', { currency: currentCurrencySymbol() })}
                       </span>
                     )}
                   </p>
@@ -758,6 +759,7 @@ export default function Analytics() {
                 </p>
                 <p className="mt-0.5 text-xs text-mist">
                   {t('analytics.lpgSavingsDetail', {
+                    currency: currentCurrencySymbol(),
                     perKm: analytics.lpg_savings.saved_per_km.toFixed(2),
                     distance: formatKm(analytics.lpg_savings.gas_distance_km),
                   })}
@@ -767,15 +769,14 @@ export default function Analytics() {
           )}
           <div className="grid grid-cols-2 gap-2.5">
             <TcoTile
-              label={t('analytics.tcoCostPerKm')}
+              label={t('analytics.tcoCostPerKm', { currency: currentCurrencySymbol() })}
               value={
-                analytics.tco?.cost_per_km != null ? analytics.tco.cost_per_km.toFixed(2) : '—'
+                analytics.tco?.cost_per_km != null ? formatMoney(analytics.tco.cost_per_km) : '—'
               }
-              unit="₴"
               hint={t('analytics.tcoCostPerKmHint')}
             />
             <TcoTile
-              label={t('analytics.tcoCostPerDay')}
+              label={t('analytics.tcoCostPerDay', { currency: currentCurrencySymbol() })}
               value={
                 analytics.tco?.cost_per_day != null
                   ? formatMoney(analytics.tco.cost_per_day)
@@ -807,6 +808,7 @@ export default function Analytics() {
                 i18nKey="analytics.tcoExplainer"
                 components={{ b: <span className="text-fg" /> }}
                 values={{
+                  currency: currentCurrencySymbol(),
                   distance:
                     analytics.tco?.distance_km != null
                       ? ` (${formatKm(analytics.tco.distance_km)})`

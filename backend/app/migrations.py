@@ -19,6 +19,7 @@ BASELINE_REVISION = "0001"
 EXPECTED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     ("users", "telegram_chat_id", "VARCHAR(50)"),
     ("users", "language", "VARCHAR(5) DEFAULT 'uk'"),
+    ("users", "currency", "VARCHAR(3) DEFAULT 'UAH'"),
     ("service_intervals", "last_notified_at", "DATE"),
 )
 

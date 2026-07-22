@@ -7,6 +7,7 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.currency import normalize_currency
 from app.i18n import normalize_lang
 from app.services.vin import normalize_vin
 
@@ -91,6 +92,7 @@ class UserCreate(BaseModel):
     # The UI language the account is created in; drives emails/bot/errors too.
     # Optional so older clients still work — the register endpoint defaults it.
     language: Optional[str] = None
+    currency: Optional[str] = None
 
     @field_validator("email")
     @classmethod
@@ -105,6 +107,11 @@ class UserCreate(BaseModel):
     @classmethod
     def validate_language(cls, value: Optional[str]) -> Optional[str]:
         return None if value is None else normalize_lang(value)
+
+    @field_validator("currency")
+    @classmethod
+    def validate_currency(cls, value: Optional[str]) -> Optional[str]:
+        return None if value is None else normalize_currency(value)
 
 
 class PasswordChangeIn(BaseModel):
@@ -156,6 +163,8 @@ class UserOut(BaseModel):
     notify_rotation: bool = True
     # UI language ('en' | 'uk'); also the language of emails/bot/error details.
     language: str = "en"
+    # Display currency code (symbol only; amounts are never converted).
+    currency: str = "USD"
     created_at: dt.datetime
 
 
@@ -183,6 +192,7 @@ class UserUpdate(BaseModel):
     notify_seasonal: Optional[bool] = None
     notify_rotation: Optional[bool] = None
     language: Optional[str] = None
+    currency: Optional[str] = None
 
     @field_validator("display_name")
     @classmethod
@@ -193,6 +203,11 @@ class UserUpdate(BaseModel):
     @classmethod
     def validate_language(cls, value: Optional[str]) -> Optional[str]:
         return None if value is None else normalize_lang(value)
+
+    @field_validator("currency")
+    @classmethod
+    def validate_currency(cls, value: Optional[str]) -> Optional[str]:
+        return None if value is None else normalize_currency(value)
 
 
 class Token(BaseModel):
