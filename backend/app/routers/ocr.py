@@ -6,7 +6,7 @@ import datetime as dt
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from pytesseract import TesseractNotFoundError
 
-from app.auth import get_current_user
+from app.auth import require_verified_user
 from app.models import User
 from app.schemas import OcrScanResult, OcrWorkOrderResult
 from app.services.ocr_llm import OcrUnavailable, recognize_receipt, recognize_work_order
@@ -58,7 +58,7 @@ async def _read_image(file: UploadFile) -> bytes:
 @router.post("/scan", response_model=OcrScanResult)
 async def scan_receipt(
     file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_verified_user),
 ) -> OcrScanResult:
     image_bytes = await _read_image(file)
     try:
@@ -85,7 +85,7 @@ async def scan_receipt(
 @router.post("/scan-order", response_model=OcrWorkOrderResult)
 async def scan_work_order(
     file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_verified_user),
 ) -> OcrWorkOrderResult:
     image_bytes = await _read_image(file)
     try:

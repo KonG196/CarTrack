@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
-from app.auth import get_current_user
+from app.auth import require_verified_user
 from app.models import User
 from app.ratelimit import RateLimiter, client_ip
 from app.schemas import PlateLookupIn, PlateLookupOut
@@ -20,7 +20,7 @@ lookup_limiter = RateLimiter(limit=10, window_seconds=60 * 60)
 def lookup_plate(
     payload: PlateLookupIn,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_verified_user),
 ) -> PlateLookupOut:
     if not plate_service.enabled():
         raise HTTPException(

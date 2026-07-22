@@ -55,6 +55,39 @@ def test_register_with_mail_server_still_lets_you_log_in(client: TestClient, mai
     assert "access_token" in login.json()
 
 
+def _auth(client: TestClient) -> dict[str, str]:
+    token = _login(client).json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+def test_scan_and_lookup_require_a_verified_email(client: TestClient, mail_on) -> None:
+    # Unverified account: login works, but the costly features are gated (403).
+    _register(client)
+    headers = _auth(client)
+
+    scan = client.post(
+        "/api/ocr/scan",
+        files={"file": ("r.jpg", b"fake-bytes", "image/jpeg")},
+        headers=headers,
+    )
+    assert scan.status_code == 403
+
+    lookup = client.post(
+        "/api/plate/lookup", json={"query": "AA1234BB"}, headers=headers
+    )
+    assert lookup.status_code == 403
+
+    # After verifying, the verification gate lifts. Use plate lookup to prove it:
+    # without a baza-gai key it returns 503 (service unavailable), never the 403
+    # verification gate — so «not 403» is the meaningful signal.
+    _, code = mail_on[0]
+    client.post("/api/auth/verify/confirm", json={"email": "new@example.com", "code": code})
+    lookup_after = client.post(
+        "/api/plate/lookup", json={"query": "AA1234BB"}, headers=_auth(client)
+    )
+    assert lookup_after.status_code != 403
+
+
 def test_verify_then_login(client: TestClient, mail_on) -> None:
     _register(client)
     _, code = mail_on[0]
