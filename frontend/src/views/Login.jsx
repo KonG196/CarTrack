@@ -39,16 +39,16 @@ export default function Login() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-garage px-4">
+      <div className="fixed right-4 top-4 z-10">
+        <LanguageToggle />
+      </div>
       <div className="rise-in w-full max-w-md">
-        <div className="mb-4 flex justify-end">
-          <LanguageToggle />
-        </div>
         {/* Логотип веде на лендінг (/welcome) — звичайне <a>, бо це статична
             сторінка поза React-роутером. Повне перезавантаження тут доречне:
             людина йде на маркетингову сторінку, а не в застосунок. */}
         <a
           href="/welcome"
-          className="mb-6 flex flex-col items-center gap-2 rounded-xl transition-opacity hover:opacity-90"
+          className="mb-10 flex flex-col items-center gap-2 rounded-xl transition-opacity hover:opacity-90"
         >
           <Wordmark size="lg" />
           <p className="font-mono text-xs uppercase tracking-[0.14em] text-mist">
@@ -56,7 +56,7 @@ export default function Login() {
           </p>
         </a>
         <Card>
-          <h1 className="mb-4 font-display text-lg font-semibold text-fg">{t('auth.login.title')}</h1>
+          <h1 className="mb-4 text-center font-display text-lg font-semibold text-fg">{t('auth.login.title')}</h1>
           <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
             <TextField
               label={t('auth.login.email')}

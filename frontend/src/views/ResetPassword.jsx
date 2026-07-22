@@ -83,18 +83,18 @@ export default function ResetPassword() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-garage px-4">
       <Toast message={toast} onDone={() => navigate('/login', { replace: true })} />
+      <div className="fixed right-4 top-4 z-10">
+        <LanguageToggle />
+      </div>
       <div className="rise-in w-full max-w-md">
-        <div className="mb-4 flex justify-end">
-          <LanguageToggle />
-        </div>
-        <div className="mb-6 flex flex-col items-center gap-2">
+        <div className="mb-10 flex flex-col items-center gap-2">
           <Wordmark size="lg" />
           <p className="font-mono text-xs uppercase tracking-[0.14em] text-mist">
             {t('auth.tagline')}
           </p>
         </div>
         <Card>
-          <h1 className="mb-4 font-display text-lg font-semibold text-fg">{t('auth.reset.title')}</h1>
+          <h1 className="mb-4 text-center font-display text-lg font-semibold text-fg">{t('auth.reset.title')}</h1>
           {step === 1 ? (
             <form onSubmit={handleRequest} className="flex flex-col gap-3.5">
               <p className="text-sm text-mist">{t('auth.reset.intro')}</p>

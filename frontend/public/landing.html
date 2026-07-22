@@ -179,12 +179,27 @@ h2{font-size:clamp(1.4rem,3vw,2rem)}
 .hero-copy{display:flex; flex-direction:column; gap:22px}
 .hero-copy .cta-row{display:flex; flex-wrap:wrap; gap:14px; margin-top:6px}
 
-/* GitHub star button — the official buttons.github.io widget. buttons.js turns
-   the raw <a.github-button> into an <iframe.github-button> (the ⭐ Star | N pill).
-   Reserve height so the row doesn't jump, and hide the unstyled <a> until then. */
-.ghstar-wrap{align-self:flex-start; margin-top:-8px; min-height:28px; display:flex; align-items:center}
-.ghstar-wrap a.github-button{visibility:hidden}
-.ghstar-wrap iframe.github-button{visibility:visible}
+/* GitHub star button — our own two-part pill, GitHub-style: [⭐ Star | N].
+   The count is fetched from the GitHub API at runtime (see script); the pill
+   shows without a number until it arrives (or if the request fails). */
+.ghstar{
+  display:inline-flex; align-self:flex-start; margin-top:-8px;
+  border:1px solid #2A3A52; border-radius:8px; overflow:hidden;
+  text-decoration:none; font:600 .85rem var(--body);
+}
+.ghstar .gh-btn{
+  display:inline-flex; align-items:center; gap:8px;
+  padding:7px 13px; background:#1A2230; color:var(--fg);
+  transition:background .15s ease;
+}
+.ghstar:hover .gh-btn{background:#222D3E}
+.ghstar .gh-btn svg{color:var(--fg); flex-shrink:0}
+.ghstar .gh-count{
+  display:none; align-items:center; padding:7px 13px;
+  background:#0F1723; color:var(--fg); font-family:var(--mono); font-size:.82rem;
+  border-left:1px solid #2A3A52;
+}
+.ghstar .gh-count.show{display:inline-flex}
 .statline{
   font-family:var(--mono); font-size:.78rem; color:var(--mist);
   border-top:2px dashed #2A3A52; padding-top:14px; margin-top:10px;
@@ -384,17 +399,15 @@ footer a:hover{color:var(--amber)}
         <a class="btn btn-amber" href="/" data-i18n="openApp">Open app</a>
         <a class="btn btn-ghost" href="#how" data-i18n="heroHow">How it works</a>
       </div>
-      <div class="ghstar-wrap">
-        <!-- Official GitHub Buttons widget (buttons.github.io): buttons.js swaps
-             this <a> for an iframe rendering the live ⭐ Star | N pill. -->
-        <a class="github-button"
-           href="https://github.com/KonG196/CarTrack"
-           data-color-scheme="no-preference: dark; light: dark; dark: dark;"
-           data-icon="octicon-star"
-           data-size="large"
-           data-show-count="true"
-           aria-label="Star KonG196/CarTrack on GitHub">Star</a>
-      </div>
+      <!-- GitHub star pill [⭐ Star | N]. The count is filled from the GitHub API
+           at runtime; the .gh-count box stays hidden until a number arrives. -->
+      <a class="ghstar" href="https://github.com/KonG196/CarTrack" target="_blank" rel="noopener" aria-label="Star KonG196/CarTrack on GitHub">
+        <span class="gh-btn">
+          <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/></svg>
+          <span data-i18n="ghStar">Star on GitHub</span>
+        </span>
+        <span class="gh-count" id="ghCount" aria-hidden="true"></span>
+      </a>
       <p class="statline num" data-i18n="heroStat">Author's logbook: VW Golf 7 Variant 1.6 TDI • <b>240,054 km</b> • <b>19</b> entries • <b>₴87,323</b> tracked</p>
     </div>
 
@@ -571,6 +584,7 @@ footer a:hover{color:var(--amber)}
     heroH1: 'Сфоткай чек.<br>Решту запише сам.',
     heroLead: 'Kapot Tracker читає чеки АЗС — літри, ціну й суму — та перетворює їх на записи журналу. Рахує реальний розхід, стежить за ТО і нагадує в Telegram. Замість блокнота, Excel і «та я запам’ятаю».',
     heroHow: 'Як це працює',
+    ghStar: 'Зірка на GitHub',
     heroStat: 'Журнал автора: VW Golf 7 Variant 1.6 TDI • <b>240 054 км</b> • <b>19</b> записів • <b>87 323 ₴</b> під контролем',
     receiptAria: 'Фіскальний чек АЗС, який розпізнає застосунок',
     extractAria: 'Розпізнані поля запису',
@@ -708,9 +722,23 @@ footer a:hover{color:var(--amber)}
   document.querySelectorAll('.reveal').forEach(function(el){ io.observe(el); });
 })();
 </script>
-<!-- Official GitHub star button with live count (buttons.github.io). Async, so
-     a slow/blocked load never holds up the page — the styled fallback shows
-     until (and unless) the widget renders. -->
-<script async defer src="https://buttons.github.io/buttons.js"></script>
+<script>
+// Fill the star count from the public GitHub API. This is what the official
+// widget does internally — we do it directly so the pill always renders in our
+// own style. On any failure the pill just shows «Star» with no number.
+(function(){
+  var el = document.getElementById('ghCount');
+  if (!el || !window.fetch) return;
+  fetch('https://api.github.com/repos/KonG196/CarTrack', { headers: { Accept: 'application/vnd.github+json' } })
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(d){
+      if (!d || typeof d.stargazers_count !== 'number') return;
+      var n = d.stargazers_count;
+      el.textContent = n >= 1000 ? (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : String(n);
+      el.classList.add('show');
+    })
+    .catch(function(){ /* offline / rate-limited — leave the count hidden */ });
+})();
+</script>
 </body>
 </html>
