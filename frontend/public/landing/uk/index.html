@@ -1,0 +1,703 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kapot Tracker — бортовий журнал авто</title>
+<meta name="description" content="Сфоткай чек з АЗС — Kapot Tracker сам створить запис, порахує реальний розхід і нагадає про ТО в Telegram.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Kapot Tracker">
+<meta property="og:title" content="Kapot Tracker — бортовий журнал авто">
+<meta property="og:description" content="Сфоткай чек з АЗС — Kapot Tracker сам створить запис, порахує реальний розхід і нагадає про ТО в Telegram.">
+<meta property="og:url" content="https://kapot-tracker.vercel.app/landing/uk/">
+<meta property="og:locale" content="uk_UA">
+<meta property="og:image" content="https://kapot-tracker.vercel.app/og-uk.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Kapot Tracker — бортовий журнал авто: сканування чеків, Telegram-асистент, трекер ТО та шин, економіка та TCO">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Kapot Tracker — бортовий журнал авто">
+<meta name="twitter:description" content="Сфоткай чек з АЗС — Kapot Tracker сам створить запис, порахує реальний розхід і нагадає про ТО в Telegram.">
+<meta name="twitter:image" content="https://kapot-tracker.vercel.app/og-uk.png">
+<meta name="twitter:image:alt" content="Kapot Tracker — бортовий журнал авто: сканування чеків, Telegram-асистент, трекер ТО та шин, економіка та TCO">
+<link rel="canonical" href="https://kapot-tracker.vercel.app/landing/uk/">
+<style>
+/* Ті самі шрифти, що й у застосунку (public/fonts) — одне джерело */
+@font-face {
+  font-family: 'Unbounded';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/unbounded-600-cyrillic.woff2') format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'Unbounded';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/unbounded-600-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 100 700;
+  font-display: swap;
+  src: url('/fonts/plex-sans-var-cyrillic.woff2') format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'IBM Plex Sans';
+  font-style: normal;
+  font-weight: 100 700;
+  font-display: swap;
+  src: url('/fonts/plex-sans-var-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/plex-mono-400-cyrillic.woff2') format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/plex-mono-400-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/plex-mono-600-cyrillic.woff2') format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/plex-mono-600-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+:root{
+  --garage:#0B1119;      /* нічний гараж */
+  --panel:#121A26;       /* панелі на темному */
+  --edge:#22304433;      /* тонкі межі */
+  --paper:#F2EEE3;       /* термопапір */
+  --paper-dim:#E7E1D2;
+  --ink:#23201A;         /* касова фарба */
+  --ink-soft:#5A544A;
+  --amber:#FFB454;       /* приладковий бурштин — акцент і warn */
+  --amber-deep:#E8912B;
+  --blue:#4C8DFF;        /* app-синій, вторинний */
+  --mist:#93A1B8;        /* приглушений текст */
+  --fg:#E9EEF6;
+  --ok:#35C77B;
+  --crit:#FF5D5D;
+  --disp:"Unbounded", system-ui, sans-serif;
+  --body:"IBM Plex Sans", -apple-system, "Segoe UI", sans-serif;
+  --mono:"IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+
+*{box-sizing:border-box; margin:0}
+html{scroll-behavior:smooth}
+body{
+  background:var(--garage);
+  color:var(--fg);
+  font-family:var(--body);
+  font-size:16.5px;
+  line-height:1.65;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:clip;
+}
+img,svg{max-width:100%}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--amber); outline-offset:3px; border-radius:4px}
+
+.wrap{max-width:1120px; margin-inline:auto; padding-inline:clamp(20px,4vw,40px); min-width:0}
+
+/* ---------- типографіка ---------- */
+.eyebrow{
+  font-family:var(--mono); font-size:.72rem; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--amber);
+  display:flex; align-items:center; gap:14px;
+}
+.eyebrow::after{content:""; flex:1; border-top:2px dashed #2A3A52}
+.paper-zone .eyebrow{color:var(--amber-deep)}
+.paper-zone .eyebrow::after{border-color:#C9C0AA}
+h1,h2{font-family:var(--disp); font-weight:600; line-height:1.14; text-wrap:balance}
+h1{font-size:clamp(2rem,4.6vw,3.3rem); letter-spacing:-.01em}
+h2{font-size:clamp(1.4rem,3vw,2rem)}
+.lead{color:var(--mist); max-width:34em}
+.num{font-variant-numeric:tabular-nums}
+
+/* ---------- кнопки ---------- */
+.btn{
+  display:inline-flex; align-items:center; gap:10px;
+  font:600 1rem var(--body); text-decoration:none;
+  padding:14px 26px; border-radius:10px; border:1px solid transparent;
+  transition:transform .15s ease, box-shadow .15s ease;
+}
+.btn-amber{background:var(--amber); color:#231708}
+.btn-amber:hover{transform:translateY(-1px); box-shadow:0 6px 24px #FFB45440}
+.btn-ghost{border-color:#33415C; color:var(--fg)}
+.btn-ghost:hover{border-color:var(--mist)}
+.paper-zone .btn-ghost{border-color:#B7AE97; color:var(--ink)}
+.paper-zone .btn-ghost:hover{border-color:var(--ink-soft)}
+
+/* ---------- шапка ---------- */
+.top{padding-block:22px}
+.top .wrap{display:flex; align-items:center; justify-content:space-between; gap:16px}
+.mark{display:inline-flex; align-items:center; gap:9px; font-family:var(--disp); font-weight:600; font-size:.95rem; letter-spacing:.02em; text-decoration:none; color:var(--fg)}
+.mark img{height:30px; width:auto}
+.mark b{color:var(--amber); font-weight:600}
+.mark .tk{margin-left:.35em; font-size:.62em; letter-spacing:.13em; color:var(--mist)}
+.top .btn{padding:10px 18px; font-size:.9rem}
+
+/* ---------- перемикач мови (під кнопкою «Open app», поза хедером) ---------- */
+.lang-bar{padding-block:0 4px}
+.lang-bar .wrap{display:flex; justify-content:flex-end}
+.lang-toggle{
+  display:inline-flex; overflow:hidden; border:1px solid #33415C;
+  border-radius:8px; font-family:var(--mono); font-size:.72rem;
+}
+.lang-toggle button{
+  background:none; border:none; cursor:pointer; color:var(--mist);
+  padding:5px 12px; letter-spacing:.06em; text-transform:uppercase;
+  transition:color .15s ease, background .15s ease;
+}
+.lang-toggle button[aria-pressed="true"]{background:var(--amber); color:#231708}
+.lang-toggle button:not([aria-pressed="true"]):hover{color:var(--fg)}
+
+/* ---------- hero ---------- */
+.hero{padding-block:clamp(24px,5vw,64px) clamp(40px,6vw,72px)}
+.hero .wrap{
+  display:grid; grid-template-columns:minmax(0,1.04fr) minmax(0,.96fr);
+  gap:clamp(32px,5vw,64px); align-items:center;
+}
+.hero-copy{display:flex; flex-direction:column; gap:22px}
+.hero-copy .cta-row{display:flex; flex-wrap:wrap; gap:14px; margin-top:6px}
+.statline{
+  font-family:var(--mono); font-size:.78rem; color:var(--mist);
+  border-top:2px dashed #2A3A52; padding-top:14px; margin-top:10px;
+}
+.statline b{color:var(--fg); font-weight:500}
+
+/* чек */
+.hero-demo{display:flex; flex-direction:column; gap:18px; min-width:0}
+.receipt{
+  position:relative; overflow:hidden;
+  background:var(--paper); color:var(--ink);
+  font-family:var(--mono); font-size:.82rem; line-height:1.75;
+  padding:30px 26px 34px; transform:rotate(1.5deg);
+  box-shadow:0 24px 60px #00000066;
+  -webkit-mask:
+    conic-gradient(from 135deg at 50% 9px,#000 90deg,#0000 0) 50% 0/22px 55% repeat-x,
+    conic-gradient(from -45deg at 50% calc(100% - 9px),#000 90deg,#0000 0) 50% 100%/22px 55% repeat-x;
+  mask:
+    conic-gradient(from 135deg at 50% 9px,#000 90deg,#0000 0) 50% 0/22px 55% repeat-x,
+    conic-gradient(from -45deg at 50% calc(100% - 9px),#000 90deg,#0000 0) 50% 100%/22px 55% repeat-x;
+}
+.receipt .r{display:flex; justify-content:space-between; gap:12px; white-space:nowrap; min-width:0}
+.receipt .c{justify-content:center; text-align:center}
+.receipt .sep{border-top:2px dashed #A79E88; height:0; margin-block:10px}
+.receipt .hl{position:relative}
+.receipt .hl::before{
+  content:""; position:absolute; inset:1px -8px; border-radius:4px;
+  background:#FFAB3D55; z-index:-1;
+}
+/* базовий стан — фінальний: без JS сторінка показує результат скану */
+.play .receipt .hl::before{animation:hlIn .45s ease both; animation-delay:var(--d)}
+@keyframes hlIn{from{opacity:0}to{opacity:1}}
+
+.beam{
+  position:absolute; left:-6%; width:112%; height:52px; top:-60px;
+  background:linear-gradient(180deg,#FF9D0000 0%,#FF9D0038 42%,#E8730077 50%,#FF9D0038 58%,#FF9D0000 100%);
+  pointer-events:none;
+}
+.play .beam{animation:sweep 1.7s cubic-bezier(.45,.05,.4,.95) .25s forwards}
+@keyframes sweep{from{top:-60px}to{top:105%}}
+
+/* розпізнані поля */
+.extract{
+  background:var(--panel); border:1px solid #223044; border-radius:14px;
+  padding:18px 20px; display:flex; flex-direction:column; gap:12px;
+}
+.extract .toast{
+  display:flex; align-items:center; gap:8px;
+  font-family:var(--mono); font-size:.78rem; color:var(--ok);
+}
+.play .toast{animation:chipIn .4s ease both; animation-delay:2.15s}
+.fields{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px}
+.field{background:#0D1520; border:1px solid #223044; border-radius:10px; padding:10px 12px; min-width:0}
+.field small{display:block; font-size:.68rem; color:var(--mist); letter-spacing:.04em}
+.field .v{font-family:var(--mono); font-size:1rem; color:var(--fg); display:block}
+.play .field .v{animation:chipIn .45s ease both; animation-delay:var(--d)}
+@keyframes chipIn{from{opacity:0; transform:translateY(5px)}to{opacity:1; transform:none}}
+.replay{
+  align-self:flex-start; background:none; border:none; cursor:pointer;
+  font-family:var(--mono); font-size:.75rem; color:var(--mist);
+  padding:4px 0; border-bottom:1px dashed #33415C;
+}
+.replay:hover{color:var(--amber)}
+
+/* ---------- секції ---------- */
+.sect{padding-block:clamp(64px,9vw,110px)}
+.sect-head{display:flex; flex-direction:column; gap:16px; margin-bottom:clamp(32px,5vw,52px)}
+
+/* кроки */
+.steps{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px}
+.step{
+  background:var(--panel); border:1px solid #1D2A3E; border-radius:14px;
+  padding:26px 24px 28px; display:flex; flex-direction:column; gap:12px;
+}
+.step .k{font-family:var(--mono); font-size:.72rem; letter-spacing:.14em; color:var(--amber)}
+.step h3{font-family:var(--body); font-weight:600; font-size:1.1rem}
+.step p{color:var(--mist); font-size:.95rem}
+
+/* здоровʼя */
+.health{display:grid; grid-template-columns:1.06fr .94fr; gap:18px; align-items:stretch}
+.card{
+  background:var(--panel); border:1px solid #1D2A3E; border-radius:14px;
+  padding:26px 24px; display:flex; flex-direction:column; gap:18px;
+}
+.card .card-t{font-family:var(--mono); font-size:.72rem; letter-spacing:.14em; text-transform:uppercase; color:var(--mist)}
+.iv{display:flex; flex-direction:column; gap:8px}
+.iv .iv-row{display:flex; justify-content:space-between; gap:12px; font-size:.95rem}
+.iv .iv-row b{font-weight:600}
+.iv .iv-row .num{font-family:var(--mono); font-size:.8rem; color:var(--mist)}
+.bar{height:8px; border-radius:99px; background:#0D1520; overflow:hidden}
+.bar i{display:block; height:100%; border-radius:99px}
+.bar .ok{background:var(--ok)}
+.bar .warn{background:var(--amber)}
+.bar .crit{background:var(--crit)}
+
+.chat{display:flex; flex-direction:column; gap:10px; font-size:.92rem}
+.msg{max-width:85%; padding:9px 14px; border-radius:14px; width:fit-content}
+.msg.me{align-self:flex-end; background:var(--blue); color:#fff; border-bottom-right-radius:4px; font-family:var(--mono)}
+.msg.bot{background:#0D1520; border:1px solid #223044; border-bottom-left-radius:4px}
+.msg.bot.warn{border-color:#FFB45455; color:var(--amber)}
+
+/* паперова зона */
+.paper-zone{background:var(--paper); color:var(--ink)}
+.paper-zone .lead{color:var(--ink-soft)}
+.paper-grid{display:grid; grid-template-columns:1fr 1fr; gap:clamp(32px,5vw,64px)}
+.paper-col{display:flex; flex-direction:column; gap:18px; min-width:0}
+.paper-col h3{font-family:var(--disp); font-weight:600; font-size:1.15rem; line-height:1.3}
+.paper-col p{color:var(--ink-soft); font-size:.97rem}
+.formula{
+  font-family:var(--mono); background:#FFFDF6; border:1px solid #D8D0BC;
+  border-radius:10px; padding:22px 24px; font-size:.95rem; line-height:2;
+  overflow-x:auto;
+}
+.formula b{font-size:1.25rem; font-weight:600; color:var(--amber-deep); white-space:nowrap}
+.pdf{
+  background:#FFFDF6; border:1px solid #D8D0BC; border-radius:10px;
+  padding:22px 24px; font-family:var(--mono); font-size:.78rem; line-height:1.9;
+  color:var(--ink-soft); overflow:hidden;
+}
+.pdf .pdf-t{color:var(--ink); font-weight:600; letter-spacing:.06em}
+.pdf .r{display:flex; justify-content:space-between; gap:10px; white-space:nowrap}
+.pdf .sep{overflow:hidden}
+
+/* «і це ще не все» — компактна сітка решти фіч */
+.more-grid{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px}
+.more-item{background:var(--panel); border:1px solid #1D2A3E; border-radius:12px; padding:20px 22px}
+.more-item h3{font-family:var(--body); font-weight:600; font-size:1rem; margin-bottom:6px}
+.more-item p{color:var(--mist); font-size:.9rem; line-height:1.5}
+
+/* фінальний CTA */
+.cta-band{text-align:center; padding-block:clamp(72px,10vw,130px)}
+.cta-band .wrap{display:flex; flex-direction:column; align-items:center; gap:26px}
+.cta-band .sub{font-family:var(--mono); font-size:.78rem; color:var(--mist)}
+
+footer{border-top:1px solid #17233520; background:#080D14; padding-block:28px}
+footer .wrap{display:flex; flex-wrap:wrap; justify-content:space-between; gap:10px; color:#5C6B84; font-size:.85rem}
+footer .wrap span:last-child{font-family:var(--mono); font-size:.75rem}
+
+/* появи при скролі */
+.reveal{opacity:0; transform:translateY(14px); transition:opacity .6s ease, transform .6s ease}
+.reveal.in{opacity:1; transform:none}
+
+@media (prefers-reduced-motion: reduce){
+  html{scroll-behavior:auto}
+  .reveal{opacity:1; transform:none; transition:none}
+  .btn{transition:none}
+}
+
+@media (max-width: 900px){
+  .hero .wrap{grid-template-columns:minmax(0,1fr)}
+  .receipt{transform:rotate(.8deg); font-size:.78rem}
+  .steps{grid-template-columns:minmax(0,1fr)}
+  .health{grid-template-columns:minmax(0,1fr)}
+  .paper-grid{grid-template-columns:minmax(0,1fr)}
+  .fields{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width: 480px){
+  .mark{font-size:.82rem}
+  .top .btn{padding:8px 13px; font-size:.82rem}
+  .receipt{padding:26px 18px 30px; font-size:.72rem}
+  .extract{padding:16px}
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="mark" href="/"><img src="/logo-mark-white.png" alt="" aria-hidden="true"><b>KAPOT</b><span class="tk">TRACKER</span></a>
+    <a class="btn btn-ghost" href="/" data-i18n="openApp">Open app</a>
+  </div>
+</header>
+
+<div class="lang-bar">
+  <div class="wrap">
+    <div class="lang-toggle" role="group" aria-label="Language">
+      <button type="button" data-lang="en" aria-pressed="true">EN</button>
+      <button type="button" data-lang="uk" aria-pressed="false">UK</button>
+    </div>
+  </div>
+</div>
+
+<main>
+<section class="hero">
+  <div class="wrap">
+    <div class="hero-copy">
+      <p class="eyebrow" data-i18n="heroEyebrow">Car logbook</p>
+      <h1 data-i18n="heroH1">Snap the receipt.<br>It logs the rest.</h1>
+      <p class="lead" data-i18n="heroLead">Kapot Tracker reads fuel receipts — litres, price and total — and turns them into logbook entries. It computes your real consumption, tracks service and reminds you in Telegram. Instead of a notebook, a spreadsheet and «I'll remember».</p>
+      <div class="cta-row">
+        <a class="btn btn-amber" href="/" data-i18n="openApp">Open app</a>
+        <a class="btn btn-ghost" href="#how" data-i18n="heroHow">How it works</a>
+      </div>
+      <p class="statline num" data-i18n="heroStat">Author's logbook: VW Golf 7 Variant 1.6 TDI • <b>240,054 km</b> • <b>19</b> entries • <b>₴87,323</b> tracked</p>
+    </div>
+
+    <div class="hero-demo" id="demo">
+      <div class="receipt" data-i18n-aria="receiptAria" aria-label="A fuel-station fiscal receipt the app recognizes">
+        <div class="r c hl" style="--d:.55s">ТОВ "ОККО-СХІД"</div>
+        <div class="r c">АЗС з магазином №КГ31</div>
+        <div class="r">ПРК №8, Кран №2, Резервуар №6</div>
+        <div class="r hl" style="--d:.8s"><span>43,06 л х 15,99</span></div>
+        <div class="r"><span>АвтоГАЗ скраплений</span><span class="num">688,53 Б</span></div>
+        <div class="sep" aria-hidden="true"></div>
+        <div class="r hl" style="--d:1.35s"><span>СУМА, ГРН.</span><span class="num">688,53</span></div>
+        <div class="r"><span>ПДВ Б=20,00%</span><span class="num">114,76</span></div>
+        <div class="r"><span>ЕКВАЙРИНГ</span><span class="num">688,53</span></div>
+        <div class="sep" aria-hidden="true"></div>
+        <div class="r c">Дякуємо за покупку!</div>
+        <div class="r c">ФІСКАЛЬНИЙ ЧЕК</div>
+        <div class="beam" aria-hidden="true"></div>
+      </div>
+
+      <div class="extract" data-i18n-aria="extractAria" aria-label="Recognized entry fields">
+        <div class="fields num">
+          <div class="field"><small data-i18n="fieldLitres">Litres</small><span class="v" style="--d:1.05s">43.06</span></div>
+          <div class="field"><small data-i18n="fieldPrice">Price per litre, ₴</small><span class="v" style="--d:1.2s">15.99</span></div>
+          <div class="field"><small data-i18n="fieldAmount">Amount, ₴</small><span class="v" style="--d:1.6s">688.53</span></div>
+          <div class="field"><small data-i18n="fieldStation">Station</small><span class="v" style="--d:.85s">OKKO</span></div>
+        </div>
+        <p class="toast" data-i18n="toast">✓ Recognized: 43.06 L • 688.53 ₴ • OKKO</p>
+        <button class="replay" type="button" id="replay" data-i18n="replay">⟳ Scan again</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sect" id="how">
+  <div class="wrap">
+    <div class="sect-head reveal">
+      <p class="eyebrow" data-i18n="howEyebrow">How it works</p>
+      <h2 data-i18n="howH2">An entry in three steps</h2>
+    </div>
+    <div class="steps">
+      <div class="step reveal">
+        <span class="k" data-i18n="step1k">STEP 01</span>
+        <h3 data-i18n="step1h">Photograph the receipt</h3>
+        <p data-i18n="step1p">Straight from your phone, as-is: crumpled, in the sun, handheld. Tricky photos are finished by cloud recognition — with zero setup.</p>
+      </div>
+      <div class="step reveal">
+        <span class="k" data-i18n="step2k">STEP 02</span>
+        <h3 data-i18n="step2h">Check it and add the mileage</h3>
+        <p data-i18n="step2p">Litres, price and total are already in the form. Add the odometer, mark «full tank» — and that's it.</p>
+      </div>
+      <div class="step reveal">
+        <span class="k" data-i18n="step3k">STEP 03</span>
+        <h3 data-i18n="step3h">Save — the rest is automatic</h3>
+        <p data-i18n="step3p">Consumption is recomputed, interval life updates, and when service comes due — Telegram reminds you.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sect">
+  <div class="wrap">
+    <div class="sect-head reveal">
+      <p class="eyebrow" data-i18n="healthEyebrow">Health panel</p>
+      <h2 data-i18n="healthH2">Your car tells you when it's time for service</h2>
+      <p class="lead" data-i18n="healthLead">Set the intervals once — then every mileage entry updates their life. The forecast accounts for your real driving pace.</p>
+    </div>
+    <div class="health">
+      <div class="card reveal" data-i18n-aria="intervalsAria" aria-label="Service intervals">
+        <span class="card-t" data-i18n="healthCardT">Service intervals</span>
+        <div class="iv">
+          <div class="iv-row"><b data-i18n="ivOil">Oil &amp; filter</b><span class="num" data-i18n="ivOilNum">7,000 km or 9 mo</span></div>
+          <div class="bar"><i class="ok" style="width:70%"></i></div>
+        </div>
+        <div class="iv">
+          <div class="iv-row"><b data-i18n="ivBelt">Timing belt</b><span class="num" data-i18n="ivBeltNum">≈ 4 months</span></div>
+          <div class="bar"><i class="warn" style="width:38%"></i></div>
+        </div>
+        <div class="iv">
+          <div class="iv-row"><b data-i18n="ivIns">MTPL insurance</b><span class="num" data-i18n="ivInsNum">12 days</span></div>
+          <div class="bar"><i class="crit" style="width:8%"></i></div>
+        </div>
+      </div>
+      <div class="card reveal" data-i18n-aria="botAria" aria-label="An example chat with the Telegram bot">
+        <span class="card-t">@KapotTrackerBot</span>
+        <div class="chat num">
+          <span class="msg me">240560</span>
+          <span class="msg bot" data-i18n="chatBot1">Golf mileage updated: 240,560 km ✓</span>
+          <span class="msg me" data-i18n="chatMe2">car wash 300</span>
+          <span class="msg bot" data-i18n="chatBot2">Logged: other expense — 300 ₴</span>
+          <span class="msg bot warn" data-i18n="chatBot3">⚠ Oil &amp; filter: 440 km left</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sect paper-zone">
+  <div class="wrap">
+    <div class="sect-head reveal">
+      <p class="eyebrow" data-i18n="paperEyebrow">Numbers you can trust</p>
+      <h2 data-i18n="paperH2">Consumption without self-deception — and a passport for the sale</h2>
+    </div>
+    <div class="paper-grid">
+      <div class="paper-col reveal">
+        <h3 data-i18n="paperCol1H">The full-to-full method</h3>
+        <p data-i18n="paperCol1P">Consumption is measured only between two full-tank fills — partial top-ups accumulate and don't skew the figure.</p>
+        <div class="formula num" data-i18n="formula">
+          38.20 L ÷ 664 km × 100<br>
+          <b>= 5.75 L / 100 km</b>
+        </div>
+      </div>
+      <div class="paper-col reveal">
+        <h3 data-i18n="paperCol2H">PDF history passport</h3>
+        <p data-i18n="paperCol2P">Your whole service history in one file — an argument that adds trust and price when you sell the car.</p>
+        <div class="pdf num" data-i18n-aria="pdfAria" aria-label="A fragment of the PDF report">
+          <div class="r pdf-t"><span data-i18n="pdfTitle">KAPOT TRACKER — SERVICE HISTORY</span></div>
+          <div class="r"><span>VW Golf VII Variant 1.6 TDI</span><span>2016</span></div>
+          <div class="r sep">····································</div>
+          <div class="r" data-i18n="pdfRow1"><span>12.05.2026 · Oil LM 5W-30</span><span>₴3,420</span></div>
+          <div class="r" data-i18n="pdfRow2"><span>03.03.2026 · Brake discs</span><span>₴7,180</span></div>
+          <div class="r" data-i18n="pdfRow3"><span>19 entries · total</span><span>₴87,323</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sect">
+  <div class="wrap">
+    <div class="sect-head reveal">
+      <p class="eyebrow" data-i18n="moreEyebrow">And there's more</p>
+      <h2 data-i18n="moreH2">Everything the car needs — in one app</h2>
+    </div>
+    <div class="more-grid">
+      <div class="more-item reveal"><h3 data-i18n="more1h">Multiple cars &amp; sharing</h3><p data-i18n="more1p">Several cars per account; share a car per driver — owner, editor or viewer.</p></div>
+      <div class="more-item reveal"><h3 data-i18n="more2h">Tyres</h3><p data-i18n="more2p">Seasonal changeover, axle rotation and tyre-age reminders.</p></div>
+      <div class="more-item reveal"><h3 data-i18n="more3h">Documents</h3><p data-i18n="more3p">Insurance and inspection with expiry reminders.</p></div>
+      <div class="more-item reveal"><h3 data-i18n="more4h">OBD diagnostics</h3><p data-i18n="more4p">DPF soot, injector trims and battery voltage from a Car Scanner CSV.</p></div>
+      <div class="more-item reveal"><h3 data-i18n="more5h">Analytics &amp; forecast</h3><p data-i18n="more5p">Spend by category and month, a forecast, the cheapest station and cost per km.</p></div>
+      <div class="more-item reveal"><h3 data-i18n="more6h">Your year</h3><p data-i18n="more6p">«Your year with Kapot» — an annual recap with a shareable image.</p></div>
+      <div class="more-item reveal"><h3 data-i18n="more7h">Notification centre</h3><p data-i18n="more7p">In-app nudges plus Telegram push and a weekly digest.</p></div>
+      <div class="more-item reveal"><h3 data-i18n="more8h">Yours, everywhere</h3><p data-i18n="more8p">English or Ukrainian, 10 display currencies, installable PWA, works offline.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="cta-band">
+  <div class="wrap reveal">
+    <h2 data-i18n="ctaH2">A logbook starts<br>with one entry</h2>
+    <a class="btn btn-amber" href="/" data-i18n="openApp">Open app</a>
+    <p class="sub" data-i18n="ctaSub">Free • PWA — no App Store • your data in your database</p>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span data-i18n="footer1">Kapot Tracker · 2026</span>
+  </div>
+</footer>
+
+<script>
+(function(){
+  // ── i18n: English by default, Ukrainian via the toggle. Same localStorage
+  // key as the app (kapot_lang), so the choice carries between the two. ──
+  var LANG_KEY = 'kapot_lang';
+  try { localStorage.setItem(LANG_KEY, 'uk'); } catch (e) {}
+  var UK = {
+    _title: 'Kapot Tracker — бортовий журнал авто',
+    _desc: 'Сфоткай чек з АЗС — Kapot Tracker сам створить запис, порахує реальний розхід і нагадає про ТО в Telegram.',
+    openApp: 'Відкрити застосунок',
+    heroEyebrow: 'Бортовий журнал авто',
+    heroH1: 'Сфоткай чек.<br>Решту запише сам.',
+    heroLead: 'Kapot Tracker читає чеки АЗС — літри, ціну й суму — та перетворює їх на записи журналу. Рахує реальний розхід, стежить за ТО і нагадує в Telegram. Замість блокнота, Excel і «та я запам’ятаю».',
+    heroHow: 'Як це працює',
+    heroStat: 'Журнал автора: VW Golf 7 Variant 1.6 TDI • <b>240 054 км</b> • <b>19</b> записів • <b>87 323 ₴</b> під контролем',
+    receiptAria: 'Фіскальний чек АЗС, який розпізнає застосунок',
+    extractAria: 'Розпізнані поля запису',
+    fieldLitres: 'Літри',
+    fieldPrice: 'Ціна за літр, ₴',
+    fieldAmount: 'Вартість, ₴',
+    fieldStation: 'АЗС',
+    toast: '✓ Розпізнано: 43.06 л • 688.53 ₴ • ОККО',
+    replay: '⟳ Сканувати ще раз',
+    howEyebrow: 'Як це працює',
+    howH2: 'Запис за три кроки',
+    step1k: 'КРОК 01',
+    step1h: 'Сфотографуй чек',
+    step1p: 'Просто з телефона, як є: зім’ятий, під сонцем, з рук. Складні фото дочитує хмарне розпізнавання — без жодного налаштування.',
+    step2k: 'КРОК 02',
+    step2h: 'Перевір і додай пробіг',
+    step2p: 'Літри, ціна й сума вже у формі. Допиши одометр, познач «повний бак» — і все.',
+    step3k: 'КРОК 03',
+    step3h: 'Збережи — далі само',
+    step3p: 'Розхід перерахувався, ресурс інтервалів оновився, а коли підійде ТО — Telegram нагадає.',
+    healthEyebrow: 'Панель здоров’я',
+    healthH2: 'Авто саме скаже, коли час у сервіс',
+    healthLead: 'Один раз задай інтервали — далі кожен запис пробігу оновлює ресурс. Прогноз враховує твій реальний темп їзди.',
+    healthCardT: 'Сервісні інтервали',
+    ivOil: 'Олива та фільтр',
+    ivOilNum: '7 000 км або 9 міс',
+    ivBelt: 'Ремінь ГРМ',
+    ivBeltNum: '≈ 4 місяці',
+    ivIns: 'Страховка ОСЦПВ',
+    ivInsNum: '12 днів',
+    intervalsAria: 'Сервісні інтервали',
+    botAria: 'Приклад діалогу з Telegram-ботом',
+    chatBot1: 'Пробіг Golf оновлено: 240 560 км ✓',
+    chatMe2: 'мийка 300',
+    chatBot2: 'Записав: інші витрати — 300 ₴',
+    chatBot3: '⚠ Олива та фільтр: лишилось 440 км',
+    paperEyebrow: 'Цифри, яким можна вірити',
+    paperH2: 'Розхід без самообману — і паспорт до продажу',
+    paperCol1H: 'Метод «повний-до-повного»',
+    paperCol1P: 'Розхід рахується лише між двома заправками до повного бака — часткові доливання акумулюються і не викривляють цифру.',
+    formula: '38,20 л ÷ 664 км × 100<br><b>= 5,75 л / 100 км</b>',
+    paperCol2H: 'PDF-паспорт історії',
+    paperCol2P: 'Уся сервісна історія одним файлом — аргумент, що додає довіри й ціни, коли продаєш авто.',
+    pdfAria: 'Фрагмент PDF-звіту',
+    pdfTitle: 'KAPOT TRACKER — СЕРВІСНА ІСТОРІЯ',
+    pdfRow1: '<span>12.05.2026 · Олива LM 5W-30</span><span>3 420 ₴</span>',
+    pdfRow2: '<span>03.03.2026 · Гальмівні диски</span><span>7 180 ₴</span>',
+    pdfRow3: '<span>19 записів · разом</span><span>87 323 ₴</span>',
+    ctaH2: 'Журнал починається<br>з одного запису',
+    ctaSub: 'Безкоштовно • PWA — без App Store • дані у вашій базі',
+    moreEyebrow: 'І це ще не все',
+    moreH2: 'Усе, що треба авто — в одному застосунку',
+    more1h: 'Кілька авто та спільний доступ',
+    more1p: 'Кілька авто на акаунт; діліться авто по драйверу — власник, редактор або глядач.',
+    more2h: 'Шини',
+    more2p: 'Сезонна заміна, ротація вісей і нагадування про вік шин.',
+    more3h: 'Документи',
+    more3p: 'Страховка й техогляд із нагадуваннями про закінчення.',
+    more4h: 'OBD-діагностика',
+    more4p: 'Сажа DPF, корекції форсунок і напруга АКБ з CSV Car Scanner.',
+    more5h: 'Аналітика та прогноз',
+    more5p: 'Витрати за категоріями й місяцями, прогноз, найдешевша АЗС і вартість км.',
+    more6h: 'Ваш рік',
+    more6p: '«Ваш рік з Kapot» — річний підсумок із картинкою для шерінгу.',
+    more7h: 'Центр сповіщень',
+    more7p: 'Нагадування в застосунку + Telegram-пуш і тижневий підсумок.',
+    more8h: 'Ваше, будь-де',
+    more8p: 'Англійська чи українська, 10 валют, встановлюваний PWA, працює офлайн.',
+    footer1: 'Kapot Tracker · 2026'
+  };
+
+  function getLang(){
+    try { var s = localStorage.getItem(LANG_KEY); if (s === 'en' || s === 'uk') return s; } catch (e) {}
+    return 'en';
+  }
+
+  function apply(lang){
+    var dict = lang === 'uk' ? UK : null; // null = the English already in the HTML
+    document.documentElement.lang = lang;
+    document.querySelectorAll('[data-i18n]').forEach(function(el){
+      var k = el.getAttribute('data-i18n');
+      if (!el.hasAttribute('data-en')) el.setAttribute('data-en', el.innerHTML); // stash English once
+      el.innerHTML = dict && dict[k] != null ? dict[k] : el.getAttribute('data-en');
+    });
+    document.querySelectorAll('[data-i18n-aria]').forEach(function(el){
+      var k = el.getAttribute('data-i18n-aria');
+      if (!el.hasAttribute('data-en-aria')) el.setAttribute('data-en-aria', el.getAttribute('aria-label') || '');
+      el.setAttribute('aria-label', dict && dict[k] != null ? dict[k] : el.getAttribute('data-en-aria'));
+    });
+    var enTitle = document.querySelector('title').getAttribute('data-en') || document.title;
+    if (!document.querySelector('title').getAttribute('data-en')) document.querySelector('title').setAttribute('data-en', document.title);
+    document.title = dict && dict._title ? dict._title : enTitle;
+    var md = document.querySelector('meta[name="description"]');
+    if (md) {
+      if (!md.getAttribute('data-en')) md.setAttribute('data-en', md.getAttribute('content') || '');
+      md.setAttribute('content', dict && dict._desc ? dict._desc : md.getAttribute('data-en'));
+    }
+    document.querySelectorAll('.lang-toggle button').forEach(function(b){
+      b.setAttribute('aria-pressed', String(b.getAttribute('data-lang') === lang));
+    });
+  }
+
+  function setLang(lang){
+    try { localStorage.setItem(LANG_KEY, lang); } catch (e) {}
+    apply(lang);
+  }
+
+  document.querySelectorAll('.lang-toggle button').forEach(function(b){
+    b.addEventListener('click', function(){ setLang(b.getAttribute('data-lang')); });
+  });
+  apply(getLang());
+
+  // ── receipt-scan demo animation (unchanged) ──
+  var reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var demo = document.getElementById('demo');
+  if (!reduced) { setTimeout(function(){ demo.classList.add('play'); }, 350); }
+
+  document.getElementById('replay').addEventListener('click', function(){
+    if (reduced) return;
+    demo.classList.remove('play');
+    void demo.offsetWidth;
+    demo.classList.add('play');
+  });
+
+  if (!('IntersectionObserver' in window) || reduced) {
+    document.querySelectorAll('.reveal').forEach(function(el){ el.classList.add('in'); });
+    return;
+  }
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+    });
+  }, {threshold:.15});
+  document.querySelectorAll('.reveal').forEach(function(el){ io.observe(el); });
+})();
+</script>
+</body>
+</html>
