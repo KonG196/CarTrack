@@ -386,7 +386,9 @@
     "deleteFailed": "Не вдалося видалити акаунт",
     "deleteForeverTitle": "Видалити акаунт назавжди?",
     "deleteForeverMessage": "Уся сервісна історія ваших авто буде знищена без можливості відновлення.",
-    "yesDelete": "Так, видалити"
+    "yesDelete": "Так, видалити",
+    "aboutLicense": "Відкритий код за некомерційною ліцензією",
+    "aboutSource": "Код на GitHub"
   },
   "carSpecs": {
     "errNameRequired": "Вкажіть назву",

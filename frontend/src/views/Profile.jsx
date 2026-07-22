@@ -490,6 +490,19 @@ export default function Profile() {
       <PasswordCard onToast={setToast} />
       <TelegramCard onToast={setToast} />
       <DangerZone />
+
+      <p className="pt-2 text-center text-xs text-mist">
+        © 2026 Kapot Tracker · {t('profile.aboutLicense')}
+        {' · '}
+        <a
+          href="https://github.com/KonG196/CarTrack"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline underline-offset-2 hover:text-amber"
+        >
+          {t('profile.aboutSource')}
+        </a>
+      </p>
     </div>
   );
 }

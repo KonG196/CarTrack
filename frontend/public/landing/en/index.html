@@ -194,6 +194,22 @@ h2{font-size:clamp(1.4rem,3vw,2rem)}
 }
 .hero-copy{display:flex; flex-direction:column; gap:22px}
 .hero-copy .cta-row{display:flex; flex-wrap:wrap; gap:14px; margin-top:6px}
+
+/* GitHub star pill — a source-available cue linking to the repo */
+.ghstar{
+  display:inline-flex; align-items:center; gap:9px; align-self:flex-start;
+  margin-top:-8px; padding:8px 8px 8px 14px; border-radius:9px;
+  border:1px solid #2A3A52; background:#0F1723; text-decoration:none;
+  font:600 .85rem var(--body); color:var(--fg);
+  transition:border-color .15s ease, transform .15s ease;
+}
+.ghstar:hover{border-color:var(--mist); transform:translateY(-1px)}
+.ghstar .ghmark{color:var(--fg); flex-shrink:0}
+.ghstar-count{
+  display:inline-flex; align-items:center; gap:5px; margin-left:2px;
+  padding:3px 9px; border-radius:6px; background:#1A2536;
+  color:var(--amber); font-family:var(--mono); font-size:.78rem;
+}
 .statline{
   font-family:var(--mono); font-size:.78rem; color:var(--mist);
   border-top:2px dashed #2A3A52; padding-top:14px; margin-top:10px;
@@ -331,6 +347,8 @@ h2{font-size:clamp(1.4rem,3vw,2rem)}
 footer{border-top:1px solid #17233520; background:#080D14; padding-block:28px}
 footer .wrap{display:flex; flex-wrap:wrap; justify-content:space-between; gap:10px; color:#5C6B84; font-size:.85rem}
 footer .wrap span:last-child{font-family:var(--mono); font-size:.75rem}
+footer a{color:var(--mist); text-decoration:underline; text-underline-offset:2px}
+footer a:hover{color:var(--amber)}
 
 /* появи при скролі */
 .reveal{opacity:0; transform:translateY(14px); transition:opacity .6s ease, transform .6s ease}
@@ -391,6 +409,13 @@ footer .wrap span:last-child{font-family:var(--mono); font-size:.75rem}
         <a class="btn btn-amber" href="/" data-i18n="openApp">Open app</a>
         <a class="btn btn-ghost" href="#how" data-i18n="heroHow">How it works</a>
       </div>
+      <a class="ghstar" href="https://github.com/KonG196/CarTrack" target="_blank" rel="noopener" data-i18n-aria="ghStarAria" aria-label="Star Kapot Tracker on GitHub">
+        <svg class="ghmark" viewBox="0 0 16 16" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+        <span class="ghstar-label" data-i18n="ghStar">Star on GitHub</span>
+        <span class="ghstar-count" aria-hidden="true">
+          <svg viewBox="0 0 16 16" width="14" height="14"><path fill="currentColor" d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/></svg>
+        </span>
+      </a>
       <p class="statline num" data-i18n="heroStat">Author's logbook: VW Golf 7 Variant 1.6 TDI • <b>240,054 km</b> • <b>19</b> entries • <b>₴87,323</b> tracked</p>
     </div>
 
@@ -549,7 +574,8 @@ footer .wrap span:last-child{font-family:var(--mono); font-size:.75rem}
 
 <footer>
   <div class="wrap">
-    <span data-i18n="footer1">Kapot Tracker · 2026</span>
+    <span data-i18n="footer1">© 2026 Kapot Tracker</span>
+    <span data-i18n="footer2">Source-available (<a href="https://github.com/KonG196/CarTrack" rel="noopener">GitHub</a>) · noncommercial license</span>
   </div>
 </footer>
 
@@ -567,6 +593,8 @@ footer .wrap span:last-child{font-family:var(--mono); font-size:.75rem}
     heroH1: 'Сфоткай чек.<br>Решту запише сам.',
     heroLead: 'Kapot Tracker читає чеки АЗС — літри, ціну й суму — та перетворює їх на записи журналу. Рахує реальний розхід, стежить за ТО і нагадує в Telegram. Замість блокнота, Excel і «та я запам’ятаю».',
     heroHow: 'Як це працює',
+    ghStar: 'Зірка на GitHub',
+    ghStarAria: 'Поставити зірку Kapot Tracker на GitHub',
     heroStat: 'Журнал автора: VW Golf 7 Variant 1.6 TDI • <b>240 054 км</b> • <b>19</b> записів • <b>87 323 ₴</b> під контролем',
     receiptAria: 'Фіскальний чек АЗС, який розпізнає застосунок',
     extractAria: 'Розпізнані поля запису',
@@ -635,7 +663,8 @@ footer .wrap span:last-child{font-family:var(--mono); font-size:.75rem}
     more7p: 'Нагадування в застосунку + Telegram-пуш і тижневий підсумок.',
     more8h: 'Ваше, будь-де',
     more8p: 'Англійська чи українська, 10 валют, встановлюваний PWA, працює офлайн.',
-    footer1: 'Kapot Tracker · 2026'
+    footer1: '© 2026 Kapot Tracker',
+    footer2: 'Відкритий код (<a href="https://github.com/KonG196/CarTrack" rel="noopener">GitHub</a>) · некомерційна ліцензія'
   };
 
   function getLang(){

@@ -386,7 +386,9 @@
     "deleteFailed": "Couldn't delete your account",
     "deleteForeverTitle": "Delete account forever?",
     "deleteForeverMessage": "All service history for your cars will be destroyed with no way to recover it.",
-    "yesDelete": "Yes, delete"
+    "yesDelete": "Yes, delete",
+    "aboutLicense": "Source-available under a noncommercial license",
+    "aboutSource": "Source on GitHub"
   },
   "carSpecs": {
     "errNameRequired": "Enter a name",

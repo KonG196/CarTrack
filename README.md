@@ -171,3 +171,12 @@ Full production setup (Oracle Cloud + DuckDNS + Caddy, free): **[docs/DEPLOY.md]
 
 A personal project, hosted for anyone who wants to use it at the live link above. Built
 Ukrainian-first for local realities (ОСЦПВ, ГБО, seasonal tyres, regional fuel prices).
+
+---
+
+## License
+
+Source-available under the [PolyForm Noncommercial License 1.0.0](LICENSE). You are welcome
+to read the code, learn from it, and run it for personal, educational or other noncommercial
+use. Running it as a commercial or hosted service is not permitted — Kapot Tracker is offered
+as a hosted product at the link above.
