@@ -98,24 +98,24 @@ MESSAGES: dict[str, dict[str, str]] = {
         "uk": "Kapot Tracker — підтвердження пошти",
     },
     "email.verify.text": {
-        "en": "Welcome to Kapot Tracker!\n\nConfirmation code: {code}\n\nOr just follow this link:\n{link}\n\nThe code is valid for {hours} h. If you didn't sign up, just ignore this message.",
-        "uk": "Вітаємо в Kapot Tracker!\n\nКод підтвердження: {code}\n\nАбо просто перейдіть за посиланням:\n{link}\n\nКод дійсний {hours} год. Якщо ви не реєструвалися — просто проігноруйте цей лист.",
+        "en": "Welcome to Kapot Tracker!\n\nConfirm your email by following this link:\n{link}\n\nThe link is valid for {hours} h. If you didn't sign up, just ignore this message.",
+        "uk": "Вітаємо в Kapot Tracker!\n\nПідтвердіть пошту за посиланням:\n{link}\n\nПосилання дійсне {hours} год. Якщо ви не реєструвалися — просто проігноруйте цей лист.",
     },
     "email.verify.heading": {
         "en": "Welcome to Kapot Tracker!",
         "uk": "Вітаємо в Kapot Tracker!",
     },
     "email.verify.lede": {
-        "en": "Just confirm your email. Enter the code in the app or tap the button below.",
-        "uk": "Залишилось підтвердити пошту. Введіть код у застосунку або натисніть кнопку нижче.",
+        "en": "Just confirm your email — tap the button below.",
+        "uk": "Залишилось підтвердити пошту — натисніть кнопку нижче.",
     },
     "email.verify.button": {
         "en": "Confirm email",
         "uk": "Підтвердити пошту",
     },
     "email.verify.note": {
-        "en": "The code is valid for {hours} h. If you didn't sign up, just ignore this message.",
-        "uk": "Код дійсний {hours} год. Якщо ви не реєструвалися — просто проігноруйте цей лист.",
+        "en": "The link is valid for {hours} h. If you didn't sign up, just ignore this message.",
+        "uk": "Посилання дійсне {hours} год. Якщо ви не реєструвалися — просто проігноруйте цей лист.",
     },
     # ── Email: password reset ──
     "email.reset.subject": {

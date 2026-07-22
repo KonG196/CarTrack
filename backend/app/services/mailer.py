@@ -216,12 +216,14 @@ def send_verification(to: str, code: str, lang: str = "en") -> bool:
     return send_mail(
         to,
         t("email.verify.subject", lang),
-        t("email.verify.text", lang, code=code, link=link, hours=hours),
+        t("email.verify.text", lang, link=link, hours=hours),
         html=_render_email(
             lang=lang,
             heading=t("email.verify.heading", lang),
             lede=t("email.verify.lede", lang),
-            code=code,
+            # No visible code — verification is link-only now. The button + the
+            # plaintext URL fallback below it are the whole letter.
+            code=None,
             button=(t("email.verify.button", lang), link),
             note=t("email.verify.note", lang, hours=hours),
         ),

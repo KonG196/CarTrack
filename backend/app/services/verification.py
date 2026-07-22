@@ -18,22 +18,31 @@ from app.models import User
 from app.services.mailer import mail_enabled, send_email_change, send_verification
 
 CODE_DIGITS = 6
-#: Wrong guesses before the verify code is burned (per-account, IP-independent).
+#: Wrong guesses before the verify code/token is burned (per-account, IP-independent).
 _MAX_VERIFY_ATTEMPTS = 5
 
 
 def _new_code() -> str:
+    # Short numeric code the user retypes — used by the email-change flow, where
+    # the confirmation is a manual entry, not a link.
     return f"{secrets.randbelow(10 ** CODE_DIGITS):0{CODE_DIGITS}d}"
+
+
+def _new_token() -> str:
+    # Long, unguessable token for registration verification: that email carries
+    # only a link (no code to retype), so the value must not be brute-forceable.
+    # 32 random bytes → ~43 url-safe chars, ~256 bits of entropy.
+    return secrets.token_urlsafe(32)
 
 
 def issue_verification(db: Session, user: User) -> str | None:
     """Stamp a fresh code on the user and mail it.
 
-    Returns the plain code when mail is off (so tests and local development can
+    Returns the plain token when mail is off (so tests and local development can
     read it); None once it has actually been sent, because nothing outside the
     letter is allowed to know it.
     """
-    code = _new_code()
+    code = _new_token()
     user.verify_code_hash = hash_password(code)
     user.verify_code_expires_at = dt.datetime.utcnow() + dt.timedelta(
         hours=settings.VERIFY_CODE_EXPIRE_HOURS
