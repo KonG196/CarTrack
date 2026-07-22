@@ -24,4 +24,8 @@ COPY alembic ./alembic
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Two workers use both vCPUs of the Oracle free-tier micro. A single worker
+# saturated one core at ~120 rps and timed out every request under an 80-client
+# burst; two workers cleared those timeouts. SQLite serialises writes across
+# workers, so revisit (or move to Postgres) if concurrent writes get hot.
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
