@@ -67,8 +67,11 @@ export default function Menu({
       {mounted && (
         <div
           data-closing={closing ? 'true' : undefined}
-          className={`menu-pop absolute z-50 mt-2 max-h-72 origin-top overflow-y-auto rounded-xl border border-edge bg-panel p-1 shadow-xl shadow-black/50 ${
-            matchWidth ? 'w-full' : 'min-w-[12rem]'
+          style={{ backgroundColor: '#1B2636' }}
+          className={`menu-pop absolute z-50 max-h-72 origin-top overflow-y-auto rounded-xl border border-edge-soft p-1 shadow-2xl shadow-black/70 ring-1 ring-black/50 ${
+            // A field-width menu reads as one control with its trigger, so it
+            // sits snug beneath it; the floating pill menu keeps a small gap.
+            matchWidth ? 'mt-1 w-full' : 'mt-2 min-w-[12rem]'
           } ${align === 'right' ? 'right-0' : 'left-0'}`}
         >
           <div role="listbox" aria-label={ariaLabel}>

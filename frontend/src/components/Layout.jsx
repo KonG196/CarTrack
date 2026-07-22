@@ -191,7 +191,10 @@ export default function Layout() {
       <OfflineBanner />
       <Toast message={syncToast} onDone={() => setSyncToast('')} />
 
-      <main className="mx-auto max-w-md px-4 pb-28 pt-4" key={location.pathname}>
+      <main
+        className="mx-auto max-w-md px-4 pt-4 pb-[calc(env(safe-area-inset-bottom)+3.75rem)]"
+        key={location.pathname}
+      >
         <Outlet />
       </main>
 

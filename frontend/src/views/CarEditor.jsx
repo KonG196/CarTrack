@@ -398,9 +398,13 @@ function CarForm({ initial, onSubmit, onCancel, focusField }) {
         </div>
       </div>
 
-      {/* Sticky action bar: always in reach above the bottom nav, so a long
-          form never means scrolling to the very end to save. */}
-      <div className="sticky bottom-0 z-20 -mx-4 border-t border-edge bg-garage px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+4.75rem)]">
+      {/* Sticky action bar: always in reach just above the bottom nav. Its own
+          black background carries a generous bottom pad (pb-9) so the buttons
+          clear both the nav and the round «Add» button that juts up over it —
+          without that gap the round button overlapped «Save». The ::after fills
+          the strip between the bar and the nav with the same solid background,
+          so scrolling form text never shows through beneath the buttons. */}
+      <div className="sticky bottom-[calc(env(safe-area-inset-bottom)+3.75rem)] z-20 -mx-4 border-t border-edge bg-garage px-4 pt-3 pb-9 after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-24 after:bg-garage">
         {error && <ErrorMessage className="mb-3">{error}</ErrorMessage>}
         <div className="flex gap-2">
           <Button type="submit" disabled={submitting} className="flex-1">

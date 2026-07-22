@@ -411,21 +411,26 @@ html[data-vt='down']::view-transition-new(page) {
   z-index: 1;
 }
 
+/* Slide across the whole viewport, not the page column. `main` is a narrow
+   max-w-md container centred with mx-auto, so translateX(100%) only travels its
+   own width — on a wide screen that reads as a jump inside a thin strip with
+   dead space either side. 100vw carries the snapshot fully off-screen, so the
+   leaving and arriving pages cross the entire width, mobile and desktop alike. */
 @keyframes kt-vt-in-right {
-  from { transform: translateX(100%); }
+  from { transform: translateX(100vw); }
   to { transform: translateX(0); }
 }
 @keyframes kt-vt-out-left {
   from { transform: translateX(0); }
-  to { transform: translateX(-100%); }
+  to { transform: translateX(-100vw); }
 }
 @keyframes kt-vt-in-left {
-  from { transform: translateX(-100%); }
+  from { transform: translateX(-100vw); }
   to { transform: translateX(0); }
 }
 @keyframes kt-vt-out-right {
   from { transform: translateX(0); }
-  to { transform: translateX(100%); }
+  to { transform: translateX(100vw); }
 }
 @keyframes kt-vt-in-up {
   from { transform: translateY(100%); }

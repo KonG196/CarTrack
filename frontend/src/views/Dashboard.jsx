@@ -219,7 +219,7 @@ export default function Dashboard() {
           {t('dashboard.welcomeSubtitle')}
         </p>
         <Link
-          to="/garage"
+          to="/garage/new"
           className="mt-2 inline-flex items-center gap-1 rounded-xl bg-amber px-5 py-2.5 text-sm font-medium text-amber-ink transition-colors hover:bg-amber-deep"
         >
           {t('dashboard.addCar')}
