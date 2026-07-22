@@ -187,6 +187,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "uk": "ОСЦПВ дійсна до {date} — лишилось {days} дн. Оновіть поліс, щоб уникнути штрафу.",
     },
     # ── API error details (routers) ──
+    "err.verifyEmailForFeature": {"en": "Verify your email to use this feature.", "uk": "Підтвердіть пошту, щоб користуватися цією функцією."},
     "err.tooManyAttempts": {"en": "Too many attempts. Try again later.", "uk": "Забагато спроб. Спробуйте пізніше."},
     "err.tooManyRequests": {"en": "Too many requests. Try again later.", "uk": "Забагато запитів. Спробуйте пізніше."},
     "err.passwordWrong": {"en": "Incorrect password", "uk": "Пароль невірний"},

@@ -147,6 +147,9 @@ class UserOut(BaseModel):
 
     id: int
     email: str
+    # Whether the address is confirmed. Drives the «verify your email» banner and
+    # the scan / plate-lookup gates on the web (login no longer depends on it).
+    email_verified: bool = False
     # How the user is signed on a shared car; None means «use the email
     # handle» (models.User.label decides that, not the client).
     display_name: Optional[str] = None

@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
+from app.i18n import t
 from app.models import User
 
 ALGORITHM = "HS256"
@@ -99,3 +100,14 @@ def get_current_user(
     if payload.get("tv", 0) != user.token_version:
         raise credentials_exception
     return user
+
+
+def require_verified_user(current_user: User = Depends(get_current_user)) -> User:
+    """Gate the costly external features (OCR scan, plate lookup) behind a
+    verified email. Everything else stays open to any signed-in user."""
+    if not current_user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=t("err.verifyEmailForFeature", current_user.language),
+        )
+    return current_user

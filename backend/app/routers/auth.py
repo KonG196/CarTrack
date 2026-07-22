@@ -124,11 +124,9 @@ def login(
             detail=t("auth.bad_credentials", lang_from_accept(request.headers.get("accept-language"))),
             headers={"WWW-Authenticate": "Bearer"},
         )
-    if not user.email_verified:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=t("auth.verify_email_first", user.language),
-        )
+    # Login no longer requires a verified email — anyone with the right password
+    # gets in. Verification gates only the costly features (scan, plate lookup)
+    # via require_verified_user; see app/auth.py.
     # A legitimate owner should not stay locked out by their earlier typos.
     login_limiter.reset(limit_key)
     return _issue_tokens(user)

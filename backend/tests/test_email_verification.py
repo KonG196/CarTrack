@@ -41,7 +41,9 @@ def test_register_without_mail_server_auto_verifies(client: TestClient) -> None:
     assert _login(client).status_code == 200
 
 
-def test_register_with_mail_server_gates_login(client: TestClient, mail_on) -> None:
+def test_register_with_mail_server_still_lets_you_log_in(client: TestClient, mail_on) -> None:
+    # Verification no longer gates login: a fresh (unverified) account can sign
+    # in immediately. Verification only unlocks scan / plate lookup elsewhere.
     response = _register(client)
     assert response.status_code == 201
     assert response.json()["email_verified"] is False
@@ -49,9 +51,8 @@ def test_register_with_mail_server_gates_login(client: TestClient, mail_on) -> N
     assert len(mail_on) == 1
 
     login = _login(client)
-    assert login.status_code == 403
-    # English is the default language for a registration that doesn't specify one.
-    assert "Confirm your email" in login.json()["detail"]
+    assert login.status_code == 200
+    assert "access_token" in login.json()
 
 
 def test_verify_then_login(client: TestClient, mail_on) -> None:
@@ -71,7 +72,8 @@ def test_wrong_code_rejected(client: TestClient, mail_on) -> None:
         "/api/auth/verify/confirm", json={"email": "new@example.com", "code": "000000"}
     )
     assert response.status_code == 400
-    assert _login(client).status_code == 403
+    # A wrong code leaves the account unverified — but login is open regardless.
+    assert _login(client).status_code == 200
 
 
 def test_expired_code_rejected(client: TestClient, mail_on, db_session_factory) -> None:
