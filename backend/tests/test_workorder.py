@@ -394,14 +394,18 @@ def test_a_model_date_from_the_future_is_refused() -> None:
     assert parsed.date is None
 
 
-def test_the_model_survives_a_dead_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A dead/rate-limited key must not crash — it fast-fails to manual entry."""
+def test_a_dead_key_raises_ocr_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A dead/rate-limited key surfaces as «unavailable», not a bad photo."""
     monkeypatch.setattr(ocr_llm.settings, "GEMINI_API_KEY", "dead-key")
 
     def boom(*args, **kwargs):
         raise RuntimeError("gemini down")
 
     monkeypatch.setattr("app.services.ocr_llm._ask_gemini", boom)
-    parsed = ocr_llm.recognize_work_order(b"img")
-    # Survives (no exception) and returns an empty reading for manual entry.
-    assert parsed.total_cost is None
+    with pytest.raises(ocr_llm.OcrUnavailable):
+        ocr_llm.recognize_work_order(b"img")
+
+    # Same when the model just returns no answer.
+    monkeypatch.setattr("app.services.ocr_llm._ask_gemini", lambda *a, **k: None)
+    with pytest.raises(ocr_llm.OcrUnavailable):
+        ocr_llm.recognize_work_order(b"img")

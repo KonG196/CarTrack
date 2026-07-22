@@ -44,6 +44,15 @@ from app.services.workorder import (
 
 logger = logging.getLogger(__name__)
 
+
+class OcrUnavailable(Exception):
+    """A configured vision model gave no answer (down / rate-limited / dead key).
+
+    Distinct from a readable-but-empty photo: the receipt is fine, our OCR is
+    temporarily unavailable. The scan endpoint turns this into a 503 so the app
+    says «скан недоступний, спробуйте пізніше» instead of blaming the photo.
+    """
+
 _GEMINI_URL = (
     "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 )
@@ -318,15 +327,16 @@ def recognize_receipt(image_bytes: bytes, content_type: str = "image/jpeg") -> P
         # latency. Go straight to the model.
         try:
             llm_parsed = recognize_receipt_llm(image_bytes, content_type)
-        except Exception:
+        except Exception as exc:
             logger.warning("Vision OCR failed", exc_info=True)
-            llm_parsed = None
+            raise OcrUnavailable from exc
         if llm_parsed is not None:
             return llm_parsed
-        # Model down/rate-limited: fail fast to manual entry rather than grind
-        # tesseract for ~27s only to read nothing. An empty parse tells the app
-        # «не вдалося» in a second, and the user types the three numbers in.
-        return parse_receipt_text("")
+        # Model configured but gave no answer (down / rate-limited / dead key):
+        # signal «temporarily unavailable» so the app can say «скан недоступний,
+        # спробуйте пізніше» rather than «не вдалося розпізнати чек» — the photo
+        # is fine, our OCR is not.
+        raise OcrUnavailable
 
     # No vision model configured at all: the full free rungs are the only option.
     return parse_receipt_text(read_text(image_bytes, content_type, _receipt_score, 2))
@@ -442,15 +452,16 @@ def recognize_work_order(
         # reads the table cleanly in ~11s. Go straight to the model.
         try:
             data = _ask_gemini(_ORDER_PROMPT, image_bytes, content_type)
-        except Exception:
+        except Exception as exc:
             logger.warning("Vision OCR failed", exc_info=True)
-            data = None
+            raise OcrUnavailable from exc
         if data is not None:
             llm_parsed = parsed_work_order_from_llm(data)
             if llm_parsed is not None:
                 return llm_parsed
-        # Model down/short: fail fast to manual entry rather than grind tesseract.
-        return parse_work_order("")
+        # Model down/rate-limited/unparseable answer — signal «unavailable» so the
+        # app says «спробуйте пізніше», not «не вдалося розпізнати».
+        raise OcrUnavailable
 
     # No vision model configured at all: the full free rungs are the only option.
     return parse_work_order(

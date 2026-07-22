@@ -9,7 +9,7 @@ from pytesseract import TesseractNotFoundError
 from app.auth import get_current_user
 from app.models import User
 from app.schemas import OcrScanResult, OcrWorkOrderResult
-from app.services.ocr_llm import recognize_receipt, recognize_work_order
+from app.services.ocr_llm import OcrUnavailable, recognize_receipt, recognize_work_order
 
 router = APIRouter(prefix="/ocr", tags=["ocr"])
 
@@ -21,6 +21,14 @@ _NO_TESSERACT = HTTPException(
         "OCR is unavailable: the tesseract binary is not installed on the "
         "server. Install it with: brew install tesseract tesseract-lang"
     ),
+)
+
+# The vision model is configured but gave no answer (rate-limited / down). A 503
+# lets the app tell the user «скан тимчасово недоступний» rather than blame the
+# photo — the frontend maps this status to entryForm.scanUnavailable.
+_OCR_UNAVAILABLE = HTTPException(
+    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+    detail="Розпізнавання тимчасово недоступне. Введіть дані вручну і спробуйте скан пізніше.",
 )
 
 
@@ -59,6 +67,8 @@ async def scan_receipt(
         )
     except TesseractNotFoundError:
         raise _NO_TESSERACT
+    except OcrUnavailable:
+        raise _OCR_UNAVAILABLE
 
     return OcrScanResult(
         liters=parsed.liters,
@@ -82,6 +92,8 @@ async def scan_work_order(
         )
     except TesseractNotFoundError:
         raise _NO_TESSERACT
+    except OcrUnavailable:
+        raise _OCR_UNAVAILABLE
 
     date = None
     if parsed.date:

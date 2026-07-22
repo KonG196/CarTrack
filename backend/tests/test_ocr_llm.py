@@ -123,19 +123,22 @@ def test_endpoint_falls_back_to_llm_when_tesseract_fails(
     assert body["gas_station"] == "OKKO"
 
 
-def test_endpoint_survives_llm_error(
+def test_endpoint_returns_503_when_the_model_is_unavailable(
     client: TestClient, auth_headers: dict, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("app.services.ocr_llm.extract_text", lambda b, **kw: "нечитабельно")
+    # A vision-model failure is «scan unavailable» (503), not a bad photo — the
+    # app maps 503 to «спробуйте пізніше» rather than «не вдалося розпізнати».
     monkeypatch.setattr(ocr_llm.settings, "GEMINI_API_KEY", "test-key")
 
     def boom(image_bytes: bytes, content_type: str) -> ParsedReceipt:
         raise RuntimeError("gemini down")
 
     monkeypatch.setattr("app.services.ocr_llm.recognize_receipt_llm", boom)
-    response = _post_scan(client, auth_headers)
-    assert response.status_code == 200
-    assert response.json()["liters"] is None
+    assert _post_scan(client, auth_headers).status_code == 503
+
+    # Same when the model simply returns no answer (rate-limited / dead key).
+    monkeypatch.setattr("app.services.ocr_llm.recognize_receipt_llm", lambda b, c: None)
+    assert _post_scan(client, auth_headers).status_code == 503
 
 
 def test_llm_not_called_without_key(
