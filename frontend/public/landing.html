@@ -332,7 +332,11 @@ footer .wrap span:last-child{font-family:var(--mono); font-size:.75rem}
   .steps{grid-template-columns:minmax(0,1fr)}
   .health{grid-template-columns:minmax(0,1fr)}
   .paper-grid{grid-template-columns:minmax(0,1fr)}
+  .more-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .fields{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width: 560px){
+  .more-grid{grid-template-columns:minmax(0,1fr)}
 }
 @media (max-width: 480px){
   .mark{font-size:.82rem}
