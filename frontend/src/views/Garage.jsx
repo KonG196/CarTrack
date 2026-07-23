@@ -41,6 +41,7 @@ import Toast from '../components/Toast';
 import SharingCard from '../components/SharingCard';
 import LanguageToggle from '../components/LanguageToggle';
 import CurrencySelect from '../components/CurrencySelect';
+import UnitToggle from '../components/UnitToggle';
 
 const FUEL_TYPES = [
   { value: 'petrol', labelKey: 'fuelPetrol' },
@@ -544,6 +545,10 @@ export default function Garage() {
         <div className="mt-4">
           <span className="text-xs text-mist">{t('garage.currencyLabel')}</span>
           <CurrencySelect className="mt-1.5" />
+        </div>
+        <div className="mt-4">
+          <span className="text-xs text-mist">{t('units.settingsLabel')}</span>
+          <UnitToggle className="mt-1.5" />
         </div>
       </Card>
 

@@ -3,11 +3,31 @@ import { useTranslation } from 'react-i18next';
 import { Check, Minus, Plus, Route, Share2, Sparkles } from 'lucide-react';
 
 import { buildTripShareText, computeTripCost, tripInputsFrom } from '../utils/tripCost';
-import { formatMoney } from '../utils/format';
+import { formatMoney, distanceUnitLabel, volumeUnitLabel, consumptionUnitLabel } from '../utils/format';
+import {
+  isImperial,
+  kmFromDistance,
+  consumptionFromL100,
+  KM_PER_MILE,
+  LITRES_PER_US_GALLON,
+} from '../units';
+import { useUnitStore } from '../store/unitStore';
+import { currentCurrencySymbol } from '../store/currencyStore';
 import { Card, TextField } from './UI';
+
+// mpg -> l/100km (the inverse of consumptionFromL100).
+const l100FromMpg = (mpg) => (mpg > 0 ? 235.214583 / mpg : null);
 
 export default function TripCostCard({ analytics, refuelContext, carName }) {
   const { t } = useTranslation();
+  const units = useUnitStore((s) => s.units);
+  const imperial = isImperial(units);
+  // Fields are entered in the user's display units; the calculator works in
+  // metric, so convert on the way into computeTripCost and on the way out of
+  // the history prefills.
+  const distToKm = (d) => (imperial ? Number(d) * KM_PER_MILE : Number(d));
+  const consToL100 = (c) => (imperial ? l100FromMpg(Number(c)) : Number(c));
+  const priceToPerL = (p) => (imperial ? Number(p) / LITRES_PER_US_GALLON : Number(p));
   const [distance, setDistance] = useState('');
   const [people, setPeople] = useState(1);
   const [consumption, setConsumption] = useState('');
@@ -27,19 +47,22 @@ export default function TripCostCard({ analytics, refuelContext, carName }) {
     setConsumption((current) => {
       if (current || !known.consumption) return current;
       setAuto((a) => ({ ...a, consumption: true }));
-      return String(known.consumption);
+      const shown = imperial ? consumptionFromL100(known.consumption, units) : known.consumption;
+      return shown == null ? current : String(+shown.toFixed(1));
     });
     setPrice((current) => {
       if (current || !known.pricePerLiter) return current;
       setAuto((a) => ({ ...a, price: true }));
-      return String(known.pricePerLiter);
+      const shown = imperial ? known.pricePerLiter * LITRES_PER_US_GALLON : known.pricePerLiter;
+      return String(+shown.toFixed(2));
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [known.consumption, known.pricePerLiter]);
 
   const result = computeTripCost({
-    distanceKm: distance,
-    consumption: Number(String(consumption).replace(',', '.')) || null,
-    pricePerLiter: Number(String(price).replace(',', '.')) || null,
+    distanceKm: distToKm(distance),
+    consumption: consToL100(Number(String(consumption).replace(',', '.'))) || null,
+    pricePerLiter: priceToPerL(Number(String(price).replace(',', '.'))) || null,
     people,
   });
 
@@ -84,7 +107,7 @@ export default function TripCostCard({ analytics, refuelContext, carName }) {
 
       <div className="grid grid-cols-2 gap-3">
         <TextField
-          label={t('tripCostCard.distanceLabel')}
+          label={t('tripCostCard.distanceLabel', { unit: distanceUnitLabel() })}
           inputMode="decimal"
           numeric
           value={distance}
@@ -115,7 +138,7 @@ export default function TripCostCard({ analytics, refuelContext, carName }) {
 
       <div className="mt-3 grid grid-cols-2 gap-3">
         <TextField
-          label={t('tripCostCard.consumptionLabel')}
+          label={t('tripCostCard.consumptionLabel', { unit: consumptionUnitLabel() })}
           inputMode="decimal"
           numeric
           value={consumption}
@@ -126,7 +149,10 @@ export default function TripCostCard({ analytics, refuelContext, carName }) {
           }}
         />
         <TextField
-          label={t('tripCostCard.pricePerLiterLabel')}
+          label={t('tripCostCard.pricePerLiterLabel', {
+            unit: volumeUnitLabel(),
+            currency: currentCurrencySymbol(),
+          })}
           inputMode="decimal"
           numeric
           value={price}

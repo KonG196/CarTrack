@@ -451,8 +451,10 @@ def recognize_photo(image_bytes: bytes, lang: str = "en") -> PhotoReading:
         raise OcrUnavailableError("vision OCR is unavailable") from exc
 
 
-def build_report(db: Session, car: Car, lang: str = "en", currency: str = "USD") -> bytes:
-    return build_car_report(db, car, lang, currency)
+def build_report(
+    db: Session, car: Car, lang: str = "en", currency: str = "USD", units: str = "metric"
+) -> bytes:
+    return build_car_report(db, car, lang, currency, units)
 
 
 # Ukrainian summaries
@@ -1070,6 +1072,7 @@ def build_weekly_digest(
     today: dt.date | None = None,
     lang: str = "en",
     currency: str = "USD",
+    units: str = "metric",
 ) -> Optional[str]:
     """One car's week in one Ukrainian message, or None when there was no week.
 
@@ -1110,12 +1113,29 @@ def build_weekly_digest(
         t("bot.svc.digestHeader", lang, label=car_label(car)),
         f"{spent} ({breakdown})" if breakdown else spent,
     ]
+    from app.units import (
+        consumption_from_l100,
+        consumption_unit,
+        distance_from_km,
+        distance_unit,
+    )
+
     distance_km = _week_distance_km(logs, week_logs, start)
     if distance_km is not None:
-        lines.append(t("bot.svc.distance", lang, km=distance_km))
+        lines.append(
+            t(
+                "bot.svc.distance",
+                lang,
+                km=f"{round(distance_from_km(distance_km, units))} {distance_unit(units)}",
+            )
+        )
     consumption = _week_consumption_l_100km(logs, car, start, end)
     if consumption is not None:
-        lines.append(t("bot.svc.consumption", lang, value=f"{consumption:.1f}"))
+        cons = consumption_from_l100(consumption, units)
+        if cons is not None:
+            lines.append(
+                t("bot.svc.consumption", lang, value=f"{cons:.1f} {consumption_unit(units)}")
+            )
     nearest = _nearest_interval_phrase(db, car, today, lang)
     if nearest is not None:
         lines.append(t("bot.svc.nearest", lang, phrase=nearest))
@@ -1153,9 +1173,12 @@ def digest_targets(
         digests: list[WeeklyDigest] = []
         lang = normalize_lang(user.language)
         currency = getattr(user, "currency", None) or "USD"
+        units = getattr(user, "unit_system", None) or "metric"
         # Owned cars only — see the note above.
         for car in list_owned_cars(db, user):
-            text = build_weekly_digest(db, car, today=today, lang=lang, currency=currency)
+            text = build_weekly_digest(
+                db, car, today=today, lang=lang, currency=currency, units=units
+            )
             if text is not None:
                 digests.append(WeeklyDigest(car=car, text=text))
         if digests:

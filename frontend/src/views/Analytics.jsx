@@ -30,7 +30,20 @@ import { useCarStore } from '../store/carStore';
 import { expenseCategoryLabel } from '../i18n/domain';
 import { extractError } from '../api/client';
 import { downloadCarReport } from '../api/reports';
-import { formatMoney, formatMoneyCompact, formatKm, formatDate, monthLabel } from '../utils/format';
+import {
+  formatMoney,
+  formatMoneyCompact,
+  formatKm,
+  formatDate,
+  monthLabel,
+  formatConsumptionValue,
+  formatVolume,
+  consumptionUnitLabel,
+  volumeUnitLabel,
+  distanceUnitLabel,
+} from '../utils/format';
+import { consumptionFromL100, volumeFromLitres, costPerDistanceFromPerKm, isImperial } from '../units';
+import { useUnitStore } from '../store/unitStore';
 import { currentCurrencySymbol } from '../store/currencyStore';
 import { expenseCategoryRows, shouldShowStations } from '../utils/analyticsBreakdown';
 import {
@@ -98,7 +111,7 @@ function PriceTooltip({ active, payload, label }) {
             className="inline-block h-2 w-2 rounded-full"
             style={{ backgroundColor: entry.color || entry.stroke }}
           />
-          {entry.name}: {Number(entry.value).toFixed(2)} {t('analytics.unitUahPerL', { currency: currentCurrencySymbol() })}
+          {entry.name}: {Number(entry.value).toFixed(2)} {t('analytics.unitUahPerL', { currency: currentCurrencySymbol(), unit: volumeUnitLabel() })}
           {entry.payload?.[`${entry.dataKey}__station`] && (
             <span className="text-mist">· {entry.payload[`${entry.dataKey}__station`]}</span>
           )}
@@ -242,8 +255,12 @@ function TcoTile({ label, value, unit, hint }) {
   );
 }
 
+const LITRES_PER_GAL = 3.785411784;
+
 export default function Analytics() {
   const { t } = useTranslation();
+  const units = useUnitStore((s) => s.units);
+  const imperial = isImperial(units);
   const compactHryvnia = (v) =>
     Math.abs(v) >= 1000 ? `${Math.round(v / 1000)}${t('analytics.thousandsSuffix')}` : String(v);
   const activeCarId = useCarStore((s) => s.activeCarId);
@@ -350,19 +367,32 @@ export default function Analytics() {
   const byKind = analytics.fuel?.by_kind || {};
   const mixedKinds = hasMixedKinds(byKind);
 
-  const fuelHistory = (
-    mixedKinds ? consumptionChartRows(byKind) : analytics.fuel?.history || []
-  ).map((h) => ({ ...h, label: formatDate(h.date) }));
+  // Chart values are stored metric; convert each numeric series to the display
+  // system so the plotted shape, axes and tooltips all read in the user's units.
+  // Consumption→mpg is an INVERSE, so an imperial consumption chart legitimately
+  // flips (a thirsty month is a LOW mpg point).
+  const convConsumption = (v) => (v == null ? v : consumptionFromL100(v, units));
+  const convPricePerVol = (v) =>
+    v == null ? v : imperial ? v * LITRES_PER_GAL : v;
+  const convertRowSeries = (row, keys, fn) => {
+    const next = { ...row };
+    for (const k of keys) if (typeof next[k] === 'number') next[k] = fn(next[k]);
+    return next;
+  };
+
   const fuelKinds = consumptionKinds(byKind);
-  const avgConsumption = analytics.fuel?.avg_consumption_l_100km;
+  const consumptionSeriesKeys = ['consumption_l_100km', ...fuelKinds];
+  const fuelHistory = (mixedKinds ? consumptionChartRows(byKind) : analytics.fuel?.history || [])
+    .map((h) => convertRowSeries(h, consumptionSeriesKeys, convConsumption))
+    .map((h) => ({ ...h, label: formatDate(h.date) }));
+  const avgConsumption = convConsumption(analytics.fuel?.avg_consumption_l_100km ?? null);
 
   const priceHistory = analytics.price_history || [];
   const showPriceChart = shouldShowPriceChart(priceHistory);
-  const priceRows = priceChartRows(priceHistory).map((row) => ({
-    ...row,
-    label: formatDate(row.date),
-  }));
   const priceKinds = priceChartKinds(priceHistory);
+  const priceRows = priceChartRows(priceHistory)
+    .map((row) => convertRowSeries(row, priceKinds, convPricePerVol))
+    .map((row) => ({ ...row, label: formatDate(row.date) }));
 
   const expenseRows = expenseCategoryRows(analytics.expense_by_category);
   const stations = analytics.stations || [];
@@ -515,8 +545,9 @@ export default function Analytics() {
               </p>
               <p className="mt-0.5 text-mist">
                 {t('analytics.fuelSpikeBody', {
-                  consumption: analytics.fuel.spike.consumption_l_100km.toFixed(1),
-                  baseline: analytics.fuel.spike.baseline_l_100km.toFixed(1),
+                  consumption: formatConsumptionValue(analytics.fuel.spike.consumption_l_100km),
+                  baseline: formatConsumptionValue(analytics.fuel.spike.baseline_l_100km),
+                  unit: consumptionUnitLabel(),
                   date: formatDate(analytics.fuel.spike.date),
                 })}
               </p>
@@ -525,7 +556,7 @@ export default function Analytics() {
         </Card>
       )}
       <Card>
-        <h2 className="mb-3 font-display text-sm font-semibold text-fg">{t('analytics.fuelConsumptionTitle')}</h2>
+        <h2 className="mb-3 font-display text-sm font-semibold text-fg">{t('analytics.fuelConsumptionTitle', { unit: consumptionUnitLabel() })}</h2>
         {fuelHistory.length === 0 ? (
           <p className="py-6 text-center text-sm text-mist">
             {t('analytics.notEnoughData')}
@@ -553,7 +584,7 @@ export default function Analytics() {
                 <Tooltip
                   content={
                     <ChartTooltip
-                      valueFormatter={(v) => `${Number(v).toFixed(2)} ${t('analytics.unitLPer100km')}`}
+                      valueFormatter={(v) => `${Number(v).toFixed(2)} ${consumptionUnitLabel()}`}
                     />
                   }
                 />
@@ -622,11 +653,11 @@ export default function Analytics() {
                 </span>
                 <span className="font-mono text-xs tabular-nums text-fg">
                   {byKind[kind].avg_consumption_l_100km != null
-                    ? `${byKind[kind].avg_consumption_l_100km.toFixed(2)} ${t('analytics.unitLPer100km')}`
+                    ? `${formatConsumptionValue(byKind[kind].avg_consumption_l_100km)} ${consumptionUnitLabel()}`
                     : '—'}
                   <span className="text-mist/70">
                     {' '}
-                    · {byKind[kind].total_liters.toFixed(0)} {t('analytics.unitLiters')} ·{' '}
+                    · {Math.round(volumeFromLitres(byKind[kind].total_liters, units))} {volumeUnitLabel()} ·{' '}
                     {formatMoney(byKind[kind].total_cost)}
                   </span>
                 </span>
@@ -637,7 +668,8 @@ export default function Analytics() {
           analytics.fuel?.last_consumption_l_100km != null && (
             <p className="mt-2 text-xs text-mist">
               {t('analytics.lastConsumption', {
-                value: analytics.fuel.last_consumption_l_100km.toFixed(2),
+                value: formatConsumptionValue(analytics.fuel.last_consumption_l_100km),
+                unit: consumptionUnitLabel(),
               })}
             </p>
           )
@@ -646,7 +678,7 @@ export default function Analytics() {
 
       {showPriceChart && (
         <Card>
-          <h2 className="mb-3 font-display text-sm font-semibold text-fg">{t('analytics.pricePerLiterTitle', { currency: currentCurrencySymbol() })}</h2>
+          <h2 className="mb-3 font-display text-sm font-semibold text-fg">{t('analytics.pricePerLiterTitle', { currency: currentCurrencySymbol(), unit: volumeUnitLabel() })}</h2>
           <div className="h-56">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={priceRows} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
@@ -711,12 +743,12 @@ export default function Analytics() {
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-fg">{station.name}</p>
                   <p className="mt-0.5 text-xs text-mist">
-                    {station.refuels} {t('analytics.unitRefuels')} · {station.total_liters.toFixed(1)}{' '}
-                    {t('analytics.unitLiters')}
+                    {station.refuels} {t('analytics.unitRefuels')} · {volumeFromLitres(station.total_liters, units).toFixed(1)}{' '}
+                    {volumeUnitLabel()}
                     {station.avg_price_per_liter != null && (
                       <span className="text-mist/70">
                         {' '}
-                        · {station.avg_price_per_liter.toFixed(2)} {t('analytics.unitUahPerL', { currency: currentCurrencySymbol() })}
+                        · {(imperial ? station.avg_price_per_liter * LITRES_PER_GAL : station.avg_price_per_liter).toFixed(2)} {t('analytics.unitUahPerL', { currency: currentCurrencySymbol(), unit: volumeUnitLabel() })}
                       </span>
                     )}
                   </p>
@@ -727,7 +759,7 @@ export default function Analytics() {
                   </p>
                   <p className="text-[10px] text-mist/70">
                     {station.avg_consumption_l_100km != null
-                      ? `${station.avg_consumption_l_100km.toFixed(1)} ${t('analytics.unitLPer100km')}`
+                      ? `${formatConsumptionValue(station.avg_consumption_l_100km)} ${consumptionUnitLabel()}`
                       : '—'}
                   </p>
                 </div>
@@ -769,9 +801,14 @@ export default function Analytics() {
           )}
           <div className="grid grid-cols-2 gap-2.5">
             <TcoTile
-              label={t('analytics.tcoCostPerKm', { currency: currentCurrencySymbol() })}
+              label={t('analytics.tcoCostPerKm', {
+                currency: currentCurrencySymbol(),
+                unit: distanceUnitLabel(),
+              })}
               value={
-                analytics.tco?.cost_per_km != null ? formatMoney(analytics.tco.cost_per_km) : '—'
+                analytics.tco?.cost_per_km != null
+                  ? formatMoney(costPerDistanceFromPerKm(analytics.tco.cost_per_km, units))
+                  : '—'
               }
               hint={t('analytics.tcoCostPerKmHint')}
             />
@@ -788,10 +825,10 @@ export default function Analytics() {
               label={t('analytics.tcoConsumption')}
               value={
                 analytics.fuel?.avg_consumption_l_100km != null
-                  ? analytics.fuel.avg_consumption_l_100km.toFixed(1)
+                  ? formatConsumptionValue(analytics.fuel.avg_consumption_l_100km)
                   : '—'
               }
-              unit={t('analytics.unitLPer100km')}
+              unit={consumptionUnitLabel()}
             />
             <TcoTile
               label={t('analytics.tcoSpendPerMonth')}

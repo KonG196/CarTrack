@@ -577,7 +577,8 @@
     "cheapestStation": "Cheapest station",
     "pricePerLiter": "{{value}} ₴/L",
     "biggestExpense": "Biggest expense",
-    "shareCard": "Share card"
+    "shareCard": "Share card",
+    "perMile": "per mi"
   },
   "notifications": {
     "title": "Notifications",
@@ -771,7 +772,7 @@
     "yourYear": "Your year with Kapot",
     "avgSpendPerMonth": "Avg spend/mo",
     "projectedThisMonth": "Forecast this month",
-    "distancePerMonth": "Distance km/mo",
+    "distancePerMonth": "Distance/mo",
     "upcomingMaintenance": "Upcoming maintenance",
     "noUpcoming": "No scheduled maintenance in the next 90 days.",
     "costFromHistory": "your price",
@@ -787,22 +788,22 @@
     "noSpendingYet": "No spending yet — add records to your logbook.",
     "thousandsSuffix": "k",
     "fuelSpikeTitle": "{{fuel}} consumption spike of +{{pct}}%",
-    "fuelSpikeBody": "{{consumption}} L/100 km vs the usual ~{{baseline}} ({{date}}). If your driving hasn’t changed, check tyre pressure, filters, and spark plugs.",
-    "fuelConsumptionTitle": "Fuel consumption, L/100 km",
+    "fuelSpikeBody": "{{consumption}} {{unit}} vs the usual ~{{baseline}} ({{date}}). If your driving hasn’t changed, check tyre pressure, filters, and spark plugs.",
+    "fuelConsumptionTitle": "Fuel consumption, {{unit}}",
     "notEnoughData": "Not enough data. Add at least two full-tank refuels to see consumption.",
     "avgReferenceLabel": "avg {{value}}",
     "consumptionLine": "Consumption",
-    "lastConsumption": "Last measured consumption: {{value}} L/100 km",
-    "pricePerLiterTitle": "Price per liter, {{currency}}",
+    "lastConsumption": "Last measured consumption: {{value}} {{unit}}",
+    "pricePerLiterTitle": "Price per {{unit}}, {{currency}}",
     "myStations": "My stations",
     "stationsHint": "Consumption is measured over the legs that start at this station.",
-    "unitLPer100km": "L/100 km",
+    "unitLPer100km": "{{unit}}",
     "unitLiters": "L",
-    "unitUahPerL": "{{currency}}/L",
+    "unitUahPerL": "{{currency}}/{{unit}}",
     "unitRefuels": "fill-ups",
     "lpgSaved": "Thanks to LPG you’ve saved",
     "lpgSavingsDetail": "Net savings of {{perKm}} {{currency}} per kilometer · {{distance}} on gas",
-    "tcoCostPerKm": "Cost, {{currency}}/km",
+    "tcoCostPerKm": "Cost/{{unit}}, {{currency}}",
     "tcoCostPerKmHint": "All costs over distance",
     "tcoCostPerDay": "Cost, {{currency}}/day",
     "tcoCostPerDayHint": "All costs over days owned",
@@ -845,12 +846,12 @@
   "tripCostCard": {
     "title": "Trip cost",
     "filledFromHistory": "Filled in from your history — you can change it",
-    "distanceLabel": "Distance, km",
+    "distanceLabel": "Distance, {{unit}}",
     "fewerPeople": "Fewer people",
     "morePeople": "More people",
     "peopleUnit": "ppl",
-    "consumptionLabel": "Consumption, L/100 km",
-    "pricePerLiterLabel": "Price per liter, ₴",
+    "consumptionLabel": "Consumption, {{unit}}",
+    "pricePerLiterLabel": "Price per {{unit}}, {{currency}}",
     "oneWay": "One way · {{liters}} L",
     "roundTrip": "Round trip",
     "perPersonRoundTrip": "Per person (round trip)",
@@ -1078,9 +1079,9 @@
   },
   "tripCostUtil": {
     "onCar": " on {{name}}",
-    "tripLine": "🚐 Trip{{on}}: distance {{distance}} km, consumption {{consumption}} L/100 km, fuel price {{price}} ₴.",
-    "total": "Total: {{amount}} ₴.",
-    "perPerson": "Per person ({{people}} ppl) — {{amount}} ₴ each."
+    "tripLine": "🚐 Trip{{on}}: distance {{distance}} {{distUnit}}, consumption {{consumption}} {{consUnit}}, fuel price {{price}} {{currency}}.",
+    "total": "Total: {{amount}} {{currency}}.",
+    "perPerson": "Per person ({{people}} ppl) — {{amount}} {{currency}} each."
   },
   "apiBackup": {
     "notAnExport": "This file doesn't look like a Kapot Tracker export",
@@ -1140,15 +1141,22 @@
     "allSeason": "All-season"
   },
   "currencyPrompt": {
-    "title": "Choose your currency",
-    "subtitle": "Which currency should amounts be shown in?",
+    "title": "Currency & units",
+    "subtitle": "How should amounts and distances be shown?",
     "confirm": "Continue",
-    "note": "Display only — the symbol changes, amounts are never converted. You can change it anytime in Settings."
+    "note": "Display only — the symbol changes, amounts are never converted. You can change it anytime in Settings.",
+    "unitsLabel": "Units"
   },
   "odometerModal": {
     "title": "Update odometer",
     "subtitle": "Enter the current reading — everything else keeps calculating from it.",
     "saved": "Odometer updated",
     "errSave": "Couldn't save. Try again."
+  },
+  "units": {
+    "label": "Units",
+    "metric": "Metric",
+    "imperial": "Imperial",
+    "settingsLabel": "Units"
   }
 }

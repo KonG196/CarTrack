@@ -515,7 +515,8 @@ async def _send_report(
         getattr(message.from_user, "language_code", None)
     )
     currency = user.currency if user else "USD"
-    pdf_bytes = await asyncio.to_thread(service.build_report, db, car, lang, currency)
+    units = user.unit_system if user else "metric"
+    pdf_bytes = await asyncio.to_thread(service.build_report, db, car, lang, currency, units)
     document = BufferedInputFile(
         pdf_bytes, filename=f"kapot-tracker-report-{car.id}.pdf"
     )

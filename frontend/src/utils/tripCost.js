@@ -3,6 +3,9 @@
 // brochure figure and not today's average at the pumps.
 
 import i18n from '../i18n';
+import { currentUnits } from '../store/unitStore';
+import { unitInfo } from '../units';
+import { currentCurrencySymbol } from '../store/currencyStore';
 
 export function computeTripCost({ distanceKm, consumption, pricePerLiter, people = 1 }) {
   const distance = Number(String(distanceKm).replace(',', '.'));
@@ -35,21 +38,29 @@ function tidy(value) {
 // wants to send to the group chat, in plain words.
 export function buildTripShareText({ carName, distanceKm, consumption, pricePerLiter, result }) {
   if (!result) return '';
+  // distanceKm/consumption/pricePerLiter here are the display-unit strings the
+  // user typed, so they need only their unit labels — not conversion.
+  const info = unitInfo(currentUnits());
+  const currency = currentCurrencySymbol();
   const on = carName ? i18n.t('tripCostUtil.onCar', { name: carName }) : '';
   const parts = [
     i18n.t('tripCostUtil.tripLine', {
       on,
       distance: tidy(distanceKm),
+      distUnit: info.distance,
       consumption: tidy(consumption),
+      consUnit: info.consumption,
       price: tidy(pricePerLiter),
+      currency,
     }),
-    i18n.t('tripCostUtil.total', { amount: tidy(Math.round(result.cost)) }),
+    i18n.t('tripCostUtil.total', { amount: tidy(Math.round(result.cost)), currency }),
   ];
   if (result.people > 1) {
     parts.push(
       i18n.t('tripCostUtil.perPerson', {
         people: result.people,
         amount: tidy(Math.round(result.perPerson)),
+        currency,
       }),
     );
   }

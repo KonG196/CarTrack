@@ -4,7 +4,9 @@ import { Share2, Fuel, Route, Gauge, Wallet, MapPin, TrendingUp, CalendarDays } 
 import { useCarStore } from '../store/carStore';
 import { getYearReview } from '../api/yearReview';
 import { shareYearImage } from '../utils/shareYearImage';
-import { formatMoney, formatKm } from '../utils/format';
+import { formatMoney, formatKm, formatVolume, formatConsumption } from '../utils/format';
+import { costPerDistanceFromPerKm, isImperial } from '../units';
+import { useUnitStore } from '../store/unitStore';
 import BackLink from '../components/BackLink';
 import Toast from '../components/Toast';
 import { Button, Card, Spinner, ErrorMessage } from '../components/UI';
@@ -25,6 +27,7 @@ function Stat({ icon: Icon, label, value }) {
 
 export default function YearReview() {
   const { t } = useTranslation();
+  const units = useUnitStore((s) => s.units);
   const MONTHS = t('yearReview.months', { returnObjects: true });
   const cars = useCarStore((s) => s.cars);
   const carsLoaded = useCarStore((s) => s.carsLoaded);
@@ -148,25 +151,29 @@ export default function YearReview() {
               <Stat
                 icon={Fuel}
                 label={t('yearReview.fuelAdded')}
-                value={review.liters != null ? t('yearReview.litersValue', { value: review.liters }) : '—'}
+                value={review.liters != null ? formatVolume(review.liters) : '—'}
               />
               <Stat
                 icon={Gauge}
                 label={t('yearReview.consumption')}
                 value={
                   review.avg_consumption_l_100km != null
-                    ? t('yearReview.consumptionValue', {
-                        value: review.avg_consumption_l_100km.toFixed(1),
-                      })
+                    ? formatConsumption(review.avg_consumption_l_100km)
                     : '—'
                 }
               />
               <Stat
                 icon={Wallet}
-                label={t('yearReview.per100km')}
+                label={
+                  isImperial(units)
+                    ? t('yearReview.perMile')
+                    : t('yearReview.per100km')
+                }
                 value={
                   review.cost_per_km != null
-                    ? formatMoney(Math.round(review.cost_per_km * 100))
+                    ? isImperial(units)
+                      ? formatMoney(costPerDistanceFromPerKm(review.cost_per_km, units))
+                      : formatMoney(Math.round(review.cost_per_km * 100))
                     : '—'
                 }
               />

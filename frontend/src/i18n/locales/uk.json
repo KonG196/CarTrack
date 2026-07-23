@@ -579,7 +579,8 @@
     "cheapestStation": "Найдешевша АЗС",
     "pricePerLiter": "{{value}} ₴/л",
     "biggestExpense": "Найбільша витрата",
-    "shareCard": "Поділитися карткою"
+    "shareCard": "Поділитися карткою",
+    "perMile": "на милю"
   },
   "notifications": {
     "title": "Сповіщення",
@@ -773,7 +774,7 @@
     "yourYear": "Ваш рік з Kapot",
     "avgSpendPerMonth": "Середні витрати/міс",
     "projectedThisMonth": "Прогноз на цей місяць",
-    "distancePerMonth": "Пробіг км/міс",
+    "distancePerMonth": "Пробіг/міс",
     "upcomingMaintenance": "Найближчі ТО",
     "noUpcoming": "У найближчі 90 днів планових робіт не передбачається.",
     "costFromHistory": "ваша ціна",
@@ -789,22 +790,22 @@
     "noSpendingYet": "Ще немає витрат — додайте записи в журнал.",
     "thousandsSuffix": "к",
     "fuelSpikeTitle": "Стрибок витрати {{fuel}} на +{{pct}}%",
-    "fuelSpikeBody": "{{consumption}} л/100 км проти звичних ~{{baseline}} ({{date}}). Якщо стиль їзди не змінювався — перевірте тиск у шинах, стан фільтрів чи свічок.",
-    "fuelConsumptionTitle": "Витрата пального, л/100 км",
+    "fuelSpikeBody": "{{consumption}} {{unit}} проти звичних ~{{baseline}} ({{date}}). Якщо стиль їзди не змінився — перевірте тиск у шинах, фільтри та свічки.",
+    "fuelConsumptionTitle": "Розхід пального, {{unit}}",
     "notEnoughData": "Замало даних. Додайте щонайменше дві заправки «до повного», щоб побачити витрату.",
     "avgReferenceLabel": "середнє {{value}}",
     "consumptionLine": "Витрата",
-    "lastConsumption": "Остання виміряна витрата: {{value}} л/100 км",
-    "pricePerLiterTitle": "Ціна за літр, {{currency}}",
+    "lastConsumption": "Останній виміряний розхід: {{value}} {{unit}}",
+    "pricePerLiterTitle": "Ціна за {{unit}}, {{currency}}",
     "myStations": "Мої АЗС",
     "stationsHint": "Витрата рахується по відрізках, що починаються на цій АЗС.",
-    "unitLPer100km": "л/100 км",
+    "unitLPer100km": "{{unit}}",
     "unitLiters": "л",
-    "unitUahPerL": "{{currency}}/л",
+    "unitUahPerL": "{{currency}}/{{unit}}",
     "unitRefuels": "запр.",
     "lpgSaved": "Завдяки ГБО ви зберегли",
     "lpgSavingsDetail": "Чиста економія {{perKm}} {{currency}} на кожному кілометрі · {{distance}} на газу",
-    "tcoCostPerKm": "Вартість, {{currency}}/км",
+    "tcoCostPerKm": "Вартість/{{unit}}, {{currency}}",
     "tcoCostPerKmHint": "Усі витрати на пробіг",
     "tcoCostPerDay": "Вартість, {{currency}}/день",
     "tcoCostPerDayHint": "Усі витрати на дні володіння",
@@ -847,12 +848,12 @@
   "tripCostCard": {
     "title": "Скільки коштує поїздка",
     "filledFromHistory": "Заповнено з вашої історії — можна змінити",
-    "distanceLabel": "Відстань, км",
+    "distanceLabel": "Відстань, {{unit}}",
     "fewerPeople": "Менше людей",
     "morePeople": "Більше людей",
     "peopleUnit": "ос.",
-    "consumptionLabel": "Розхід, л/100 км",
-    "pricePerLiterLabel": "Ціна за літр, ₴",
+    "consumptionLabel": "Розхід, {{unit}}",
+    "pricePerLiterLabel": "Ціна за {{unit}}, {{currency}}",
     "oneWay": "В один бік · {{liters}} л",
     "roundTrip": "Туди й назад",
     "perPersonRoundTrip": "З кожного (туди й назад)",
@@ -1082,9 +1083,9 @@
   },
   "tripCostUtil": {
     "onCar": " на {{name}}",
-    "tripLine": "🚐 Поїздка{{on}}: відстань {{distance}} км, розхід {{consumption}} л/100 км, ціна пального {{price}} ₴.",
-    "total": "Всього: {{amount}} ₴.",
-    "perPerson": "З кожного ({{people}} ос.) — по {{amount}} ₴."
+    "tripLine": "🚐 Поїздка{{on}}: відстань {{distance}} {{distUnit}}, розхід {{consumption}} {{consUnit}}, ціна пального {{price}} {{currency}}.",
+    "total": "Разом: {{amount}} {{currency}}.",
+    "perPerson": "На особу ({{people}} ос.) — {{amount}} {{currency}} кожному."
   },
   "apiBackup": {
     "notAnExport": "Файл не схожий на експорт Kapot Tracker",
@@ -1144,15 +1145,22 @@
     "allSeason": "Всесезонні"
   },
   "currencyPrompt": {
-    "title": "Оберіть валюту",
-    "subtitle": "У якій валюті показувати суми?",
+    "title": "Валюта та одиниці",
+    "subtitle": "Як показувати суми та відстані?",
     "confirm": "Продовжити",
-    "note": "Лише відображення — змінюється символ, суми не конвертуються. Змінити можна будь-коли в Налаштуваннях."
+    "note": "Лише відображення — змінюється символ, суми не конвертуються. Змінити можна будь-коли в Налаштуваннях.",
+    "unitsLabel": "Одиниці"
   },
   "odometerModal": {
     "title": "Оновити одометр",
     "subtitle": "Введіть поточний пробіг — усе решта рахується від нього.",
     "saved": "Одометр оновлено",
     "errSave": "Не вдалося зберегти. Спробуйте ще раз."
+  },
+  "units": {
+    "label": "Одиниці",
+    "metric": "Метрична",
+    "imperial": "Імперіальна",
+    "settingsLabel": "Одиниці"
   }
 }

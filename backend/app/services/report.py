@@ -67,10 +67,13 @@ def _fmt_money(value: float, currency: str) -> str:
     return _money(value, currency)
 
 
-def _fmt_km(value: int | float | None, lang: str) -> str:
+def _fmt_km(value: int | float | None, lang: str, units: str = "metric") -> str:
     if value is None:
         return "—"
-    return f"{_fmt_number(round(float(value)))} {t('report.unitKm', lang)}"
+    from app.units import distance_from_km, distance_unit
+
+    shown = distance_from_km(float(value), units)
+    return f"{_fmt_number(round(shown))} {distance_unit(units)}"
 
 
 def _styles() -> dict[str, ParagraphStyle]:
@@ -155,7 +158,9 @@ def _service_log_description(log: LogEntry, lang: str) -> str:
     return " — ".join(parts) if parts else "—"
 
 
-def build_car_report(db: Session, car: Car, lang: str = "en", currency: str = "USD") -> bytes:
+def build_car_report(
+    db: Session, car: Car, lang: str = "en", currency: str = "USD", units: str = "metric"
+) -> bytes:
     lang = normalize_lang(lang)
     _register_fonts()
     styles = _styles()
@@ -205,7 +210,7 @@ def build_car_report(db: Session, car: Car, lang: str = "en", currency: str = "U
     story.append(Spacer(1, 2 * mm))
     avg_daily = round(effective_avg_daily_km(car, logs), 1) if len(logs) >= 2 else None
     summary_lines = [
-        t("report.currentMileage", lang, km=_fmt_km(car.current_odometer, lang)),
+        t("report.currentMileage", lang, km=_fmt_km(car.current_odometer, lang, units)),
         t("report.fuelType", lang, fuel=fuel_type_label(car.fuel_type, lang)),
         t(
             "report.avgDaily",
@@ -232,13 +237,20 @@ def build_car_report(db: Session, car: Car, lang: str = "en", currency: str = "U
         fuel_stats = compute_fuel_stats(
             build_refuel_points(logs, car), fuel_kind=car.fuel_type
         )
+        from app.units import (
+            consumption_from_l100,
+            consumption_unit,
+            cost_per_distance_from_per_km,
+            distance_unit,
+        )
+
+        cons = consumption_from_l100(fuel_stats.avg_consumption_l_100km, units)
         avg_consumption = (
-            f"{fuel_stats.avg_consumption_l_100km} {t('report.unitConsumption', lang)}"
-            if fuel_stats.avg_consumption_l_100km is not None
-            else "—"
+            f"{cons:.1f} {consumption_unit(units)}" if cons is not None else "—"
         )
         cost_per_km = (
-            f"{fuel_stats.avg_cost_per_km:.2f} {currency_symbol(currency)}/{t('report.unitKm', lang)}"
+            f"{cost_per_distance_from_per_km(fuel_stats.avg_cost_per_km, units):.2f} "
+            f"{currency_symbol(currency)}/{distance_unit(units)}"
             if fuel_stats.avg_cost_per_km is not None
             else "—"
         )
@@ -280,7 +292,7 @@ def build_car_report(db: Session, car: Car, lang: str = "en", currency: str = "U
             rows.append(
                 [
                     Paragraph(_fmt_date(log.date), styles["cell"]),
-                    Paragraph(_fmt_km(log.odometer, lang), styles["cell"]),
+                    Paragraph(_fmt_km(log.odometer, lang, units), styles["cell"]),
                     Paragraph(escape(_service_log_description(log, lang)), styles["cell"]),
                     Paragraph(_fmt_money(float(log.total_cost or 0), currency), styles["cell"]),
                 ]
@@ -334,9 +346,9 @@ def build_car_report(db: Session, car: Car, lang: str = "en", currency: str = "U
                 current_odometer=car.current_odometer,
                 avg_daily_km=avg_daily_km,
             )
-            last_text = f"{_fmt_km(interval.last_odometer, lang)} / {_fmt_date(interval.last_date)}"
+            last_text = f"{_fmt_km(interval.last_odometer, lang, units)} / {_fmt_date(interval.last_date)}"
             next_text = (
-                f"{_fmt_km(computed['due_odometer'], lang)} / "
+                f"{_fmt_km(computed['due_odometer'], lang, units)} / "
                 f"{_fmt_date(computed['predicted_due_date'])}"
             )
             rows.append(

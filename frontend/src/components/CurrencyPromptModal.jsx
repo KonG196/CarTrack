@@ -5,6 +5,7 @@ import Modal from './UI/Modal';
 import { Button } from './UI';
 import { CURRENCIES, DEFAULT_CURRENCY } from '../currency';
 import { useCurrencyStore } from '../store/currencyStore';
+import UnitToggle from './UnitToggle';
 
 // First-run currency picker. Shown once, on the first authenticated visit that
 // has no explicit currency choice yet — so a new account picks its symbol up
@@ -69,6 +70,11 @@ export default function CurrencyPromptModal({ open, onClose }) {
             </button>
           );
         })}
+      </div>
+
+      <div className="mt-4">
+        <span className="text-xs text-mist">{t('currencyPrompt.unitsLabel')}</span>
+        <UnitToggle className="mt-1.5" />
       </div>
 
       <p className="mt-3 text-center text-xs text-mist">{t('currencyPrompt.note')}</p>
