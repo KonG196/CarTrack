@@ -299,6 +299,9 @@ def confirm_email(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> User:
+    # Same brute-force guard as verify/reset confirm: without it the 6-digit
+    # email-change code can be tried indefinitely.
+    _enforce_rate_limit(sensitive_limiter, current_user.id, current_user.language)
     if not confirm_email_change(db, current_user, payload.code):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

@@ -22,6 +22,36 @@ def mail_on(monkeypatch):
     return sent
 
 
+def test_magic_links_url_encode_plus_addressed_email(monkeypatch):
+    """A '+' in the address must be %2B in the link, or react-router decodes it to
+    a space and confirmation/reset silently fail for the whole email forever."""
+    from urllib.parse import parse_qs, urlparse
+
+    from app.services import mailer
+
+    captured: dict = {}
+
+    def fake_send_mail(to, subject, text, html=None):
+        captured["text"] = text
+        captured["html"] = html or ""
+        return True
+
+    monkeypatch.setattr(mailer, "send_mail", fake_send_mail)
+
+    for build in (mailer.send_verification, mailer.send_reset_code_mail):
+        captured.clear()
+        build("john+kapot@gmail.com", "123456", "en")
+        blob = captured["text"] + captured["html"]
+        assert "email=john%2Bkapot%40gmail.com" in blob or "email=john%2Bkapot@gmail.com" in blob
+        assert "email=john+kapot@gmail.com" not in blob  # the broken form
+        # The link's email param round-trips back to the original address.
+        import re
+
+        url = re.search(r"https?://\S*?/(verify|reset)\?\S+", blob).group(0).rstrip('".)')
+        got = parse_qs(urlparse(url).query)["email"][0]
+        assert got == "john+kapot@gmail.com"
+
+
 def _register(client: TestClient, email="new@example.com", password="password123"):
     return client.post("/api/auth/register", json={"email": email, "password": password})
 

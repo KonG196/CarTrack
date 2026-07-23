@@ -8,15 +8,17 @@ import Toast from './Toast';
 
 // Dashboard nudge for unverified accounts: login is open, but receipt scan and
 // plate lookup need a confirmed email. Hidden once verified (or dismissed this
-// session). The CTA re-sends the verification link.
-const DISMISS_KEY = 'kapot_verify_banner_dismissed';
+// session). The CTA re-sends the verification link. The dismiss flag is scoped
+// per user so dismissing on a shared device doesn't hide the nudge from the
+// next unverified account that logs in there.
+const dismissKey = (user) => `kapot_verify_banner_dismissed:${user?.id ?? user?.email ?? ''}`;
 
 export default function VerifyEmailBanner() {
   const { t } = useTranslation();
   const user = useAuthStore((s) => s.user);
   const [dismissed, setDismissed] = useState(() => {
     try {
-      return localStorage.getItem(DISMISS_KEY) === '1';
+      return localStorage.getItem(dismissKey(user)) === '1';
     } catch {
       return false;
     }
@@ -30,7 +32,7 @@ export default function VerifyEmailBanner() {
 
   const dismiss = () => {
     try {
-      localStorage.setItem(DISMISS_KEY, '1');
+      localStorage.setItem(dismissKey(user), '1');
     } catch {
       /* ignore */
     }

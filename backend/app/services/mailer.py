@@ -19,6 +19,7 @@ import smtplib
 from email.message import EmailMessage
 from pathlib import Path
 from typing import Optional
+from urllib.parse import quote
 
 from app.config import settings
 from app.i18n import normalize_lang, t
@@ -212,7 +213,7 @@ def send_email_change(to: str, code: str, lang: str = "en") -> bool:
 def send_verification(to: str, code: str, lang: str = "en") -> bool:
     lang = normalize_lang(lang)
     hours = settings.VERIFY_CODE_EXPIRE_HOURS
-    link = f"{settings.PUBLIC_URL.rstrip('/')}/verify?email={to}&code={code}"
+    link = f"{settings.PUBLIC_URL.rstrip('/')}/verify?email={quote(to, safe='')}&code={code}"
     return send_mail(
         to,
         t("email.verify.subject", lang),
@@ -234,7 +235,7 @@ def send_reset_code_mail(to: str, code: str, lang: str = "en") -> bool:
     # Magic link: /reset prefills the code and jumps straight to the
     # new-password step, so the letter is one click from resetting.
     lang = normalize_lang(lang)
-    link = f"{settings.PUBLIC_URL.rstrip('/')}/reset?email={to}&code={code}"
+    link = f"{settings.PUBLIC_URL.rstrip('/')}/reset?email={quote(to, safe='')}&code={code}"
     return send_mail(
         to,
         t("email.reset.subject", lang),
