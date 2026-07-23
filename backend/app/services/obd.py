@@ -165,9 +165,15 @@ def parse_timestamp(raw: str) -> Optional[dt.datetime]:
         pass
     for fmt in _TIME_FORMATS:
         try:
-            return dt.datetime.strptime(text, fmt)
+            parsed = dt.datetime.strptime(text, fmt)
         except ValueError:
             continue
+        # A clock-only format (%H:%M:%S) has no date, so strptime fills 1900-01-01
+        # — storing that as the session's recorded_at shows a nonsense date. Treat
+        # a date-less value as "no timestamp" so the caller uses seconds-from-start.
+        if "%Y" not in fmt and "%y" not in fmt:
+            return None
+        return parsed
     return None
 
 
@@ -202,7 +208,12 @@ def parse_obd_csv(text: str) -> dict:
         raise ObdParseError("Файл порожній")
 
     delimiter = _detect_delimiter(lines)
-    rows = list(csv.reader(io.StringIO("\n".join(lines)), delimiter=delimiter))
+    try:
+        rows = list(csv.reader(io.StringIO("\n".join(lines)), delimiter=delimiter))
+    except csv.Error as error:
+        # A malformed/oversized field makes csv.reader raise — surface it as a
+        # clean "unreadable CSV" (4xx) instead of an uncaught 500.
+        raise ObdParseError("Не вдалося прочитати CSV") from error
     if not rows:
         raise ObdParseError("Не вдалося прочитати CSV")
 

@@ -31,6 +31,9 @@ from app.services.tires import (
     tire_age_years,
 )
 
+#: A consumption spike older than this is stale — matches the bot digest gate.
+CONSUMPTION_RECENT_DAYS = 21
+
 #: Warn this many days before the ОСЦПВ lapses; escalate inside the last week.
 INSURANCE_WARN_DAYS = 30
 INSURANCE_CRIT_DAYS = 7
@@ -122,8 +125,13 @@ def build_notifications(db: Session, user: User, today: dt.date | None = None) -
                 }
             )
 
-        # 2. Consumption spike over the car's own recent baseline.
+        # 2. Consumption spike over the car's own recent baseline. Gate on
+        # recency the same way the bot digest does: a spike from months ago is
+        # stale news, not a nudge — without this it would show in the centre
+        # forever until a newer refuel displaced it.
         spike = detect_consumption_spike(compute_stats_per_kind(build_refuel_points(logs, car)))
+        if spike is not None and (today - spike.date).days > CONSUMPTION_RECENT_DAYS:
+            spike = None
         if spike is not None:
             items.append(
                 {

@@ -263,7 +263,11 @@ def compute_analytics(
         all_time += cost
         by_type[log.type] += cost
         key = month_key(log.date)
-        if key == current_key:
+        # Month-to-DATE, not the whole calendar month: the budget projection adds
+        # a forecast for the days still to come, so a future-dated log counted
+        # here would make "spent" exceed the projected total — a card that reads
+        # as already over its own forecast.
+        if key == current_key and log.date <= today:
             this_month += cost
         if key in buckets:
             buckets[key][log.type] += cost

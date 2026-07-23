@@ -19,6 +19,7 @@ from typing import Any, Optional
 import httpx
 
 from app.config import settings
+from app.services.vin import normalize_vin
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +94,10 @@ def lookup(query: str, by_vin: bool = False) -> Optional[dict[str, Any]]:
     if not enabled():
         raise LookupUnavailable("BAZA_GAI_API_KEY is not configured")
 
-    value = query.strip().upper() if by_vin else normalize_plate(query)
+    # Validate before interpolating into the request path. normalize_vin rejects
+    # anything that isn't 17 chars of the VIN alphabet, so a value with '/' or
+    # '?' can't inject into (or confuse the endpoint of) the baza-gai URL.
+    value = normalize_vin(query) if by_vin else normalize_plate(query)
     if not value:
         return None
 

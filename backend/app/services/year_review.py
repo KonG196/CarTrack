@@ -12,7 +12,7 @@ from app.domain_labels import expense_category_label, repair_category_label
 from app.i18n import normalize_lang, t
 from app.models import Car, LogEntry
 from app.services.fuel import compute_fuel_stats
-from app.services.stats import build_refuel_points, compute_station_stats
+from app.services.stats import UNNAMED_STATION, build_refuel_points, compute_station_stats
 
 LOG_TYPES = ("refuel", "maintenance", "repair", "expense")
 
@@ -76,7 +76,14 @@ def build_year_review(car: Car, logs: list[LogEntry], year: int, lang: str = "en
             "cost_per_km": round(total_spent / km_driven, 2) if km_driven > 0 else None,
             "avg_consumption_l_100km": fuel_stats.avg_consumption_l_100km,
             "cheapest_station": (
-                {"name": cheapest["name"], "avg_price_per_liter": cheapest["avg_price_per_liter"]}
+                {
+                    # The unnamed-station bucket key is a fixed Ukrainian string;
+                    # localize it for the recap the user actually reads.
+                    "name": t("yr.unnamedStation", lang)
+                    if cheapest["name"] == UNNAMED_STATION
+                    else cheapest["name"],
+                    "avg_price_per_liter": cheapest["avg_price_per_liter"],
+                }
                 if cheapest
                 else None
             ),
