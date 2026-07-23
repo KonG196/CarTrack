@@ -353,7 +353,10 @@ export default function Garage() {
   if (carsLoading && !carsLoaded) return <Spinner />;
 
   return (
-    <div className="stagger space-y-4">
+    // Extra bottom padding: the last control («Вийти») otherwise ends level with
+    // the nav, where the round «Add» button juts up and covers it with no way to
+    // scroll it clear. This lifts the page's scroll end above the «+».
+    <div className="stagger space-y-4 pb-12">
       <Toast message={toast} onDone={clearToast} />
 
       <ConfirmDialog
