@@ -1143,5 +1143,11 @@
     "subtitle": "Which currency should amounts be shown in?",
     "confirm": "Continue",
     "note": "Display only — the symbol changes, amounts are never converted. You can change it anytime in Settings."
+  },
+  "odometerModal": {
+    "title": "Update odometer",
+    "subtitle": "Enter the current reading — everything else keeps calculating from it.",
+    "saved": "Odometer updated",
+    "errSave": "Couldn't save. Try again."
   }
 }

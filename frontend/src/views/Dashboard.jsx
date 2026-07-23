@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   Car,
@@ -26,6 +26,7 @@ import NotificationsBanner from '../components/NotificationsBanner';
 import VerifyEmailBanner from '../components/VerifyEmailBanner';
 import CompleteIntervalModal from '../components/CompleteIntervalModal';
 import CurrencyPromptModal from '../components/CurrencyPromptModal';
+import OdometerModal from '../components/OdometerModal';
 import CopyCarName from '../components/CopyCarName';
 
 // Once-only marker so the first-run currency prompt never re-opens after the
@@ -178,7 +179,6 @@ export default function Dashboard() {
   const fetchIntervals = useCarStore((s) => s.fetchIntervals);
   const completeInterval = useCarStore((s) => s.completeInterval);
 
-  const navigate = useNavigate();
   const activeCar = cars.find((c) => String(c.id) === String(activeCarId)) || null;
 
   const canEditCar = canDo(activeCar?.your_role, 'car:edit');
@@ -186,6 +186,7 @@ export default function Dashboard() {
   const canCompleteIntervals = canDo(activeCar?.your_role, 'interval:complete');
 
   const [completingInterval, setCompletingInterval] = useState(null);
+  const [editingOdometer, setEditingOdometer] = useState(false);
   const [toast, setToast] = useState('');
 
   const [refuelContext, setRefuelContext] = useState(null);
@@ -282,6 +283,13 @@ export default function Dashboard() {
         onToast={setToast}
       />
 
+      <OdometerModal
+        open={editingOdometer}
+        car={activeCar}
+        onClose={() => setEditingOdometer(false)}
+        onSaved={() => setToast(t('odometerModal.saved'))}
+      />
+
       {activeCar && (
         <>
           {/* Odometer vertically centred against the (possibly three-line)
@@ -302,19 +310,25 @@ export default function Dashboard() {
                 {activeCar.engine ? ` · ${activeCar.engine}` : ''} · {fuelKindLabel(activeCar.fuel_type)}
               </p>
             </div>
-            <span className="flex flex-shrink-0 items-center gap-0.5 text-sm text-mist" data-tour="odometer">
-              {formatKm(activeCar.current_odometer)}
-              {canEditCar && (
-                <button
-                  type="button"
-                  onClick={() => navigate(`/garage/${activeCar.id}/edit?focus=odometer`)}
-                  aria-label={t('dashboard.editOdometerAria')}
-                  className="rounded-lg p-1.5 text-mist/70 transition-colors hover:bg-panel hover:text-fg"
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </span>
+            {canEditCar ? (
+              <button
+                type="button"
+                onClick={() => setEditingOdometer(true)}
+                aria-label={t('dashboard.editOdometerAria')}
+                data-tour="odometer"
+                className="flex flex-shrink-0 items-center gap-1.5 rounded-xl bg-amber px-3 py-1.5 font-mono text-sm font-semibold tabular-nums text-amber-ink transition-transform active:scale-95 motion-reduce:active:scale-100"
+              >
+                {formatKm(activeCar.current_odometer)}
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+            ) : (
+              <span
+                className="flex-shrink-0 font-mono text-sm tabular-nums text-mist"
+                data-tour="odometer"
+              >
+                {formatKm(activeCar.current_odometer)}
+              </span>
+            )}
           </div>
         </>
       )}
