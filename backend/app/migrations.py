@@ -21,6 +21,10 @@ EXPECTED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     ("users", "language", "VARCHAR(5) DEFAULT 'uk'"),
     ("users", "currency", "VARCHAR(3) DEFAULT 'UAH'"),
     ("users", "unit_system", "VARCHAR(10) DEFAULT 'metric'"),
+    ("users", "admin_notified_signup", "BOOLEAN DEFAULT 0 NOT NULL"),
+    ("users", "admin_notified_first_car", "BOOLEAN DEFAULT 0 NOT NULL"),
+    ("users", "admin_notified_verified", "BOOLEAN DEFAULT 0 NOT NULL"),
+    ("users", "admin_notified_first_ocr", "BOOLEAN DEFAULT 0 NOT NULL"),
     ("service_intervals", "last_notified_at", "DATE"),
 )
 

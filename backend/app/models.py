@@ -69,6 +69,21 @@ class User(Base):
     unit_system: Mapped[str] = mapped_column(
         String(10), nullable=False, default="metric", server_default=text("'metric'")
     )
+    # One-shot flags for the owner's "new activity" emails (see
+    # services/admin_notify.py): each fires the admin mail once, then latches so
+    # a restart or a repeated action never re-sends. Not user-facing.
+    admin_notified_signup: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
+    admin_notified_first_car: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
+    admin_notified_verified: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
+    admin_notified_first_ocr: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
     # Unique per app logic: linking re-assigns a chat id instead of duplicating it.
     # An address the user asked to move to, parked until a code sent to it
     # comes back. Login is gated on a verified address, so writing an

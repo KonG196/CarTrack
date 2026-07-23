@@ -16,6 +16,7 @@ from app.database import get_db
 from app.models import Car, LogEntry, RefuelDetails, User
 from app.schemas import CarCreate, CarOut, CarUpdate, PassportTokenOut
 from app.services import passport
+from app.services.admin_notify import notify_first_car
 from app.services.fuel import resolve_fuel_kind
 from app.services.intervals import compute_avg_daily_km, effective_avg_daily_km
 
@@ -116,6 +117,7 @@ def create_car(
     ensure_owner_membership(db, car)
     db.commit()
     db.refresh(car)
+    notify_first_car(db, current_user, car)
     return serialize_car(db, car, current_user)
 
 

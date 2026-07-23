@@ -5,10 +5,13 @@ import datetime as dt
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from pytesseract import TesseractNotFoundError
+from sqlalchemy.orm import Session
 
 from app.auth import require_verified_user
+from app.database import get_db
 from app.models import User
 from app.schemas import OcrScanResult, OcrWorkOrderResult
+from app.services.admin_notify import notify_first_ocr
 from app.services.ocr_llm import OcrUnavailable, recognize_receipt, recognize_work_order
 from app.i18n import t
 
@@ -32,6 +35,18 @@ def _ocr_unavailable(lang: str = "en") -> HTTPException:
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         detail=t("err.ocrUnavailable", lang),
     )
+
+
+async def _flag_first_ocr(db: Session, user: User, kind: str) -> None:
+    """Fire the owner's first-scan alert, once, without blocking the loop.
+
+    Only the very first successful scan does any work; the flag check keeps every
+    later scan free of a DB write or a thread hop. The send itself (SMTP) runs
+    off the event loop, mirroring how the scan above is offloaded.
+    """
+    if user.admin_notified_first_ocr:
+        return
+    await asyncio.to_thread(notify_first_ocr, db, user, kind)
 
 
 async def _read_image(file: UploadFile) -> bytes:
@@ -59,6 +74,7 @@ async def _read_image(file: UploadFile) -> bytes:
 async def scan_receipt(
     file: UploadFile = File(...),
     current_user: User = Depends(require_verified_user),
+    db: Session = Depends(get_db),
 ) -> OcrScanResult:
     image_bytes = await _read_image(file)
     try:
@@ -72,6 +88,7 @@ async def scan_receipt(
     except OcrUnavailable:
         raise _ocr_unavailable(current_user.language)
 
+    await _flag_first_ocr(db, current_user, "чек")
     return OcrScanResult(
         liters=parsed.liters,
         price_per_liter=parsed.price_per_liter,
@@ -86,6 +103,7 @@ async def scan_receipt(
 async def scan_work_order(
     file: UploadFile = File(...),
     current_user: User = Depends(require_verified_user),
+    db: Session = Depends(get_db),
 ) -> OcrWorkOrderResult:
     image_bytes = await _read_image(file)
     try:
@@ -97,6 +115,7 @@ async def scan_work_order(
     except OcrUnavailable:
         raise _ocr_unavailable(current_user.language)
 
+    await _flag_first_ocr(db, current_user, "замовлення-наряд")
     date = None
     if parsed.date:
         try:

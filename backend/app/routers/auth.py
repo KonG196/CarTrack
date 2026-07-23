@@ -46,6 +46,7 @@ from app.services.google_auth import (
     GoogleAuthUnavailable,
     verify_id_token as verify_google_id_token,
 )
+from app.services.admin_notify import notify_first_verified, notify_new_signup
 from app.services.reset import confirm_reset, initiate_reset
 from app.services.mailer import mail_enabled
 from app.services.verification import (
@@ -107,6 +108,7 @@ def register(payload: UserCreate, request: Request, db: Session = Depends(get_db
         issue_verification(db, user)
     db.commit()
     db.refresh(user)
+    notify_new_signup(db, user)
     return RegisterOut(
         id=user.id,
         email=user.email,
@@ -200,11 +202,16 @@ def google_login(
         db.add(user)
         db.commit()
         db.refresh(user)
+        # Google signup is a new account whose address is already verified — both
+        # owner alerts fire, each latched by its own flag.
+        notify_new_signup(db, user)
+        notify_first_verified(db, user)
     elif not user.email_verified:
         # Merge into the existing (password) account. Google having verified the
         # address is proof enough to lift our own verification gate.
         user.email_verified = True
         db.commit()
+        notify_first_verified(db, user)
 
     return _issue_tokens(user)
 

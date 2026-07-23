@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from app.auth import hash_password, verify_password
 from app.config import settings
 from app.models import User
+from app.services.admin_notify import notify_first_verified
 from app.services.mailer import mail_enabled, send_email_change, send_verification
 
 CODE_DIGITS = 6
@@ -81,6 +82,7 @@ def confirm_verification(db: Session, email: str, code: str) -> bool:
     user.verify_code_expires_at = None
     user.verify_code_attempts = 0
     db.commit()
+    notify_first_verified(db, user)
     return True
 
 

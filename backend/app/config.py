@@ -56,6 +56,9 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str = ""
     SMTP_FROM: str = "Kapot Tracker <noreply@localhost>"
     SMTP_STARTTLS: bool = True
+    # Where the owner's "new user / first car / verified / first OCR" alerts go.
+    # Empty disables admin alerts entirely.
+    ADMIN_EMAIL: str = "maks060691@gmail.com"
     PUBLIC_URL: str = "http://localhost:5173"
     VERIFY_CODE_EXPIRE_HOURS: int = 24
 
