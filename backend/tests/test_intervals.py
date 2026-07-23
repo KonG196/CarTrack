@@ -243,6 +243,20 @@ def test_creating_an_interval_seeds_from_an_existing_service_log(
     assert interval["km_left"] == 8825  # 12000 - 3175, not a full 10000
 
 
+def test_short_abbreviation_interval_anchors_to_its_log(
+    client: TestClient, auth_headers: dict, make_car
+) -> None:
+    """«ГРМ» is 3 letters — the keyword floor used to drop it, so a bare-titled
+    ГРМ interval never anchored to its timing-belt log."""
+    car = make_car(current_odometer=200000)
+    _add_maintenance(
+        client, auth_headers, car["id"], odometer=193000,
+        items=["Комплект ГРМ (ремінь + ролики)", "Водяна помпа"],
+    )
+    grm = _create_interval(client, auth_headers, car["id"], {"title": "ГРМ", "interval_km": 120000})
+    assert _get_interval(client, auth_headers, car["id"], grm["id"])["last_odometer"] == 193000
+
+
 def test_a_filter_log_does_not_cross_match_other_filters(
     client: TestClient, auth_headers: dict, make_car
 ) -> None:

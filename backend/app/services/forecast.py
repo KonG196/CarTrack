@@ -27,6 +27,11 @@ SPEND_WINDOW_DAYS = 90
 MAX_SPEND_MONTHS = 6
 MIN_KEYWORD_LENGTH = 4
 
+# Short abbreviations that are the whole identity of a service, so the length
+# floor (meant to drop noise like "на"/"до") must not swallow them. Lower-cased
+# because normalize_keywords lower-cases before matching.
+SHORT_KEYWORDS = frozenset({"грм", "гбо", "акб", "егр", "obd", "abs", "vin"})
+
 # Generic service words that carry no information about WHAT was serviced.
 # Matching on them would tie e.g. every "Заміна ..." interval to every log
 # whose notes mention a replacement.
@@ -78,7 +83,8 @@ def normalize_keywords(text: str) -> set[str]:
     return {
         token
         for token in tokens
-        if len(token) >= MIN_KEYWORD_LENGTH and token not in UKRAINIAN_STOP_WORDS
+        if (len(token) >= MIN_KEYWORD_LENGTH or token in SHORT_KEYWORDS)
+        and token not in UKRAINIAN_STOP_WORDS
     }
 
 
