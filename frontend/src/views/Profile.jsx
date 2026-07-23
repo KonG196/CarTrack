@@ -489,9 +489,9 @@ export default function Profile() {
       <BackLink to="/garage">{t('profile.title')}</BackLink>
 
       <ProfileCard onToast={setToast} />
+      <TelegramCard onToast={setToast} />
       <EmailCard onToast={setToast} />
       {!isGoogle && <PasswordCard onToast={setToast} />}
-      <TelegramCard onToast={setToast} />
       <DangerZone />
 
       <p className="pt-2 text-center text-xs text-mist">
