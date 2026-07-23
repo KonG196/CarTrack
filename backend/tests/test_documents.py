@@ -254,9 +254,11 @@ def test_non_expiring_kinds_never_link_an_interval(
     assert client.get(f"/api/cars/{car['id']}/intervals", headers=auth_headers).json() == []
 
 
-def test_deleting_the_document_keeps_the_interval(
+def test_deleting_the_document_removes_its_expiry_interval(
     client: TestClient, auth_headers: dict, make_car, uploads_dir: Path
 ) -> None:
+    """Deleting the document also removes the reminder it booked: a nudge for a
+    document that no longer exists can't be actioned and would fire forever."""
     car = make_car()
     body = _upload(
         client,
@@ -269,7 +271,7 @@ def test_deleting_the_document_keeps_the_interval(
     assert client.delete(f"/api/documents/{body['id']}", headers=auth_headers).status_code == 204
 
     intervals = client.get(f"/api/cars/{car['id']}/intervals", headers=auth_headers).json()
-    assert [i["id"] for i in intervals] == [body["linked_interval_id"]]
+    assert intervals == []
 
 
 def test_failed_upload_leaves_no_interval_behind(

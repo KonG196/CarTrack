@@ -12,7 +12,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.access import ROLE_EDITOR, ROLE_OWNER, ROLE_VIEWER, get_accessible_car
@@ -199,6 +199,16 @@ def delete_document(
 ) -> None:
     document, car = get_owned_document(db, current_user, document_id, min_role=ROLE_EDITOR)
     path = photo_path(car.user_id, document.filename)
+    # Remove the expiry reminder this document booked: a nudge titled
+    # "…(документ)" for a document that no longer exists can't be actioned and
+    # keeps firing. The interval is the one _expiry_interval named from this
+    # document's title on this car.
+    db.execute(
+        delete(ServiceInterval).where(
+            ServiceInterval.car_id == car.id,
+            ServiceInterval.title == f"{document.title} (документ)",
+        )
+    )
     db.delete(document)
     db.commit()
     path.unlink(missing_ok=True)
