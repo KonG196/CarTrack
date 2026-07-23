@@ -180,5 +180,57 @@ def test_import_garbage_json_422_without_partial_inserts(
     assert len(client.get("/api/cars", headers=auth_headers).json()) == 0
 
 
+def test_round_trip_preserves_expense_category_and_fuel_kind(
+    client: TestClient, auth_headers: dict, make_car
+) -> None:
+    """An export→import must not collapse a categorized expense to the default
+    or lose a refuel's fuel_kind (ГБО), which the analytics depend on."""
+    car = make_car(current_odometer=10000)
+    client.post(
+        f"/api/cars/{car['id']}/logs",
+        json={
+            "type": "expense",
+            "odometer": 10100,
+            "date": "2026-07-01",
+            "total_cost": 500,
+            "expense": {"category": "Мийка"},
+        },
+        headers=auth_headers,
+    )
+    client.post(
+        f"/api/cars/{car['id']}/logs",
+        json={
+            "type": "refuel",
+            "odometer": 10200,
+            "date": "2026-07-02",
+            "total_cost": 900,
+            "refuel": {
+                "liters": 40,
+                "price_per_liter": 22.5,
+                "is_full_tank": True,
+                "fuel_kind": "lpg",
+            },
+        },
+        headers=auth_headers,
+    )
+
+    exported = client.get("/api/export", headers=auth_headers).json()
+    # The export itself must carry the fields.
+    logs = exported["cars"][0]["logs"]
+    exp = next(l for l in logs if l["type"] == "expense")
+    ref = next(l for l in logs if l["type"] == "refuel")
+    assert exp["expense"]["category"] == "Мийка"
+    assert ref["refuel"]["fuel_kind"] == "lpg"
+
+    assert client.post("/api/import", json=exported, headers=auth_headers).status_code == 200
+    cars = client.get("/api/cars", headers=auth_headers).json()
+    new_car = next(c for c in cars if c["id"] != car["id"])
+    new_logs = client.get(f"/api/cars/{new_car['id']}/logs", headers=auth_headers).json()["items"]
+    new_exp = next(l for l in new_logs if l["type"] == "expense")
+    new_ref = next(l for l in new_logs if l["type"] == "refuel")
+    assert new_exp["expense"]["category"] == "Мийка"
+    assert new_ref["refuel"]["fuel_kind"] == "lpg"
+
+
 def test_import_requires_auth(client: TestClient) -> None:
     assert client.post("/api/import", json=_import_payload()).status_code == 401

@@ -60,8 +60,14 @@ describe('summarizeImport', () => {
     expect(() => summarizeImport('text')).toThrow('Файл не схожий на експорт Kapot Tracker');
   });
 
+  it('accepts the current v2 export', () => {
+    expect(
+      summarizeImport({ schema_version: 2, cars: [{ brand: 'VW', model: 'Golf', logs: [{}] }] })
+    ).toEqual({ cars: 1, logs: 1, intervals: 0 });
+  });
+
   it('rejects an unsupported schema_version', () => {
-    expect(() => summarizeImport({ schema_version: 2, cars: [] })).toThrow(
+    expect(() => summarizeImport({ schema_version: 3, cars: [] })).toThrow(
       'Непідтримувана версія експорту'
     );
     expect(() => summarizeImport({ cars: [] })).toThrow('Непідтримувана версія експорту');

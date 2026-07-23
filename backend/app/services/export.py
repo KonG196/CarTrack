@@ -21,6 +21,7 @@ from app.access import ensure_owner_membership
 from app.models import (
     Car,
     CarSpec,
+    ExpenseDetails,
     LogEntry,
     MaintenanceDetails,
     RefuelDetails,
@@ -30,6 +31,7 @@ from app.models import (
     User,
 )
 from app.schemas import (
+    DEFAULT_EXPENSE_CATEGORY,
     CarCreate,
     CarSpecCreate,
     LogEntryCreate,
@@ -119,6 +121,7 @@ def _serialize_log(log: LogEntry) -> dict:
             "price_per_liter": float(log.refuel.price_per_liter),
             "is_full_tank": log.refuel.is_full_tank,
             "gas_station": log.refuel.gas_station,
+            "fuel_kind": log.refuel.fuel_kind,
         }
     if log.maintenance is not None:
         data["maintenance"] = {
@@ -133,6 +136,8 @@ def _serialize_log(log: LogEntry) -> dict:
             "warranty_months": log.repair.warranty_months,
             "warranty_km": log.repair.warranty_km,
         }
+    if log.expense is not None:
+        data["expense"] = {"category": log.expense.category}
     return data
 
 
@@ -282,6 +287,7 @@ def _build_log(car_id: int, payload: LogEntryCreate) -> LogEntry:
             price_per_liter=_to_decimal(payload.refuel.price_per_liter),
             is_full_tank=payload.refuel.is_full_tank,
             gas_station=payload.refuel.gas_station,
+            fuel_kind=payload.refuel.fuel_kind,
         )
     elif payload.type == "maintenance" and payload.maintenance is not None:
         log.maintenance = MaintenanceDetails(
@@ -295,6 +301,14 @@ def _build_log(car_id: int, payload: LogEntryCreate) -> LogEntry:
             part_name=payload.repair.part_name,
             warranty_months=payload.repair.warranty_months,
             warranty_km=payload.repair.warranty_km,
+        )
+    elif payload.type == "expense":
+        log.expense = ExpenseDetails(
+            category=(
+                payload.expense.category
+                if payload.expense is not None
+                else DEFAULT_EXPENSE_CATEGORY
+            ),
         )
     return log
 

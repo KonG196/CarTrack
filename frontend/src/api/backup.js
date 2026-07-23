@@ -23,10 +23,13 @@ export function csvFilename(carId) {
  * parsed JSON of a v1 export. Throws an Error with a user-facing Ukrainian
  * message when the shape is wrong (shown as-is in the UI).
  */
+// Kept in sync with the backend's SUPPORTED_SCHEMA_VERSIONS (app/services/export.py).
+const SUPPORTED_SCHEMA_VERSIONS = [1, 2];
+
 export function summarizeImport(data) {
   const invalid = () => new Error(i18n.t('apiBackup.notAnExport'));
   if (data == null || typeof data !== 'object' || Array.isArray(data)) throw invalid();
-  if (data.schema_version !== 1) {
+  if (!SUPPORTED_SCHEMA_VERSIONS.includes(data.schema_version)) {
     throw new Error(i18n.t('apiBackup.unsupportedVersion'));
   }
   if (!Array.isArray(data.cars)) throw invalid();
