@@ -130,6 +130,10 @@
       "joined": "You've joined the car",
       "acceptFailed": "Couldn't accept the invite",
       "notNow": "Not now"
+    },
+    "orDivider": "or",
+    "google": {
+      "failed": "Google sign-in failed, try again"
     }
   },
   "tour": {

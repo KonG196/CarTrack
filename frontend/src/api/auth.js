@@ -17,6 +17,18 @@ export async function login(email, password) {
   return data; // {access_token, token_type}
 }
 
+// Exchange a Google ID token (from Google Identity Services) for our own
+// access + refresh tokens. The backend verifies the ID token with Google,
+// then finds or creates the account (merging by email) and issues our pair.
+export async function googleLogin(idToken, language, currency) {
+  const { data } = await client.post('/auth/google', {
+    id_token: idToken,
+    language,
+    currency,
+  });
+  return data; // {access_token, refresh_token, token_type}
+}
+
 export async function getMe() {
   const { data } = await client.get('/auth/me');
   return data;

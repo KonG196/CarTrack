@@ -33,6 +33,24 @@ export const useAuthStore = create((set, get) => ({
     return user;
   },
 
+  // Sign in with a Google ID token. The backend verifies it, finds or creates
+  // the account, and hands back our token pair — from here it's the same as a
+  // password login.
+  async loginWithGoogle(idToken) {
+    const data = await authApi.googleLogin(
+      idToken,
+      i18n.language,
+      useCurrencyStore.getState().currency,
+    );
+    setTokens(data);
+    set({ token: data.access_token });
+    const user = await authApi.getMe();
+    set({ user });
+    adoptAccountLanguage(user);
+    useCurrencyStore.getState().adoptAccountCurrency(user?.currency);
+    return user;
+  },
+
   async register(email, password) {
     await authApi.register(
       email,

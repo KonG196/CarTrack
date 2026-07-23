@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../store/authStore';
@@ -7,10 +7,12 @@ import { safeNext, withNext } from '../utils/nextPath';
 import { Button, TextField, Card, ErrorMessage } from '../components/UI';
 import Wordmark from '../components/Wordmark';
 import LanguageToggle from '../components/LanguageToggle';
+import GoogleAuthSection from '../components/GoogleAuthSection';
 
 export default function Register() {
   const { t } = useTranslation();
   const register = useAuthStore((s) => s.register);
+  const loginWithGoogle = useAuthStore((s) => s.loginWithGoogle);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const next = safeNext(searchParams.get('next'));
@@ -19,6 +21,21 @@ export default function Register() {
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Google «sign up» and «sign in» are the same call — the backend creates the
+  // account if it's new, or logs into the existing one (merging by email).
+  const handleGoogle = useCallback(
+    async (idToken) => {
+      setError('');
+      try {
+        await loginWithGoogle(idToken);
+        navigate(next, { replace: true });
+      } catch (err) {
+        setError(extractError(err, t('auth.google.failed')));
+      }
+    },
+    [loginWithGoogle, navigate, next, t],
+  );
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -91,6 +108,9 @@ export default function Register() {
               {loading ? t('auth.register.submitting') : t('auth.register.submit')}
             </Button>
           </form>
+
+          <GoogleAuthSection onCredential={handleGoogle} />
+
           <p className="mt-4 text-center text-sm text-mist">
             {t('auth.register.haveAccount')}{' '}
             <Link to={withNext('/login', next)} className="font-semibold text-amber hover:text-amber-deep">

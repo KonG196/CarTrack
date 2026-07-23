@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../store/authStore';
@@ -7,10 +7,12 @@ import { safeNext, withNext } from '../utils/nextPath';
 import { Button, TextField, Card, ErrorMessage } from '../components/UI';
 import Wordmark from '../components/Wordmark';
 import LanguageToggle from '../components/LanguageToggle';
+import GoogleAuthSection from '../components/GoogleAuthSection';
 
 export default function Login() {
   const { t } = useTranslation();
   const login = useAuthStore((s) => s.login);
+  const loginWithGoogle = useAuthStore((s) => s.loginWithGoogle);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const next = safeNext(searchParams.get('next'));
@@ -36,6 +38,21 @@ export default function Login() {
       setLoading(false);
     }
   };
+
+  // A stable callback so GoogleSignInButton doesn't re-init its widget every
+  // render. Google users are verified by Google, so there's no /verify detour.
+  const handleGoogle = useCallback(
+    async (idToken) => {
+      setError('');
+      try {
+        await loginWithGoogle(idToken);
+        navigate(next, { replace: true });
+      } catch (err) {
+        setError(extractError(err, t('auth.google.failed')));
+      }
+    },
+    [loginWithGoogle, navigate, next, t],
+  );
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-garage px-4">
@@ -80,6 +97,10 @@ export default function Login() {
               {loading ? t('auth.login.submitting') : t('auth.login.submit')}
             </Button>
           </form>
+
+          {/* Divider + Google. The button self-hides when no client id is set. */}
+          <GoogleAuthSection onCredential={handleGoogle} />
+
           <p className="mt-4 text-center text-sm">
             <Link to="/reset" className="font-semibold text-amber hover:text-amber-deep">
               {t('auth.login.forgotPassword')}
