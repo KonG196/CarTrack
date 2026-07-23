@@ -4,6 +4,9 @@ import { Gauge } from 'lucide-react';
 import Modal from './UI/Modal';
 import { Button, TextField, ErrorMessage } from './UI';
 import { useCarStore } from '../store/carStore';
+import { currentUnits } from '../store/unitStore';
+import { isImperial, kmFromDistance, KM_PER_MILE } from '../units';
+import { distanceUnitLabel } from '../utils/format';
 
 // Quick odometer update, right on the dashboard. The whole odometer chip opens
 // this instead of navigating to the full car editor: bumping the reading is the
@@ -16,17 +19,22 @@ export default function OdometerModal({ open, onClose, car, onSaved }) {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
-  // Seed with the current reading each time it opens, ready to overwrite.
+  // Seed with the current reading (in display units) each time it opens.
   useEffect(() => {
     if (open && car) {
-      setValue(String(car.current_odometer ?? ''));
+      const km = car.current_odometer ?? '';
+      const shown =
+        km === '' ? '' : isImperial(currentUnits()) ? Math.round(km / KM_PER_MILE) : km;
+      setValue(String(shown));
       setError('');
     }
   }, [open, car]);
 
   const save = async () => {
-    const next = parseInt(value, 10);
-    if (!Number.isFinite(next) || next < 0) return setError(t('carEditor.errOdometer'));
+    const entered = parseInt(value, 10);
+    if (!Number.isFinite(entered) || entered < 0) return setError(t('carEditor.errOdometer'));
+    // Entered in display units; store metric.
+    const next = Math.round(kmFromDistance(entered, currentUnits()));
     setError('');
     setSaving(true);
     try {
@@ -59,7 +67,7 @@ export default function OdometerModal({ open, onClose, car, onSaved }) {
         <p className="text-sm text-mist">{t('odometerModal.subtitle')}</p>
       </div>
       <TextField
-        label={t('carEditor.odometer')}
+        label={t('carEditor.odometer', { unit: distanceUnitLabel() })}
         type="number"
         inputMode="numeric"
         enterKeyHint="done"

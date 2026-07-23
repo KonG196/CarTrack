@@ -18,7 +18,16 @@ import { useCarStore } from '../store/carStore';
 import { getRefuelContext } from '../api/logs';
 import { canDo } from '../utils/permissions';
 import { fuelKindLabel } from '../utils/fuelKind';
-import { formatMoney, formatMoneyCompact, formatKm, formatDate } from '../utils/format';
+import {
+  formatMoney,
+  formatMoneyCompact,
+  formatKm,
+  formatDate,
+  formatConsumptionValue,
+  consumptionUnitLabel,
+} from '../utils/format';
+import { costPerDistanceFromPerKm, isImperial } from '../units';
+import { useUnitStore } from '../store/unitStore';
 import { CURRENCY_KEY } from '../currency';
 import { Card, Spinner, ErrorMessage } from '../components/UI';
 import Toast from '../components/Toast';
@@ -178,6 +187,7 @@ export default function Dashboard() {
   const fetchAnalytics = useCarStore((s) => s.fetchAnalytics);
   const fetchIntervals = useCarStore((s) => s.fetchIntervals);
   const completeInterval = useCarStore((s) => s.completeInterval);
+  const units = useUnitStore((s) => s.units);
 
   const activeCar = cars.find((c) => String(c.id) === String(activeCarId)) || null;
 
@@ -347,19 +357,25 @@ export default function Dashboard() {
             />
             <StatCard
               icon={Droplets}
-              label={t('dashboard.statConsumption')}
+              label={consumptionUnitLabel()}
               value={
                 fuel?.avg_consumption_l_100km != null
-                  ? fuel.avg_consumption_l_100km.toFixed(1)
+                  ? formatConsumptionValue(fuel.avg_consumption_l_100km)
                   : '—'
               }
             />
             <StatCard
               icon={Route}
-              label={t('dashboard.statPer100km')}
+              label={
+                isImperial(units)
+                  ? t('dashboard.statPerMile')
+                  : t('dashboard.statPer100km')
+              }
               value={
                 analytics.tco?.cost_per_km != null
-                  ? formatMoney(Math.round(analytics.tco.cost_per_km * 100))
+                  ? isImperial(units)
+                    ? formatMoney(costPerDistanceFromPerKm(analytics.tco.cost_per_km, units))
+                    : formatMoney(Math.round(analytics.tco.cost_per_km * 100))
                   : '—'
               }
             />

@@ -20,6 +20,7 @@ EXPECTED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     ("users", "telegram_chat_id", "VARCHAR(50)"),
     ("users", "language", "VARCHAR(5) DEFAULT 'uk'"),
     ("users", "currency", "VARCHAR(3) DEFAULT 'UAH'"),
+    ("users", "unit_system", "VARCHAR(10) DEFAULT 'metric'"),
     ("service_intervals", "last_notified_at", "DATE"),
 )
 

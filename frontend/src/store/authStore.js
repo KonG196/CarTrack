@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import i18n, { LANG_KEY } from '../i18n';
 import * as authApi from '../api/auth';
 import { useCurrencyStore } from './currencyStore';
+import { useUnitStore } from './unitStore';
 import { TOKEN_KEY, clearTokens, extractError, setTokens } from '../api/client';
 
 // When an account arrives with a saved language and the browser has no explicit
@@ -30,6 +31,7 @@ export const useAuthStore = create((set, get) => ({
     set({ user });
     adoptAccountLanguage(user);
     useCurrencyStore.getState().adoptAccountCurrency(user?.currency);
+    useUnitStore.getState().adoptAccountUnits(user?.unit_system);
     return user;
   },
 
@@ -48,6 +50,7 @@ export const useAuthStore = create((set, get) => ({
     set({ user });
     adoptAccountLanguage(user);
     useCurrencyStore.getState().adoptAccountCurrency(user?.currency);
+    useUnitStore.getState().adoptAccountUnits(user?.unit_system);
     return user;
   },
 
@@ -73,6 +76,7 @@ export const useAuthStore = create((set, get) => ({
       set({ user, userLoading: false });
       adoptAccountLanguage(user);
     useCurrencyStore.getState().adoptAccountCurrency(user?.currency);
+    useUnitStore.getState().adoptAccountUnits(user?.unit_system);
       return user;
     } catch (error) {
       set({ userLoading: false });

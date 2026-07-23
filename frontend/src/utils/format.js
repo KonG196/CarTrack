@@ -1,6 +1,14 @@
 import i18n from '../i18n';
 import { currencyInfo } from '../currency';
 import { currentCurrency } from '../store/currencyStore';
+import { currentUnits } from '../store/unitStore';
+import {
+  isImperial,
+  distanceFromKm,
+  volumeFromLitres,
+  consumptionFromL100,
+  costPerDistanceFromPerKm,
+} from '../units';
 
 const THIN_SPACE = ' '; // narrow no-break space for thousands grouping (uk)
 
@@ -51,6 +59,21 @@ const units = () =>
     ? { km: 'km', thousand: 'k', million: 'M' }
     : { km: 'км', thousand: 'тис', million: 'млн' };
 
+// Unit labels follow the LANGUAGE (km/км) and the SYSTEM (km→mi). Imperial has
+// no localized mile/gallon/mpg abbreviations here — «mi/gal/mpg» read the same.
+function distanceUnit() {
+  if (isImperial(currentUnits())) return 'mi';
+  return isEn() ? 'km' : 'км';
+}
+function volumeUnit() {
+  if (isImperial(currentUnits())) return 'gal';
+  return isEn() ? 'L' : 'л';
+}
+function consumptionUnit() {
+  if (isImperial(currentUnits())) return 'mpg';
+  return isEn() ? 'L/100 km' : 'л/100 км';
+}
+
 function groupThousands(digits) {
   const sep = isEn() ? ',' : THIN_SPACE;
   return digits.replace(/\B(?=(\d{3})+(?!\d))/g, sep);
@@ -96,11 +119,57 @@ export function formatMoneyCompact(n) {
   return withCurrency(sign, groupThousands(String(Math.round(abs))));
 }
 
+// Distance is STORED in km; display converts to the user's system (mi/km) and
+// labels it. Named formatKm for historical call sites — it is distance-aware.
 export function formatKm(n) {
   if (n === null || n === undefined || Number.isNaN(Number(n))) return '—';
-  const value = Math.round(Number(n));
+  const converted = distanceFromKm(Number(n), currentUnits());
+  const value = Math.round(converted);
   const sign = value < 0 ? '-' : '';
-  return `${sign}${groupThousands(String(Math.abs(value)))}${UNIT_GAP}${units().km}`;
+  return `${sign}${groupThousands(String(Math.abs(value)))}${UNIT_GAP}${distanceUnit()}`;
+}
+
+// Consumption is STORED as l/100km; imperial shows mpg (an inverse, higher =
+// better), metric shows l/100km. `n` is the stored l/100km value.
+export function formatConsumption(n) {
+  if (n === null || n === undefined || Number.isNaN(Number(n))) return '—';
+  const converted = consumptionFromL100(Number(n), currentUnits());
+  if (converted === null) return '—';
+  const decimal = isEn() ? '.' : ',';
+  const shown = converted.toFixed(1).replace('.', decimal);
+  return `${shown}${UNIT_GAP}${consumptionUnit()}`;
+}
+
+// Just the converted consumption number (no unit label), for tiles whose label
+// already carries the unit. `n` is stored l/100km.
+export function formatConsumptionValue(n) {
+  if (n === null || n === undefined || Number.isNaN(Number(n))) return '—';
+  const converted = consumptionFromL100(Number(n), currentUnits());
+  if (converted === null) return '—';
+  const decimal = isEn() ? '.' : ',';
+  return converted.toFixed(1).replace('.', decimal);
+}
+
+// Volume is STORED in litres; imperial shows US gallons. `n` is stored litres.
+export function formatVolume(n) {
+  if (n === null || n === undefined || Number.isNaN(Number(n))) return '—';
+  const converted = volumeFromLitres(Number(n), currentUnits());
+  if (converted === null) return '—';
+  const decimal = isEn() ? '.' : ',';
+  const shown = converted.toFixed(isImperial(currentUnits()) ? 2 : 1).replace('.', decimal);
+  return `${shown}${UNIT_GAP}${volumeUnit()}`;
+}
+
+// The distance-unit label alone, for interpolating into chart titles / hints
+// ("Spending per {{unit}}"). Follows language + system.
+export function distanceUnitLabel() {
+  return distanceUnit();
+}
+export function consumptionUnitLabel() {
+  return consumptionUnit();
+}
+export function volumeUnitLabel() {
+  return volumeUnit();
 }
 
 export function formatDate(iso) {

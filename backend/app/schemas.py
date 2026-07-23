@@ -9,6 +9,7 @@ from typing import Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.currency import normalize_currency
+from app.units import normalize_unit_system
 from app.i18n import normalize_lang
 from app.services.vin import normalize_vin
 
@@ -94,6 +95,7 @@ class UserCreate(BaseModel):
     # Optional so older clients still work — the register endpoint defaults it.
     language: Optional[str] = None
     currency: Optional[str] = None
+    unit_system: Optional[str] = None
 
     @field_validator("email")
     @classmethod
@@ -113,6 +115,11 @@ class UserCreate(BaseModel):
     @classmethod
     def validate_currency(cls, value: Optional[str]) -> Optional[str]:
         return None if value is None else normalize_currency(value)
+
+    @field_validator("unit_system")
+    @classmethod
+    def validate_unit_system(cls, value: Optional[str]) -> Optional[str]:
+        return None if value is None else normalize_unit_system(value)
 
 
 class PasswordChangeIn(BaseModel):
@@ -186,6 +193,8 @@ class UserOut(BaseModel):
     language: str = "en"
     # Display currency code (symbol only; amounts are never converted).
     currency: str = "USD"
+    # Display unit system ('metric' | 'imperial'); values are stored metric.
+    unit_system: str = "metric"
     created_at: dt.datetime
 
 
@@ -214,6 +223,7 @@ class UserUpdate(BaseModel):
     notify_rotation: Optional[bool] = None
     language: Optional[str] = None
     currency: Optional[str] = None
+    unit_system: Optional[str] = None
 
     @field_validator("display_name")
     @classmethod
@@ -224,6 +234,11 @@ class UserUpdate(BaseModel):
     @classmethod
     def validate_language(cls, value: Optional[str]) -> Optional[str]:
         return None if value is None else normalize_lang(value)
+
+    @field_validator("unit_system")
+    @classmethod
+    def validate_unit_system(cls, value: Optional[str]) -> Optional[str]:
+        return None if value is None else normalize_unit_system(value)
 
     @field_validator("currency")
     @classmethod
@@ -250,11 +265,17 @@ class GoogleLoginIn(BaseModel):
     # language and currency from what the browser was already using.
     language: Optional[str] = None
     currency: Optional[str] = None
+    unit_system: Optional[str] = None
 
     @field_validator("currency")
     @classmethod
     def validate_currency(cls, value: Optional[str]) -> Optional[str]:
         return None if value is None else normalize_currency(value)
+
+    @field_validator("unit_system")
+    @classmethod
+    def validate_unit_system(cls, value: Optional[str]) -> Optional[str]:
+        return None if value is None else normalize_unit_system(value)
 
 
 class RegisterOut(BaseModel):

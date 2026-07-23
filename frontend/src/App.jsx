@@ -2,6 +2,7 @@ import { Navigate, Route, Routes, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from './store/authStore';
 import { useCurrencyStore } from './store/currencyStore';
+import { useUnitStore } from './store/unitStore';
 import { safeNext } from './utils/nextPath';
 import Layout from './components/Layout';
 import Login from './views/Login';
@@ -45,6 +46,7 @@ export default function App() {
   // (via format.js) without their own hook still refresh.
   useTranslation();
   useCurrencyStore((s) => s.currency);
+  useUnitStore((s) => s.units);
   return (
     <Routes>
       <Route

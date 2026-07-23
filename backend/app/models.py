@@ -63,6 +63,12 @@ class User(Base):
     currency: Mapped[str] = mapped_column(
         String(3), nullable=False, default="USD", server_default=text("'UAH'")
     )
+    # Display unit system: 'metric' (km, litres, l/100km) or 'imperial' (mi,
+    # gallons, mpg). Presentation only — everything is STORED metric and only
+    # converted for display / parsed back on input. See app/units.py.
+    unit_system: Mapped[str] = mapped_column(
+        String(10), nullable=False, default="metric", server_default=text("'metric'")
+    )
     # Unique per app logic: linking re-assigns a chat id instead of duplicating it.
     # An address the user asked to move to, parked until a code sent to it
     # comes back. Login is gated on a verified address, so writing an

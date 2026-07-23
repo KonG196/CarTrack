@@ -6,7 +6,9 @@ import { scanReceipt, scanWorkOrder } from '../api/ocr';
 import { getRefuelContext } from '../api/logs';
 import { useAuthStore } from '../store/authStore';
 import { num, deriveRefuel } from '../utils/refuelMath';
-import { formatDate } from '../utils/format';
+import { formatDate, distanceUnitLabel, volumeUnitLabel } from '../utils/format';
+import { isImperial, LITRES_PER_US_GALLON } from '../units';
+import { currentUnits } from '../store/unitStore';
 import { currentCurrencySymbol } from '../store/currencyStore';
 import { expenseCategoryFrom } from '../utils/expenseCategory';
 import { describeWorkOrder, workOrderToFormValues } from '../utils/workOrder';
@@ -116,6 +118,14 @@ export default function EntryForm({
   const { t } = useTranslation();
   const [init] = useState(() => ({ ...emptyFormValues(), ...initialValues }));
 
+  // Scan results and OCR previews arrive in metric (litres, price/litre); the
+  // form works in the user's display units, so convert on the way in.
+  const imperialUnits = isImperial(currentUnits());
+  const displayVolume = (litres) =>
+    imperialUnits ? +(Number(litres) / LITRES_PER_US_GALLON).toFixed(2) : litres;
+  const displayPricePerVol = (perLitre) =>
+    imperialUnits ? +(Number(perLitre) * LITRES_PER_US_GALLON).toFixed(2) : perLitre;
+
   // shared fields
   const [date, setDate] = useState(init.date);
   const [odometer, setOdometer] = useState(init.odometer);
@@ -172,7 +182,9 @@ export default function EntryForm({
         if (cancelled) return;
         setContext(data);
         if (data.last_price_per_liter != null) {
-          setPricePerLiter((prev) => (prev === '' ? String(data.last_price_per_liter) : prev));
+          setPricePerLiter((prev) =>
+            prev === '' ? String(displayPricePerVol(data.last_price_per_liter)) : prev,
+          );
         }
       })
       .catch(() => {});
@@ -292,11 +304,11 @@ export default function EntryForm({
         // Scanned numbers are the user's inputs too — mark them owned so the
         // one field the receipt didn't carry still gets computed.
         if (data.liters != null && !edited.has('liters')) {
-          setLiters(String(data.liters));
+          setLiters(String(displayVolume(data.liters)));
           refuelOwnedRef.current.add('liters');
         }
         if (data.price_per_liter != null && !edited.has('pricePerLiter')) {
-          setPricePerLiter(String(data.price_per_liter));
+          setPricePerLiter(String(displayPricePerVol(data.price_per_liter)));
           refuelOwnedRef.current.add('pricePerLiter');
         }
         if (data.total_cost != null && !edited.has('totalCost')) {
@@ -308,12 +320,19 @@ export default function EntryForm({
       },
       describe: (data) => {
         const parts = [];
-        if (data.liters != null) parts.push(t('entryForm.unitLiters', { value: data.liters }));
+        if (data.liters != null)
+          parts.push(
+            t('entryForm.unitLiters', {
+              value: displayVolume(data.liters),
+              unit: volumeUnitLabel(),
+            }),
+          );
         if (data.price_per_liter != null)
           parts.push(
             t('entryForm.unitPricePerLiter', {
-              value: data.price_per_liter,
+              value: displayPricePerVol(data.price_per_liter),
               currency: currentCurrencySymbol(),
+              unit: volumeUnitLabel(),
             }),
           );
         if (data.total_cost != null)
@@ -548,7 +567,7 @@ export default function EntryForm({
             }}
           />
           <TextField
-            label={t('entryForm.odometerKm')}
+            label={t('entryForm.odometerKm', { unit: distanceUnitLabel() })}
             type="number"
             inputMode="numeric"
             enterKeyHint="next"
@@ -590,7 +609,7 @@ export default function EntryForm({
             )}
             <div className="grid grid-cols-2 gap-3">
               <TextField
-                label={t('entryForm.liters')}
+                label={t('entryForm.liters', { unit: volumeUnitLabel() })}
                 type="text"
                 inputMode="decimal"
                 enterKeyHint="next"
@@ -600,7 +619,7 @@ export default function EntryForm({
                 onBlur={onRefuelBlur}
               />
               <TextField
-                label={t('entryForm.pricePerLiter')}
+                label={t('entryForm.pricePerLiter', { unit: volumeUnitLabel() })}
                 type="text"
                 inputMode="decimal"
                 enterKeyHint="next"
@@ -782,7 +801,7 @@ export default function EntryForm({
                 onChange={(e) => setWarrantyMonths(e.target.value)}
               />
               <TextField
-                label={t('entryForm.warrantyKm')}
+                label={t('entryForm.warrantyKm', { unit: distanceUnitLabel() })}
                 type="number"
                 inputMode="numeric"
                 enterKeyHint="next"

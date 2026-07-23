@@ -5,6 +5,15 @@ import { Loader2, Search } from 'lucide-react';
 
 import { extractError } from '../api/client';
 import { currentCurrencySymbol } from '../store/currencyStore';
+import { currentUnits } from '../store/unitStore';
+import {
+  isImperial,
+  kmFromDistance,
+  litresFromVolume,
+  KM_PER_MILE,
+  LITRES_PER_US_GALLON,
+} from '../units';
+import { distanceUnitLabel, volumeUnitLabel } from '../utils/format';
 import { lookupPlate } from '../api/cars';
 import { Button, Card, DateField, ErrorMessage, SelectField, TextField } from '../components/UI';
 import BackLink from '../components/BackLink';
@@ -22,6 +31,12 @@ export const FUEL_TYPES = [
 function CarForm({ initial, onSubmit, onCancel, focusField }) {
   const { t } = useTranslation();
   const odometerRef = useRef(null);
+
+  // The car's odometer/tank are stored metric; the form shows and takes the
+  // user's display units and converts back on save.
+  const imperial = isImperial(currentUnits());
+  const toDisplayDistance = (km) => (imperial ? Math.round(km / KM_PER_MILE) : km);
+  const toDisplayVolume = (l) => (imperial ? +(l / LITRES_PER_US_GALLON).toFixed(1) : l);
 
   const fuelOptions = FUEL_TYPES.map((f) => ({
     value: f.value,
@@ -46,8 +61,9 @@ function CarForm({ initial, onSubmit, onCancel, focusField }) {
     engine: initial?.engine || '',
     year: initial?.year != null ? String(initial.year) : '',
     fuel_type: initial?.fuel_type || 'petrol',
-    current_odometer: initial?.current_odometer != null ? String(initial.current_odometer) : '',
-    tank_liters: initial?.tank_liters != null ? String(initial.tank_liters) : '',
+    current_odometer:
+      initial?.current_odometer != null ? String(toDisplayDistance(initial.current_odometer)) : '',
+    tank_liters: initial?.tank_liters != null ? String(toDisplayVolume(initial.tank_liters)) : '',
     monthly_budget: initial?.monthly_budget != null ? String(initial.monthly_budget) : '',
     vin: initial?.vin || '',
     plate: initial?.plate || '',
@@ -167,8 +183,9 @@ function CarForm({ initial, onSubmit, onCancel, focusField }) {
       engine: form.engine.trim() || null,
       year,
       fuel_type: form.fuel_type,
-      current_odometer: odometer,
-      tank_liters: tank,
+      // Entered in display units; store metric.
+      current_odometer: Math.round(kmFromDistance(odometer, currentUnits())),
+      tank_liters: tank == null ? null : litresFromVolume(tank, currentUnits()),
       monthly_budget: budget,
       vin: form.vin.trim().toUpperCase() || null,
       plate: form.plate.trim().toUpperCase() || null,
@@ -302,7 +319,7 @@ function CarForm({ initial, onSubmit, onCancel, focusField }) {
       </div>
       <TextField
         ref={odometerRef}
-        label={t('carEditor.odometer')}
+        label={t('carEditor.odometer', { unit: distanceUnitLabel() })}
         type="number"
         inputMode="numeric"
         enterKeyHint="done"
@@ -316,7 +333,7 @@ function CarForm({ initial, onSubmit, onCancel, focusField }) {
           occupied (' ') — the floating label depends on it. */}
       <div className="grid grid-cols-2 gap-3">
         <TextField
-          label={t('carEditor.tankLiters')}
+          label={t('carEditor.tankLiters', { unit: volumeUnitLabel() })}
           hint={t('carEditor.hintTank')}
           type="number"
           inputMode="decimal"

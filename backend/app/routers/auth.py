@@ -97,6 +97,7 @@ def register(payload: UserCreate, request: Request, db: Session = Depends(get_db
         hashed_password=hash_password(payload.password),
         language=lang,
         currency=payload.currency or "USD",
+        unit_system=payload.unit_system or "metric",
         # Without a mail server nobody could ever confirm, so the gate stays open.
         email_verified=not verification_required(),
     )
@@ -193,6 +194,7 @@ def google_login(
             auth_provider="google",
             language=lang,
             currency=payload.currency or "USD",
+            unit_system=payload.unit_system or "metric",
             email_verified=True,  # Google vouched for the address
         )
         db.add(user)
@@ -248,6 +250,8 @@ def update_me(
         current_user.language = updates["language"]
     if updates.get("currency"):
         current_user.currency = updates["currency"]
+    if updates.get("unit_system"):
+        current_user.unit_system = updates["unit_system"]
     for flag in (
         "digest_enabled",
         "reminders_enabled",
