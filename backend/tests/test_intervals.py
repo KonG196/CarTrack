@@ -243,6 +243,25 @@ def test_creating_an_interval_seeds_from_an_existing_service_log(
     assert interval["km_left"] == 8825  # 12000 - 3175, not a full 10000
 
 
+def test_a_filter_log_does_not_cross_match_other_filters(
+    client: TestClient, auth_headers: dict, make_car
+) -> None:
+    """The word «фільтр» is a category, not an identity: an air-filter log must
+    not anchor the fuel- or cabin-filter interval (they'd all read 'serviced')."""
+    car = make_car(current_odometer=3175)
+    _add_maintenance(
+        client, auth_headers, car["id"], odometer=2000,
+        items=["Олива двигуна", "Масляний фільтр", "Повітряний фільтр"],
+    )
+    air = _create_interval(client, auth_headers, car["id"], {"title": "Повітряний фільтр", "interval_km": 20000})
+    fuel = _create_interval(client, auth_headers, car["id"], {"title": "Паливний фільтр", "interval_km": 30000})
+    cabin = _create_interval(client, auth_headers, car["id"], {"title": "Салонний фільтр", "interval_km": 15000})
+
+    assert _get_interval(client, auth_headers, car["id"], air["id"])["last_odometer"] == 2000
+    assert _get_interval(client, auth_headers, car["id"], fuel["id"])["last_odometer"] is None
+    assert _get_interval(client, auth_headers, car["id"], cabin["id"])["last_odometer"] is None
+
+
 def test_creating_an_interval_with_no_matching_log_stays_unanchored(
     client: TestClient, auth_headers: dict, make_car
 ) -> None:

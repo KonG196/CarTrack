@@ -58,6 +58,17 @@ UKRAINIAN_STOP_WORDS = frozenset(
         "роботи",
         "інше",
         "інші",
+        # Category nouns shared across distinct services — matching must key off
+        # the distinguishing adjective, not these. Without it "Салонний фільтр"
+        # and "Паливний фільтр" match each other (and any log with any filter)
+        # through the bare word "фільтр".
+        "фільтр",
+        "фільтра",
+        "фільтри",
+        "фільтрів",
+        "рідина",
+        "рідини",
+        "комплект",
     }
 )
 
