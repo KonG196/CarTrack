@@ -9,7 +9,7 @@
 <meta property="og:site_name" content="Kapot Tracker">
 <meta property="og:title" content="Kapot Tracker — car logbook">
 <meta property="og:description" content="Snap a fuel receipt — Kapot Tracker creates the entry, computes your real consumption and reminds you about service in Telegram.">
-<meta property="og:url" content="https://kapot-tracker.vercel.app/landing/en">
+<meta property="og:url" content="https://kapot-tracker.vercel.app/landing/en/">
 <meta property="og:locale" content="en_US">
 <meta property="og:image" content="https://kapot-tracker.vercel.app/og-en.png">
 <meta property="og:image:width" content="1200">
@@ -20,7 +20,7 @@
 <meta name="twitter:description" content="Snap a fuel receipt — Kapot Tracker creates the entry, computes your real consumption and reminds you about service in Telegram.">
 <meta name="twitter:image" content="https://kapot-tracker.vercel.app/og-en.png">
 <meta name="twitter:image:alt" content="Kapot Tracker — car logbook: receipt scanning, Telegram assistant, maintenance & tyre tracker, economics & TCO">
-<link rel="canonical" href="https://kapot-tracker.vercel.app/landing/en">
+<link rel="canonical" href="https://kapot-tracker.vercel.app/landing/en/">
 <style>
 /* Ті самі шрифти, що й у застосунку (public/fonts) — одне джерело */
 @font-face {
@@ -428,30 +428,30 @@ footer a:hover{color:var(--amber)}
     </div>
 
     <div class="hero-demo" id="demo">
-      <div class="receipt" data-i18n-aria="receiptAria" aria-label="A fuel-station fiscal receipt the app recognizes">
-        <div class="r c hl" style="--d:.55s">ТОВ "ОККО-СХІД"</div>
-        <div class="r c">АЗС з магазином №КГ31</div>
-        <div class="r">ПРК №8, Кран №2, Резервуар №6</div>
-        <div class="r hl" style="--d:.8s"><span>43,06 л х 15,99</span></div>
-        <div class="r"><span>АвтоГАЗ скраплений</span><span class="num">688,53 Б</span></div>
+      <div class="receipt" data-i18n-aria="receiptAria" aria-label="A fuel-station fuel receipt the app recognizes">
+        <div class="r c hl" style="--d:.55s" data-i18n="rcpt1">SHELL STATION #4821</div>
+        <div class="r c" data-i18n="rcpt2">1200 Main St, Austin, TX</div>
+        <div class="r" data-i18n="rcpt3">Pump 6 · Regular Unleaded</div>
+        <div class="r hl" style="--d:.8s" data-i18n="rcpt4"><span>11.38 gal × $3.499</span></div>
+        <div class="r" data-i18n="rcpt5"><span>Fuel</span><span class="num">$39.82</span></div>
         <div class="sep" aria-hidden="true"></div>
-        <div class="r hl" style="--d:1.35s"><span>СУМА, ГРН.</span><span class="num">688,53</span></div>
-        <div class="r"><span>ПДВ Б=20,00%</span><span class="num">114,76</span></div>
-        <div class="r"><span>ЕКВАЙРИНГ</span><span class="num">688,53</span></div>
+        <div class="r hl" style="--d:1.35s" data-i18n="rcpt6"><span>TOTAL</span><span class="num">$39.82</span></div>
+        <div class="r" data-i18n="rcpt7"><span>Tax incl.</span><span class="num">$3.28</span></div>
+        <div class="r" data-i18n="rcpt8"><span>VISA ****4417</span><span class="num">$39.82</span></div>
         <div class="sep" aria-hidden="true"></div>
-        <div class="r c">Дякуємо за покупку!</div>
-        <div class="r c">ФІСКАЛЬНИЙ ЧЕК</div>
+        <div class="r c" data-i18n="rcpt9">Thank you for your purchase!</div>
+        <div class="r c" data-i18n="rcpt10">CUSTOMER RECEIPT</div>
         <div class="beam" aria-hidden="true"></div>
       </div>
 
       <div class="extract" data-i18n-aria="extractAria" aria-label="Recognized entry fields">
         <div class="fields num">
-          <div class="field"><small data-i18n="fieldLitres">Litres</small><span class="v" style="--d:1.05s">43.06</span></div>
-          <div class="field"><small data-i18n="fieldPrice">Price per litre, ₴</small><span class="v" style="--d:1.2s">15.99</span></div>
-          <div class="field"><small data-i18n="fieldAmount">Amount, ₴</small><span class="v" style="--d:1.6s">688.53</span></div>
-          <div class="field"><small data-i18n="fieldStation">Station</small><span class="v" style="--d:.85s">OKKO</span></div>
+          <div class="field"><small data-i18n="fieldLitres">Volume, gal</small><span class="v" style="--d:1.05s" data-i18n="fieldVolumeVal">11.38</span></div>
+          <div class="field"><small data-i18n="fieldPrice">Price/gal, $</small><span class="v" style="--d:1.2s" data-i18n="fieldPriceVal">3.499</span></div>
+          <div class="field"><small data-i18n="fieldAmount">Amount, $</small><span class="v" style="--d:1.6s" data-i18n="fieldAmountVal">39.82</span></div>
+          <div class="field"><small data-i18n="fieldStation">Station</small><span class="v" style="--d:.85s" data-i18n="fieldStationVal">Shell</span></div>
         </div>
-        <p class="toast" data-i18n="toast">✓ Recognized: 43.06 L • 688.53 ₴ • OKKO</p>
+        <p class="toast" data-i18n="toast">✓ Recognized: 11.38 gal • $39.82 • Shell</p>
         <button class="replay" type="button" id="replay" data-i18n="replay">⟳ Scan again</button>
       </div>
     </div>
@@ -604,11 +604,27 @@ footer a:hover{color:var(--amber)}
     ghStar: 'Зірка на GitHub',
     heroStat: 'Журнал автора: VW Golf 7 Variant 1.6 TDI • <b>240 054 км</b> • <b>19</b> записів • <b>87 323 ₴</b> під контролем',
     receiptAria: 'Фіскальний чек АЗС, який розпізнає застосунок',
+    // The Ukrainian audience gets the familiar ОККО fiscal receipt; the English
+    // default in the HTML is a US-style Shell receipt (gallons, $).
+    rcpt1: 'ТОВ "ОККО-СХІД"',
+    rcpt2: 'АЗС з магазином №КГ31',
+    rcpt3: 'ПРК №8, Кран №2, Резервуар №6',
+    rcpt4: '<span>43,06 л х 15,99</span>',
+    rcpt5: '<span>АвтоГАЗ скраплений</span><span class="num">688,53 Б</span>',
+    rcpt6: '<span>СУМА, ГРН.</span><span class="num">688,53</span>',
+    rcpt7: '<span>ПДВ Б=20,00%</span><span class="num">114,76</span>',
+    rcpt8: '<span>ЕКВАЙРИНГ</span><span class="num">688,53</span>',
+    rcpt9: 'Дякуємо за покупку!',
+    rcpt10: 'ФІСКАЛЬНИЙ ЧЕК',
     extractAria: 'Розпізнані поля запису',
     fieldLitres: 'Літри',
+    fieldVolumeVal: '43.06',
     fieldPrice: 'Ціна за літр, ₴',
+    fieldPriceVal: '15.99',
     fieldAmount: 'Вартість, ₴',
+    fieldAmountVal: '688.53',
     fieldStation: 'АЗС',
+    fieldStationVal: 'ОККО',
     toast: '✓ Розпізнано: 43.06 л • 688.53 ₴ • ОККО',
     replay: '⟳ Сканувати ще раз',
     howEyebrow: 'Як це працює',
