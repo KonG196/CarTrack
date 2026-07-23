@@ -22,7 +22,7 @@ from app.schemas import (
     ServiceIntervalUpdate,
 )
 from app.services.forecast import estimate_interval_cost
-from app.services.intervals import compute_interval_status
+from app.services.intervals import compute_interval_status, seed_interval_from_history
 from app.services.intervals_complete import complete_interval
 from app.services.presets import compliance_presets, maintenance_presets
 
@@ -152,6 +152,9 @@ def create_interval(
     car = get_owned_car(db, current_user, car_id)
     interval = ServiceInterval(car_id=car.id, **payload.model_dump())
     db.add(interval)
+    db.flush()
+    if interval.last_odometer is None and interval.last_date is None:
+        seed_interval_from_history(db, interval)
     db.commit()
     db.refresh(interval)
     return serialize_interval(db, interval, car)

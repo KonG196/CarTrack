@@ -6,7 +6,7 @@ import datetime as dt
 from collections.abc import Sequence
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models import Car, LogEntry, ServiceInterval
 
@@ -125,6 +125,100 @@ def sync_intervals_from_log(db: Session, log: LogEntry) -> list[ServiceInterval]
             interval.snoozed_until = None
             advanced.append(interval)
     return advanced
+
+
+def recompute_intervals_for_car(
+    db: Session,
+    car_id: int,
+    removed_anchors: set[tuple[int, dt.date]] | None = None,
+) -> list[ServiceInterval]:
+    from app.services.forecast import _log_service_text, normalize_keywords
+
+    logs = (
+        db.execute(
+            select(LogEntry)
+            .where(LogEntry.car_id == car_id, LogEntry.type == "maintenance")
+            .options(selectinload(LogEntry.maintenance))
+        )
+        .scalars()
+        .all()
+    )
+    log_kw = [(log, normalize_keywords(_log_service_text(log))) for log in logs]
+
+    intervals = (
+        db.execute(select(ServiceInterval).where(ServiceInterval.car_id == car_id))
+        .scalars()
+        .all()
+    )
+    # Anchors that a maintenance log has ever set: (odometer, date) pairs across
+    # the whole journal. An interval whose current anchor is one of these was
+    # journal-derived, so it is safe to re-derive or clear it. An anchor that
+    # matches no log was typed by hand — leave it alone.
+    log_anchors = {(log.odometer, log.date) for log, _ in log_kw}
+    if removed_anchors:
+        log_anchors |= removed_anchors
+
+    changed: list[ServiceInterval] = []
+    for interval in intervals:
+        if interval.interval_km is None:
+            continue
+        title_kw = normalize_keywords(interval.title)
+        if not title_kw:
+            continue
+        best = None
+        for log, kw in log_kw:
+            if title_kw & kw and (best is None or (log.odometer, log.date) > (best.odometer, best.date)):
+                best = log
+
+        if best is not None:
+            new_odo, new_date = best.odometer, best.date
+        elif (interval.last_odometer, interval.last_date) in log_anchors:
+            # The matching log that set this anchor is gone (deleted or edited to
+            # no longer match) and nothing else matches: clear it, don't leave a
+            # phantom "serviced" state.
+            new_odo, new_date = None, None
+        else:
+            continue  # hand-entered anchor, or already unanchored — untouched
+
+        if interval.last_odometer != new_odo or interval.last_date != new_date:
+            interval.last_odometer = new_odo
+            interval.last_date = new_date
+            interval.last_notified_at = None
+            interval.snoozed_until = None
+            changed.append(interval)
+    return changed
+
+
+def seed_interval_from_history(db: Session, interval: ServiceInterval) -> bool:
+    from app.services.forecast import _log_service_text, normalize_keywords
+
+    if interval.last_odometer is not None or interval.last_date is not None:
+        return False
+    if interval.interval_km is None:
+        return False
+    title_keywords = normalize_keywords(interval.title)
+    if not title_keywords:
+        return False
+
+    logs = (
+        db.execute(
+            select(LogEntry)
+            .where(LogEntry.car_id == interval.car_id, LogEntry.type == "maintenance")
+            .options(selectinload(LogEntry.maintenance))
+        )
+        .scalars()
+        .all()
+    )
+    best = None
+    for log in logs:
+        if title_keywords & normalize_keywords(_log_service_text(log)):
+            if best is None or (log.odometer, log.date) > (best.odometer, best.date):
+                best = log
+    if best is None:
+        return False
+    interval.last_odometer = best.odometer
+    interval.last_date = best.date
+    return True
 
 
 def compute_interval_status(

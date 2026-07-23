@@ -227,6 +227,131 @@ def test_unrelated_service_does_not_touch_the_interval(
     assert updated["last_odometer"] == 40000  # oil interval untouched
 
 
+def test_creating_an_interval_seeds_from_an_existing_service_log(
+    client: TestClient, auth_headers: dict, make_car
+) -> None:
+    """The reported bug: log the oil change first, THEN create the interval; it
+    must anchor to the logged service (2000 km), not read as done-just-now."""
+    car = make_car(current_odometer=3175)
+    _add_maintenance(client, auth_headers, car["id"], odometer=2000, items=["Oil change"])
+
+    interval = _create_interval(
+        client, auth_headers, car["id"], {"title": "Oil change", "interval_km": 10000}
+    )
+    assert interval["last_odometer"] == 2000
+    assert interval["due_odometer"] == 12000
+    assert interval["km_left"] == 8825  # 12000 - 3175, not a full 10000
+
+
+def test_creating_an_interval_with_no_matching_log_stays_unanchored(
+    client: TestClient, auth_headers: dict, make_car
+) -> None:
+    """No history to seed from must leave it blank — never the current odometer,
+    which would falsely read as 'just serviced'."""
+    car = make_car(current_odometer=3175)
+    _add_maintenance(client, auth_headers, car["id"], odometer=2000, items=["Air filter"])
+
+    interval = _create_interval(
+        client, auth_headers, car["id"], {"title": "Oil change", "interval_km": 10000}
+    )
+    assert interval["last_odometer"] is None
+    assert interval["km_left"] is None
+
+
+def test_explicit_last_odometer_is_not_overridden_by_history(
+    client: TestClient, auth_headers: dict, make_car
+) -> None:
+    car = make_car(current_odometer=3175)
+    _add_maintenance(client, auth_headers, car["id"], odometer=2000, items=["Oil change"])
+
+    interval = _create_interval(
+        client,
+        auth_headers,
+        car["id"],
+        {"title": "Oil change", "interval_km": 10000, "last_odometer": 500},
+    )
+    assert interval["last_odometer"] == 500  # user's value wins, no seeding
+
+
+def test_deleting_a_service_log_pulls_the_interval_back(
+    client: TestClient, auth_headers: dict, make_car
+) -> None:
+    car = make_car(current_odometer=60000)
+    interval = _create_interval(
+        client, auth_headers, car["id"], {"title": "Oil change", "interval_km": 10000, "last_odometer": 40000}
+    )
+    # Two oil changes logged; interval advances to the newest (55000).
+    _add_maintenance(client, auth_headers, car["id"], odometer=50000, items=["Oil change"])
+    log2 = _add_maintenance(client, auth_headers, car["id"], odometer=55000, items=["Oil change"])
+    assert _get_interval(client, auth_headers, car["id"], interval["id"])["last_odometer"] == 55000
+
+    # Delete the newest → interval falls back to the remaining 50000, not stuck at 55000.
+    assert client.delete(f"/api/logs/{log2['id']}", headers=auth_headers).status_code == 204
+    assert _get_interval(client, auth_headers, car["id"], interval["id"])["last_odometer"] == 50000
+
+
+def test_deleting_the_only_service_log_clears_the_interval(
+    client: TestClient, auth_headers: dict, make_car
+) -> None:
+    car = make_car(current_odometer=60000)
+    interval = _create_interval(
+        client, auth_headers, car["id"], {"title": "Oil change", "interval_km": 10000, "last_odometer": 40000}
+    )
+    log = _add_maintenance(client, auth_headers, car["id"], odometer=55000, items=["Oil change"])
+    assert _get_interval(client, auth_headers, car["id"], interval["id"])["last_odometer"] == 55000
+
+    client.delete(f"/api/logs/{log['id']}", headers=auth_headers)
+    # No oil-change record left → the interval must not still read "serviced at 55000".
+    assert _get_interval(client, auth_headers, car["id"], interval["id"])["last_odometer"] is None
+
+
+def test_editing_a_service_log_down_pulls_the_interval_back(
+    client: TestClient, auth_headers: dict, make_car
+) -> None:
+    car = make_car(current_odometer=60000)
+    interval = _create_interval(
+        client, auth_headers, car["id"], {"title": "Oil change", "interval_km": 10000, "last_odometer": 40000}
+    )
+    log = _add_maintenance(client, auth_headers, car["id"], odometer=55000, items=["Oil change"])
+    assert _get_interval(client, auth_headers, car["id"], interval["id"])["last_odometer"] == 55000
+
+    # Correct a typo: it was actually at 51000.
+    client.patch(f"/api/logs/{log['id']}", json={"odometer": 51000}, headers=auth_headers)
+    assert _get_interval(client, auth_headers, car["id"], interval["id"])["last_odometer"] == 51000
+
+
+def test_editing_a_service_log_to_no_longer_match_clears_the_advance(
+    client: TestClient, auth_headers: dict, make_car
+) -> None:
+    car = make_car(current_odometer=60000)
+    interval = _create_interval(
+        client, auth_headers, car["id"], {"title": "Oil change", "interval_km": 10000, "last_odometer": 40000}
+    )
+    log = _add_maintenance(client, auth_headers, car["id"], odometer=55000, items=["Oil change"])
+    assert _get_interval(client, auth_headers, car["id"], interval["id"])["last_odometer"] == 55000
+
+    # Reclassify the log's items so it no longer matches the oil interval.
+    client.patch(
+        f"/api/logs/{log['id']}",
+        json={"maintenance": {"items": ["Air filter"]}},
+        headers=auth_headers,
+    )
+    assert _get_interval(client, auth_headers, car["id"], interval["id"])["last_odometer"] is None
+
+
+def test_deleting_an_unrelated_log_leaves_a_manual_anchor_intact(
+    client: TestClient, auth_headers: dict, make_car
+) -> None:
+    car = make_car(current_odometer=60000)
+    interval = _create_interval(
+        client, auth_headers, car["id"], {"title": "Oil change", "interval_km": 10000, "last_odometer": 42000}
+    )
+    other = _add_maintenance(client, auth_headers, car["id"], odometer=50000, items=["Air filter"])
+    client.delete(f"/api/logs/{other['id']}", headers=auth_headers)
+    # The hand-entered 42000 anchor must survive an unrelated delete.
+    assert _get_interval(client, auth_headers, car["id"], interval["id"])["last_odometer"] == 42000
+
+
 def test_interval_without_anchor_has_null_derived_fields(
     client: TestClient, auth_headers: dict, make_car
 ) -> None:

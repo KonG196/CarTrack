@@ -293,10 +293,8 @@ export const useCarStore = create((set, get) => ({
       (get().intervals || []).map((i) => i.title.trim().toLowerCase())
     );
     const fresh = presets.filter((p) => !existing.has(p.title.trim().toLowerCase()));
-    const today = new Date().toISOString().slice(0, 10);
-    const base = { last_odometer: car.current_odometer, last_date: today };
     for (const preset of fresh) {
-      await intervalsApi.createInterval(car.id, { ...preset, ...base });
+      await intervalsApi.createInterval(car.id, preset);
     }
     if (fresh.length) await get().fetchIntervals();
     return fresh.length;

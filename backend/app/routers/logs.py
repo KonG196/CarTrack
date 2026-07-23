@@ -34,7 +34,7 @@ from app.schemas import (
     RefuelDetailsIn,
     RepairDetailsIn,
 )
-from app.services.intervals import sync_intervals_from_log
+from app.services.intervals import recompute_intervals_for_car, sync_intervals_from_log
 from app.services.stats import consumption_by_log_id
 
 router = APIRouter(tags=["logs"])
@@ -361,6 +361,10 @@ def update_log(
     ignored rather than refused.
     """
     log = get_owned_log(db, current_user, log_id, min_role=ROLE_EDITOR)
+    # The anchor this log had before the edit: if it was a service anchoring an
+    # interval, recompute must know that (odometer, date) was journal-owned so it
+    # re-derives or clears the interval when the edit moves or un-matches it.
+    old_anchor = {(log.odometer, log.date)} if log.type == "maintenance" else set()
     updates = payload.model_dump(exclude_unset=True)
 
     if "type" in updates:
@@ -470,10 +474,11 @@ def update_log(
     # changes, missing detail-only edits — offline sync keys on this stamp.
     log.updated_at = utcnow()
 
-    # A corrected odometer or item list can now match (or better fit) an
-    # interval, so re-run the same advance the create path does.
+    # An edit can move a service's odometer/date down, or stop it matching an
+    # interval at all — a forward-only advance can't undo either. Re-derive the
+    # car's interval anchors from the whole remaining journal instead.
     db.flush()
-    sync_intervals_from_log(db, log)
+    recompute_intervals_for_car(db, log.car_id, removed_anchors=old_anchor)
 
     db.commit()
     db.refresh(log)
@@ -489,6 +494,14 @@ def delete_log(
     current_user: User = Depends(get_current_user),
 ) -> None:
     log = get_owned_log(db, current_user, log_id, min_role=ROLE_EDITOR)
+    car_id = log.car_id
+    removed = {(log.odometer, log.date)} if log.type == "maintenance" else None
     db.delete(log)
+    db.flush()
+    # A deleted service must not leave its interval falsely advanced: re-derive
+    # the affected car's interval anchors from what remains, treating the removed
+    # log's anchor as journal-owned so an interval it set is cleared, not stuck.
+    if removed:
+        recompute_intervals_for_car(db, car_id, removed_anchors=removed)
     db.commit()
     return None
