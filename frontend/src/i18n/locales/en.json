@@ -133,7 +133,8 @@
     },
     "orDivider": "or",
     "google": {
-      "failed": "Google sign-in failed, try again"
+      "failed": "Google sign-in failed, try again",
+      "continue": "Continue with Google"
     }
   },
   "tour": {

@@ -74,6 +74,10 @@ export default function Login() {
         </a>
         <Card>
           <h1 className="mb-4 text-center font-display text-lg font-semibold text-fg">{t('auth.login.title')}</h1>
+
+          {/* Google + «or», above the form. Self-hides without a client id. */}
+          <GoogleAuthSection onCredential={handleGoogle} />
+
           <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
             <TextField
               label={t('auth.login.email')}
@@ -97,10 +101,6 @@ export default function Login() {
               {loading ? t('auth.login.submitting') : t('auth.login.submit')}
             </Button>
           </form>
-
-          {/* Divider + Google. The button self-hides when no client id is set. */}
-          <GoogleAuthSection onCredential={handleGoogle} />
-
           <p className="mt-4 text-center text-sm">
             <Link to="/reset" className="font-semibold text-amber hover:text-amber-deep">
               {t('auth.login.forgotPassword')}

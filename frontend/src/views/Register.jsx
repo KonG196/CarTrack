@@ -76,6 +76,10 @@ export default function Register() {
         </div>
         <Card>
           <h1 className="mb-4 text-center font-display text-lg font-semibold text-fg">{t('auth.register.title')}</h1>
+
+          {/* Google + «or», above the form. Self-hides without a client id. */}
+          <GoogleAuthSection onCredential={handleGoogle} />
+
           <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
             <TextField
               label={t('auth.register.email')}
@@ -108,9 +112,6 @@ export default function Register() {
               {loading ? t('auth.register.submitting') : t('auth.register.submit')}
             </Button>
           </form>
-
-          <GoogleAuthSection onCredential={handleGoogle} />
-
           <p className="mt-4 text-center text-sm text-mist">
             {t('auth.register.haveAccount')}{' '}
             <Link to={withNext('/login', next)} className="font-semibold text-amber hover:text-amber-deep">
