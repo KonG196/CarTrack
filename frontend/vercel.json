@@ -4,6 +4,8 @@
   "trailingSlash": false,
   "rewrites": [
     { "source": "/landing", "destination": "/landing/en/index.html" },
+    { "source": "/landing/en", "destination": "/landing/en/index.html" },
+    { "source": "/landing/uk", "destination": "/landing/uk/index.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

@@ -4,19 +4,22 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
-const LANDING_FILE = fileURLToPath(new URL('./public/landing.html', import.meta.url));
+const landingFile = (rel) => fileURLToPath(new URL(`./public/${rel}`, import.meta.url));
 
-// Serve the static marketing page (public/landing.html) at a clean /welcome in
-// dev and `vite preview`. In production nginx does the same map (see
-// nginx.conf) — so the URL is identical everywhere and the page needs no build
-// step. Registered before Vite's own middlewares so it beats the SPA history
-// fallback, which would otherwise answer /welcome with index.html.
+const LANDING_ROUTES = {
+  '/welcome': 'landing.html',
+  '/landing': 'landing/en/index.html',
+  '/landing/en': 'landing/en/index.html',
+  '/landing/uk': 'landing/uk/index.html',
+};
+
 function landingRoute() {
   const serve = (req, res, next) => {
-    const path = (req.url || '').split('?')[0];
-    if (path === '/welcome' || path === '/welcome/') {
+    const path = (req.url || '').split('?')[0].replace(/\/$/, '') || '/';
+    const file = LANDING_ROUTES[path];
+    if (file) {
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      res.end(readFileSync(LANDING_FILE));
+      res.end(readFileSync(landingFile(file)));
       return;
     }
     next();
@@ -54,10 +57,7 @@ export default defineConfig({
         // Типовий набір Workbox не містить woff2, тож встановлений застосунок
         // офлайн лишався б без своїх шрифтів і падав на системний.
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        // Не підміняти лендінг застосунком: без цього навігація на /welcome і
-        // /landing.html падала б у navigateFallback (index.html) — і замість
-        // сторінки відкривався б React-застосунок.
-        navigateFallbackDenylist: [/^\/welcome$/, /^\/landing\.html$/],
+        navigateFallbackDenylist: [/^\/welcome$/, /^\/landing(\/(en|uk))?\/?$/, /^\/landing\.html$/],
         runtimeCaching: [
           {
             // Network first, but a three-second wait beats a spinner at a
