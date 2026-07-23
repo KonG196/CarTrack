@@ -50,7 +50,11 @@ export default function Menu({
   }, [mounted, requestClose]);
 
   return (
-    <div ref={wrapRef} className="relative min-w-0">
+    // While open, lift the whole trigger+popup above later siblings. The popup
+    // is `absolute z-50`, but z-index only ranks within a stacking context — a
+    // following card (Card has an opaque bg, no z) would otherwise paint over
+    // the options. Raising the wrapper's z when mounted makes the popup win.
+    <div ref={wrapRef} className={`relative min-w-0 ${mounted ? 'z-50' : ''}`}>
       <button
         ref={triggerRef}
         type="button"
