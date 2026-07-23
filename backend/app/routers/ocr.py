@@ -37,16 +37,32 @@ def _ocr_unavailable(lang: str = "en") -> HTTPException:
     )
 
 
-async def _flag_first_ocr(db: Session, user: User, kind: str) -> None:
+async def _flag_first_ocr(
+    db: Session,
+    user: User,
+    kind: str,
+    fields: dict,
+    image: tuple[str, bytes, str] | None,
+) -> None:
     """Fire the owner's first-scan alert, once, without blocking the loop.
 
     Only the very first successful scan does any work; the flag check keeps every
-    later scan free of a DB write or a thread hop. The send itself (SMTP) runs
-    off the event loop, mirroring how the scan above is offloaded.
+    later scan free of a DB write, a thread hop, or holding the image bytes. The
+    send itself (SMTP + attachment) runs off the event loop, mirroring how the
+    scan above is offloaded. `fields` is the recognised result and `image` the
+    original photo, both forwarded into the owner mail.
     """
     if user.admin_notified_first_ocr:
         return
-    await asyncio.to_thread(notify_first_ocr, db, user, kind)
+    await asyncio.to_thread(notify_first_ocr, db, user, kind, fields, image)
+
+
+def _image_attachment(file: UploadFile, data: bytes) -> tuple[str, bytes, str]:
+    """The uploaded photo as a mail attachment tuple, with a sane filename."""
+    content_type = file.content_type or "image/jpeg"
+    ext = content_type.split("/")[-1].split("+")[0] or "jpg"
+    name = (file.filename or f"receipt.{ext}").rsplit("/", 1)[-1]
+    return (name, data, content_type)
 
 
 async def _read_image(file: UploadFile) -> bytes:
@@ -88,7 +104,18 @@ async def scan_receipt(
     except OcrUnavailable:
         raise _ocr_unavailable(current_user.language)
 
-    await _flag_first_ocr(db, current_user, "чек")
+    # Owner alert (first scan only): the recognised fields + the original photo,
+    # so the read can be eyeballed against the receipt itself.
+    fields = {
+        "Літри": f"{parsed.liters} л" if parsed.liters else None,
+        "Ціна/л": parsed.price_per_liter,
+        "Сума": parsed.total_cost,
+        "Дата": parsed.date,
+        "АЗС": parsed.gas_station,
+    }
+    await _flag_first_ocr(
+        db, current_user, "чек", fields, _image_attachment(file, image_bytes)
+    )
     return OcrScanResult(
         liters=parsed.liters,
         price_per_liter=parsed.price_per_liter,
@@ -115,7 +142,6 @@ async def scan_work_order(
     except OcrUnavailable:
         raise _ocr_unavailable(current_user.language)
 
-    await _flag_first_ocr(db, current_user, "замовлення-наряд")
     date = None
     if parsed.date:
         try:
@@ -127,6 +153,20 @@ async def scan_work_order(
     if date and date > dt.date.today():
         date = None
 
+    fields = {
+        "Роботи": ", ".join(parsed.items) if parsed.items else None,
+        "Запчастини": parsed.parts_cost,
+        "Робота": parsed.labor_cost,
+        "Сума": parsed.total_cost,
+        "Дата": date,
+    }
+    await _flag_first_ocr(
+        db,
+        current_user,
+        "замовлення-наряд",
+        fields,
+        _image_attachment(file, image_bytes),
+    )
     return OcrWorkOrderResult(
         items=parsed.items,
         parts_cost=parsed.parts_cost,

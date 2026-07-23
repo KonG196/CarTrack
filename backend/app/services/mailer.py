@@ -60,11 +60,19 @@ def mail_enabled() -> bool:
     return bool(settings.SMTP_HOST)
 
 
-def send_mail(to: str, subject: str, body: str, html: Optional[str] = None) -> bool:
+def send_mail(
+    to: str,
+    subject: str,
+    body: str,
+    html: Optional[str] = None,
+    attachments: Optional[list[tuple[str, bytes, str]]] = None,
+) -> bool:
     """Send a message. Returns False when mail is off or fails.
 
     `body` is the plain-text part; when `html` is given the letter is sent as
     multipart/alternative so text-only clients still get a readable message.
+    `attachments` is a list of (filename, data, content_type) — used for e.g.
+    the scanned receipt photo on the owner's first-OCR alert.
     """
     if not mail_enabled():
         logger.info("SMTP disabled, would send to %s: %s", to, subject)
@@ -85,6 +93,14 @@ def send_mail(to: str, subject: str, body: str, html: Optional[str] = None) -> b
             html_part.add_related(
                 logo, maintype="image", subtype="png", cid=f"<{_LOGO_CID}>"
             )
+    for filename, data, content_type in attachments or []:
+        maintype, _, subtype = content_type.partition("/")
+        message.add_attachment(
+            data,
+            maintype=maintype or "application",
+            subtype=subtype or "octet-stream",
+            filename=filename,
+        )
 
     try:
         with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=15) as smtp:

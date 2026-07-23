@@ -36,14 +36,34 @@ def _who(user: User) -> str:
     return f"{name} ({user.email})" if name else user.email
 
 
-def _send_admin(subject: str, heading: str, lede: str, note: str | None = None) -> bool:
-    """Render and send one owner note. Returns False when admin mail is off."""
+def _escape(text: str) -> str:
+    """The notes are our own strings, but a user's plate/VIN/station name rides
+    inside them — escape so an odd character can never break the HTML letter."""
+    return (
+        text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    )
+
+
+def _send_admin(
+    subject: str,
+    heading: str,
+    lede: str,
+    note: str | None = None,
+    attachments: list[tuple[str, bytes, str]] | None = None,
+) -> bool:
+    """Render and send one owner note. Returns False when admin mail is off.
+
+    `note` may be multi-line: the plain-text part keeps the newlines, the HTML
+    part turns them into <br> so the little spec-sheet blocks (car facts, scan
+    results) render on separate lines.
+    """
     to = (settings.ADMIN_EMAIL or "").strip()
     if not to:
         return False
     text = f"{heading}\n\n{lede}"
     if note:
         text += f"\n\n{note}"
+    html_note = _escape(note).replace("\n", "<br>") if note else None
     return send_mail(
         to,
         subject,
@@ -53,8 +73,9 @@ def _send_admin(subject: str, heading: str, lede: str, note: str | None = None) 
             heading=heading,
             lede=lede,
             button=("Відкрити Kapot", _APP_URL),
-            note=note,
+            note=html_note,
         ),
+        attachments=attachments,
     )
 
 
@@ -74,6 +95,28 @@ def notify_new_signup(db: Session, user: User) -> None:
         logger.exception("admin signup notification failed for user %s", user.id)
 
 
+def _car_lines(car: Car) -> str:
+    """A labelled block describing the car: everything the owner filled in.
+
+    One fact per line so the note reads like a little spec sheet in the mail,
+    with blank fields simply omitted rather than showing "None".
+    """
+    head = " ".join(
+        str(part) for part in (car.brand, car.model, car.year) if part
+    )
+    rows: list[tuple[str, object]] = [
+        ("Авто", head),
+        ("Покоління", car.generation),
+        ("Двигун", car.engine),
+        ("Пальне", car.fuel_type),
+        ("Пробіг", f"{car.current_odometer:,} км".replace(",", " ")
+         if car.current_odometer else None),
+        ("VIN", car.vin),
+        ("Номер", car.plate),
+    ]
+    return "\n".join(f"{label}: {value}" for label, value in rows if value)
+
+
 def notify_first_car(db: Session, user: User, car: Car) -> None:
     """The user added their first car."""
     if user.admin_notified_first_car:
@@ -81,16 +124,11 @@ def notify_first_car(db: Session, user: User, car: Car) -> None:
     try:
         user.admin_notified_first_car = True
         db.commit()
-        car_line = " ".join(
-            str(part)
-            for part in (car.brand, car.model, car.year, car.fuel_type)
-            if part
-        )
         _send_admin(
             subject="Kapot: перша машина",
             heading="Перша машина додана",
             lede=f"{_who(user)} додав(-ла) першу машину.",
-            note=f"Авто: {car_line}." if car_line else None,
+            note=_car_lines(car) or None,
         )
     except Exception:  # noqa: BLE001
         logger.exception("admin first-car notification failed for user %s", user.id)
@@ -112,8 +150,31 @@ def notify_first_verified(db: Session, user: User) -> None:
         logger.exception("admin verify notification failed for user %s", user.id)
 
 
-def notify_first_ocr(db: Session, user: User, kind: str = "чек") -> None:
-    """The user ran OCR (receipt or work order) for the first time."""
+def _scan_lines(kind: str, fields: dict[str, object] | None) -> str:
+    """Human block for the scan: the type plus each recognised field, in order.
+
+    `fields` is an ordered {label: value} of what the OCR read; None/empty
+    values are dropped so a partial scan still reads cleanly.
+    """
+    rows = [("Тип", kind)]
+    for label, value in (fields or {}).items():
+        rows.append((label, value))
+    return "\n".join(f"{label}: {value}" for label, value in rows if value)
+
+
+def notify_first_ocr(
+    db: Session,
+    user: User,
+    kind: str = "чек",
+    fields: dict[str, object] | None = None,
+    image: tuple[str, bytes, str] | None = None,
+) -> None:
+    """The user ran OCR (receipt or work order) for the first time.
+
+    `fields` is the recognised result (label→value) shown in the note; `image`
+    is the original photo as (filename, bytes, content_type), attached so the
+    owner can eyeball what was scanned against what was read.
+    """
     if user.admin_notified_first_ocr:
         return
     try:
@@ -123,7 +184,8 @@ def notify_first_ocr(db: Session, user: User, kind: str = "чек") -> None:
             subject="Kapot: перше сканування",
             heading="Перше сканування (OCR)",
             lede=f"{_who(user)} вперше скористав(-ла)ся розпізнаванням.",
-            note=f"Тип: {kind}." if kind else None,
+            note=_scan_lines(kind, fields) or None,
+            attachments=[image] if image else None,
         )
     except Exception:  # noqa: BLE001
         logger.exception("admin OCR notification failed for user %s", user.id)

@@ -28,8 +28,16 @@ def sent_admin(monkeypatch: pytest.MonkeyPatch) -> list[dict]:
     """
     sent: list[dict] = []
 
-    def fake_send_mail(to, subject, body, html=None):
-        sent.append({"to": to, "subject": subject, "body": body})
+    def fake_send_mail(to, subject, body, html=None, attachments=None):
+        sent.append(
+            {
+                "to": to,
+                "subject": subject,
+                "body": body,
+                "html": html or "",
+                "attachments": attachments or [],
+            }
+        )
         return True
 
     monkeypatch.setattr(admin_notify, "send_mail", fake_send_mail)
@@ -83,6 +91,11 @@ def test_first_car_includes_car_line(
             model="L200",
             year=2008,
             fuel_type="diesel",
+            generation="II",
+            engine="2.5 DID",
+            current_odometer=258000,
+            vin="JMBLYV98H8J000123",
+            plate="AA1234BB",
         )
         db.add(car)
         db.flush()
@@ -93,7 +106,11 @@ def test_first_car_includes_car_line(
     body = sent_admin[0]["body"]
     # No display name → the raw address stands in for the person.
     assert "carowner@example.com" in body
+    # Every filled-in fact makes it into the spec-sheet note.
     assert "Mitsubishi" in body and "L200" in body and "2008" in body
+    assert "II" in body and "2.5 DID" in body and "diesel" in body
+    assert "258 000 км" in body  # odometer, thin-space grouped
+    assert "JMBLYV98H8J000123" in body and "AA1234BB" in body
 
 
 def test_first_verified_latches(
@@ -112,13 +129,21 @@ def test_first_ocr_names_the_kind(
     sent_admin: list[dict], db_session_factory: sessionmaker
 ) -> None:
     user = _user(db_session_factory)
+    fields = {"Літри": "42.5 л", "Сума": 2473, "АЗС": "ОККО", "Порожнє": None}
+    image = ("receipt.jpg", b"\xff\xd8\xfffakejpeg", "image/jpeg")
     with db_session_factory() as db:
         user = db.merge(user)
-        admin_notify.notify_first_ocr(db, user, "чек")
-        admin_notify.notify_first_ocr(db, user, "чек")
+        admin_notify.notify_first_ocr(db, user, "чек", fields, image)
+        admin_notify.notify_first_ocr(db, user, "чек", fields, image)
         assert user.admin_notified_first_ocr is True
     assert len(sent_admin) == 1
-    assert "чек" in sent_admin[0]["body"]
+    body = sent_admin[0]["body"]
+    assert "чек" in body
+    # Recognised fields land in the note; empty ones are dropped.
+    assert "42.5 л" in body and "2473" in body and "ОККО" in body
+    assert "Порожнє" not in body
+    # The original photo rides along as an attachment.
+    assert sent_admin[0]["attachments"] == [image]
 
 
 def test_no_admin_email_sends_nothing(
@@ -165,7 +190,9 @@ def test_verification_flow_fires_admin_alert(
     'verified' alert reaches the owner."""
     sent: list[dict] = []
     monkeypatch.setattr(
-        admin_notify, "send_mail", lambda to, s, b, html=None: sent.append({"to": to, "subject": s}) or True
+        admin_notify,
+        "send_mail",
+        lambda to, s, b, html=None, attachments=None: sent.append({"to": to, "subject": s}) or True,
     )
     monkeypatch.setattr(settings, "ADMIN_EMAIL", "owner@example.com")
     monkeypatch.setattr(verification, "mail_enabled", lambda: True)
