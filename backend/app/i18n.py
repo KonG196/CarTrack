@@ -196,6 +196,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     # ── API error details (routers) ──
     "err.verifyEmailForFeature": {"en": "Verify your email to use this feature.", "uk": "Підтвердіть пошту, щоб користуватися цією функцією."},
+    "err.accountBlocked": {"en": "This account has been blocked.", "uk": "Цей акаунт заблоковано."},
     "err.tooManyAttempts": {"en": "Too many attempts. Try again later.", "uk": "Забагато спроб. Спробуйте пізніше."},
     "err.tooManyRequests": {"en": "Too many requests. Try again later.", "uk": "Забагато запитів. Спробуйте пізніше."},
     "err.passwordWrong": {"en": "Incorrect password", "uk": "Пароль невірний"},

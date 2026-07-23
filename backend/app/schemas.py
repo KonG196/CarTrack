@@ -161,6 +161,8 @@ class UserOut(BaseModel):
     # «password» or «google». The web hides the change-password UI for google
     # accounts — they have no password to change.
     auth_provider: str = "password"
+    # Owner-only: unlocks the /admin panel in the web. Never set through signup.
+    is_superadmin: bool = False
     # Onboarding tours already shown. Stored as a JSON string on the model; the
     # validator turns it into a list for the client (and tolerates bad data).
     tours_seen: list[str] = Field(default_factory=list)
@@ -1278,3 +1280,125 @@ class ObdSessionDetail(BaseModel):
     # Only ever populated by the import response: the columns a session did
     # not recognize are not stored, so a later GET reports an empty list.
     unmapped_columns: list[str] = []
+
+
+# ── Superadmin panel (routers/admin.py) ──────────────────────────────────────
+
+
+class AdminUserRow(BaseModel):
+    """One user as shown in the admin list — identity, status, and cheap counts."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    email: str
+    display_name: Optional[str] = None
+    language: str
+    currency: str
+    unit_system: str
+    auth_provider: str
+    email_verified: bool
+    is_superadmin: bool
+    blocked: bool
+    blocked_reason: Optional[str] = None
+    created_at: dt.datetime
+    car_count: int = 0
+    log_count: int = 0
+
+
+class AdminUserList(BaseModel):
+    users: list[AdminUserRow]
+    total: int
+
+
+class AdminCarRow(BaseModel):
+    """A user's car, read-only, in the detail view."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    brand: str
+    model: str
+    year: int
+    fuel_type: str
+    current_odometer: int
+    plate: Optional[str] = None
+    vin: Optional[str] = None
+    created_at: dt.datetime
+
+
+class AdminAuditRow(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    actor_id: Optional[int] = None
+    action: str
+    target_user_id: Optional[int] = None
+    target_email: Optional[str] = None
+    detail: Optional[str] = None
+    created_at: dt.datetime
+
+
+class AdminUserDetail(BaseModel):
+    user: AdminUserRow
+    cars: list[AdminCarRow]
+    audit: list[AdminAuditRow]
+
+
+class AdminUserUpdate(BaseModel):
+    """Fields a superadmin may edit directly. Password is never here — reset
+    links are the only way in, since passwords are hashed."""
+
+    email: Optional[str] = Field(default=None, min_length=3, max_length=255)
+    display_name: Optional[str] = None
+    language: Optional[str] = None
+    currency: Optional[str] = None
+    unit_system: Optional[str] = None
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        value = value.strip().lower()
+        local, _, domain = value.partition("@")
+        if not local or not domain or "." not in domain:
+            raise ValueError("invalid email address")
+        return value
+
+    @field_validator("display_name")
+    @classmethod
+    def validate_display_name(cls, value: Optional[str]) -> Optional[str]:
+        return _clean_display_name(value)
+
+    @field_validator("language")
+    @classmethod
+    def validate_language(cls, value: Optional[str]) -> Optional[str]:
+        return None if value is None else normalize_lang(value)
+
+    @field_validator("currency")
+    @classmethod
+    def validate_currency(cls, value: Optional[str]) -> Optional[str]:
+        return None if value is None else normalize_currency(value)
+
+    @field_validator("unit_system")
+    @classmethod
+    def validate_unit_system(cls, value: Optional[str]) -> Optional[str]:
+        return None if value is None else normalize_unit_system(value)
+
+
+class AdminStatusUpdate(BaseModel):
+    """Status toggles. Each is optional; only the ones sent are applied. When
+    `blocked` is true, `blocked_reason` is required (enforced in the router)."""
+
+    email_verified: Optional[bool] = None
+    is_superadmin: Optional[bool] = None
+    blocked: Optional[bool] = None
+    blocked_reason: Optional[str] = Field(default=None, max_length=500)
+
+
+class AdminLinkOut(BaseModel):
+    """A generated verify/reset link and whether it was also mailed."""
+
+    link: str
+    emailed: bool = False

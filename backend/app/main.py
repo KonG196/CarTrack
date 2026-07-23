@@ -9,6 +9,7 @@ from app.config import settings
 from app.database import engine
 from app.migrations import run_migrations
 from app.routers import (
+    admin,
     analytics,
     auth,
     cars,
@@ -55,6 +56,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router, prefix="/api")
+app.include_router(admin.router, prefix="/api")
 app.include_router(cars.router, prefix="/api")
 app.include_router(members.router, prefix="/api")
 app.include_router(logs.router, prefix="/api")

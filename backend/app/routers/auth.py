@@ -2,12 +2,10 @@
 
 import json
 import logging
-import shutil
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.auth import (
@@ -18,10 +16,9 @@ from app.auth import (
     hash_password,
     verify_password,
 )
-from app.config import settings
 from app.database import get_db
 from app.i18n import lang_from_accept, t
-from app.models import LogEntry, User
+from app.models import User
 from app.ratelimit import RateLimiter, client_ip
 from app.schemas import (
     AccountDeleteIn,
@@ -46,6 +43,7 @@ from app.services.google_auth import (
     GoogleAuthUnavailable,
     verify_id_token as verify_google_id_token,
 )
+from app.services.accounts import purge_account
 from app.services.admin_notify import notify_first_verified, notify_new_signup
 from app.services.reset import confirm_reset, initiate_reset
 from app.services.mailer import mail_enabled
@@ -137,9 +135,21 @@ def login(
     # Login no longer requires a verified email — anyone with the right password
     # gets in. Verification gates only the costly features (scan, plate lookup)
     # via require_verified_user; see app/auth.py.
+    _reject_if_blocked(user)
     # A legitimate owner should not stay locked out by their earlier typos.
     login_limiter.reset(limit_key)
     return _issue_tokens(user)
+
+
+def _reject_if_blocked(user: User) -> None:
+    """A blocked account cannot obtain fresh tokens; the reason is surfaced so
+    the person knows why. Checked after the password so a wrong password never
+    reveals whether an address is blocked."""
+    if user.blocked:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=user.blocked_reason or t("err.accountBlocked", user.language),
+        )
 
 
 def _issue_tokens(user: User) -> Token:
@@ -213,6 +223,7 @@ def google_login(
         db.commit()
         notify_first_verified(db, user)
 
+    _reject_if_blocked(user)
     return _issue_tokens(user)
 
 
@@ -236,6 +247,7 @@ def refresh_token(payload: RefreshIn, db: Session = Depends(get_db)) -> Token:
     user = db.get(User, user_id)
     if user is None or token_version != user.token_version:
         raise invalid
+    _reject_if_blocked(user)
     return _issue_tokens(user)
 
 
@@ -323,22 +335,7 @@ def delete_me(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=t("err.passwordWrong", current_user.language)
         )
-    user_uploads = Path(settings.UPLOADS_DIR) / str(current_user.id)
-    if user_uploads.exists():
-        try:
-            shutil.rmtree(user_uploads)
-        except OSError as exc:
-            logger.error("Failed to wipe uploads for user %s: %s", current_user.id, exc)
-    # Orphan this user's authorship on OTHER people's shared cars before deleting
-    # them. log_entries.author_id has no SET NULL FK on the migrated SQLite
-    # schema, and SQLite reuses the freed integer id — so a future signup could
-    # inherit it and be shown as the author of entries they never wrote (and have
-    # their email leaked). Null it explicitly; the user's own cars' logs go with
-    # the ORM cascade regardless.
-    db.execute(
-        update(LogEntry).where(LogEntry.author_id == current_user.id).values(author_id=None)
-    )
-    db.delete(current_user)
+    purge_account(db, current_user)
     db.commit()
 
 

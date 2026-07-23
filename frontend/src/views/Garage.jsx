@@ -21,6 +21,7 @@ import {
   Sparkles,
   QrCode,
   SlidersHorizontal,
+  ShieldCheck,
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -250,6 +251,7 @@ export default function Garage() {
   const removeCar = useCarStore((s) => s.removeCar);
   const resetCars = useCarStore((s) => s.reset);
   const logout = useAuthStore((s) => s.logout);
+  const user = useAuthStore((s) => s.user);
   const { start: startTour } = useTour();
 
   const handleLogout = () => {
@@ -546,6 +548,15 @@ export default function Garage() {
         subtitle={t('garage.profileSubtitle')}
         tourId="settings-profile"
       />
+
+      {user?.is_superadmin && (
+        <SettingsRow
+          to="/admin"
+          icon={ShieldCheck}
+          title={t('admin.entryPoint')}
+          subtitle={t('admin.entryPointDesc')}
+        />
+      )}
 
       {activeCar && (
         <SettingsRow

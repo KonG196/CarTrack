@@ -27,10 +27,22 @@ import Documents from './views/Documents';
 import Notifications from './views/Notifications';
 import CarSpecs from './views/CarSpecs';
 import CarPassport from './views/CarPassport';
+import AdminUsers from './views/AdminUsers';
+import AdminUserDetail from './views/AdminUserDetail';
 
 function Protected({ children }) {
   const token = useAuthStore((s) => s.token);
   if (!token) return <Navigate to="/login" replace />;
+  return children;
+}
+
+// The admin section is gated on the loaded user's flag. While /auth/me is still
+// in flight `user` is null, so we wait (a spinner-free null) rather than bounce
+// a real superadmin to «/» on a slow first load.
+function RequireSuperadmin({ children }) {
+  const user = useAuthStore((s) => s.user);
+  if (user === null) return null;
+  if (!user.is_superadmin) return <Navigate to="/" replace />;
   return children;
 }
 
@@ -101,6 +113,22 @@ export default function App() {
         <Route path="/documents" element={<Documents />} />
         <Route path="/notifications" element={<Notifications />} />
         <Route path="/garage/:carId/specs" element={<CarSpecs />} />
+        <Route
+          path="/admin"
+          element={
+            <RequireSuperadmin>
+              <AdminUsers />
+            </RequireSuperadmin>
+          }
+        />
+        <Route
+          path="/admin/users/:id"
+          element={
+            <RequireSuperadmin>
+              <AdminUserDetail />
+            </RequireSuperadmin>
+          }
+        />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

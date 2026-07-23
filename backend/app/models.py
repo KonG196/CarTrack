@@ -133,6 +133,18 @@ class User(Base):
     token_version: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
     )
+    # Owner-only admin access to /api/admin/*. Set manually on prod; never
+    # granted through the normal signup flow. See routers/admin.py.
+    is_superadmin: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
+    # A blocked account cannot log in and its live sessions are severed (block
+    # bumps token_version). The reason is shown to the user on login and to the
+    # superadmin in the panel. Reversible — unblocking restores everything.
+    blocked: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
+    blocked_reason: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
 
     cars: Mapped[list[Car]] = relationship(back_populates="user", cascade="all, delete-orphan")
@@ -603,3 +615,35 @@ class CarDocument(Base):
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
 
     car: Mapped[Car] = relationship(back_populates="documents")
+
+
+class AdminAuditLog(Base):
+    """One row per superadmin action taken in the admin panel.
+
+    The panel touches other people's private accounts, so every mutation leaves
+    a trail: who acted, on whom, what, and when. actor/target are SET NULL on
+    delete so the history survives even after either account is removed —
+    `target_email` keeps the address verbatim for exactly that case, since the
+    FK can no longer resolve to one.
+    """
+
+    __tablename__ = "admin_audit_log"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    actor_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True
+    )
+    # One of the verbs in routers/admin.py (edit_user, block, unblock, verify,
+    # unverify, set_superadmin, unset_superadmin, issue_reset_link,
+    # issue_verify_link, send_reset, send_verify, delete_user).
+    action: Mapped[str] = mapped_column(String(40), nullable=False)
+    target_user_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True
+    )
+    target_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    # JSON string of specifics: changed fields, block reason, etc. Free-form so
+    # a new action never needs a schema change.
+    detail: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime, default=utcnow, nullable=False, index=True
+    )

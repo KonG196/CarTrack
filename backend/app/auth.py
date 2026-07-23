@@ -103,6 +103,14 @@ def get_current_user(
     # (legacy token) reads as 0, matching a fresh account until its first bump.
     if payload.get("tv", 0) != user.token_version:
         raise credentials_exception
+    # A blocked account is locked out even with a live token. Blocking bumps
+    # token_version so this rarely fires, but a token minted in the same second
+    # as the block (same tv) would otherwise slip through — this closes that.
+    if user.blocked:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=user.blocked_reason or t("err.accountBlocked", user.language),
+        )
     return user
 
 
@@ -113,5 +121,16 @@ def require_verified_user(current_user: User = Depends(get_current_user)) -> Use
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=t("err.verifyEmailForFeature", current_user.language),
+        )
+    return current_user
+
+
+def require_superadmin(current_user: User = Depends(get_current_user)) -> User:
+    """Gate the owner-only admin panel (/api/admin/*). The flag is set by hand
+    on prod, never through signup — see models.User.is_superadmin."""
+    if not current_user.is_superadmin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Superadmin access required",
         )
     return current_user

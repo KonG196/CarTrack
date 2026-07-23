@@ -36,13 +36,11 @@ def _new_token() -> str:
     return secrets.token_urlsafe(32)
 
 
-def issue_verification(db: Session, user: User) -> str | None:
-    """Stamp a fresh code on the user and mail it.
-
-    Returns the plain token when mail is off (so tests and local development can
-    read it); None once it has actually been sent, because nothing outside the
-    letter is allowed to know it.
-    """
+def issue_verification_code(db: Session, user: User) -> str:
+    """Stamp a fresh verification token on the user and return it, without
+    sending anything. The caller decides what to do with the token (build a
+    link, mail it, both) — used by the admin panel's link generation and by
+    issue_verification below."""
     code = _new_token()
     user.verify_code_hash = hash_password(code)
     user.verify_code_expires_at = dt.datetime.utcnow() + dt.timedelta(
@@ -50,6 +48,17 @@ def issue_verification(db: Session, user: User) -> str | None:
     )
     user.verify_code_attempts = 0  # fresh code, fresh attempt budget
     db.flush()
+    return code
+
+
+def issue_verification(db: Session, user: User) -> str | None:
+    """Stamp a fresh code on the user and mail it.
+
+    Returns the plain token when mail is off (so tests and local development can
+    read it); None once it has actually been sent, because nothing outside the
+    letter is allowed to know it.
+    """
+    code = issue_verification_code(db, user)
     sent = send_verification(user.email, code, user.language)
     return None if sent else code
 
