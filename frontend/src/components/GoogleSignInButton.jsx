@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 // «Continue with Google» in the app's own style. Google Identity Services only
-// styles its own widget, which clashes with the theme — so we render the real
-// GIS button hidden and overlay our own. Clicking ours programmatically clicks
-// the hidden one, which still hands back a Google ID token through the callback.
+// styles its own widget (an iframe we can't restyle or click through), so we
+// render the real GIS button transparently ON TOP of our own pretty button:
+// our button shows the design, the invisible real one catches the actual click
+// and returns a Google ID token.
 //
 // The client id is public (it ships in the bundle) and set at build time via
 // VITE_GOOGLE_CLIENT_ID. With no id the button doesn't render, so email/password
@@ -42,7 +43,8 @@ function GoogleIcon() {
 
 export default function GoogleSignInButton({ onCredential, onError }) {
   const { i18n, t } = useTranslation();
-  const hiddenRef = useRef(null);
+  const wrapRef = useRef(null);
+  const gisRef = useRef(null);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -51,21 +53,22 @@ export default function GoogleSignInButton({ onCredential, onError }) {
 
     loadGis()
       .then(() => {
-        if (cancelled || !hiddenRef.current) return;
+        if (cancelled || !gisRef.current) return;
         window.google.accounts.id.initialize({
           client_id: CLIENT_ID,
           callback: (response) => {
             if (response?.credential) onCredential(response.credential);
           },
         });
-        // The real widget, rendered into a hidden holder purely to capture the
-        // click → ID token. Our own button forwards clicks to it.
-        window.google.accounts.id.renderButton(hiddenRef.current, {
+        // Render the real GIS button at the wrapper's width. It sits invisibly
+        // on top of ours and receives the real click.
+        const width = Math.round(wrapRef.current?.offsetWidth || 320);
+        window.google.accounts.id.renderButton(gisRef.current, {
           type: 'standard',
-          theme: 'filled_black',
+          theme: 'outline',
           size: 'large',
           text: 'continue_with',
-          width: 320,
+          width,
           locale: i18n.language,
         });
         setReady(true);
@@ -79,35 +82,23 @@ export default function GoogleSignInButton({ onCredential, onError }) {
 
   if (!CLIENT_ID) return null;
 
-  const forwardClick = () => {
-    // The GIS widget renders as an iframe (or a div with a clickable role);
-    // find the first clickable element inside our hidden holder and click it.
-    const el =
-      hiddenRef.current?.querySelector('div[role="button"]') ||
-      hiddenRef.current?.querySelector('iframe') ||
-      hiddenRef.current?.firstElementChild;
-    el?.click?.();
-  };
-
   return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={forwardClick}
-        disabled={!ready}
-        className="flex w-full items-center justify-center gap-3 rounded-full border border-edge bg-raised px-4 py-3 text-sm font-semibold text-fg transition-colors hover:border-edge-soft hover:bg-panel disabled:opacity-60"
-      >
+    <div ref={wrapRef} className="relative">
+      {/* Our styled button — purely visual; pointer-events off so the real GIS
+          button on top gets the click. */}
+      <div className="pointer-events-none flex w-full items-center justify-center gap-3 rounded-full border border-edge bg-raised px-4 py-3 text-sm font-semibold text-fg">
         <GoogleIcon />
         {t('auth.google.continue')}
-      </button>
-      {/* The real GIS button, kept out of view but present so its click handler
-          runs. Not display:none — GIS won't wire up a hidden button — so it's
-          clipped to a 1px box under our own. */}
+      </div>
+      {/* The real Google button, transparent, stretched over ours. It's a real
+          (iframe) button, so this is the one that actually works when clicked. */}
       <div
-        ref={hiddenRef}
-        aria-hidden="true"
-        className="pointer-events-none absolute left-0 top-0 h-px w-px overflow-hidden opacity-0"
+        ref={gisRef}
+        aria-label={t('auth.google.continue')}
+        className="absolute inset-0 z-10 flex items-center justify-center opacity-0 [color-scheme:light]"
+        style={{ colorScheme: 'light' }}
       />
+      {!ready && <span className="sr-only">{t('auth.google.continue')}</span>}
     </div>
   );
 }
