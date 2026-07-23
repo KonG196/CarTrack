@@ -34,7 +34,13 @@ export default function CurrencySelect({ label, className = '' }) {
             </span>
           ),
         }))}
-        buttonClassName="field-input field-select flex w-full items-center text-left"
+        buttonClassName={`field-input field-select flex w-full items-center text-left ${
+          // The field-input's tall top padding (pt-6) makes room for a floating
+          // label. This picker is labelled from outside (Garage renders «Валюта»
+          // above it) and gets no `label` prop, so that padding is dead space —
+          // centre the value vertically instead.
+          label ? '' : '!py-0'
+        }`}
         button={
           <span className="flex min-w-0 items-baseline gap-2.5">
             <span className="w-6 flex-shrink-0 font-mono tabular-nums">{active.symbol}</span>
@@ -43,7 +49,7 @@ export default function CurrencySelect({ label, className = '' }) {
           </span>
         }
       />
-      <span className="field-label is-static">{label}</span>
+      {label && <span className="field-label is-static">{label}</span>}
       <ChevronDown className="field-chevron" aria-hidden="true" />
     </div>
   );

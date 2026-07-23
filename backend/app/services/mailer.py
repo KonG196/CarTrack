@@ -167,7 +167,7 @@ def _render_email(
         <table role="presentation" cellpadding="0" cellspacing="0"><tr>
           <td style="vertical-align:middle;padding-right:11px;">
             <img src="cid:{_LOGO_CID}" width="50" height="40" alt=""
-              style="display:block;"></td>
+              style="display:block;width:50px;height:40px;max-width:50px;border:0;outline:none;"></td>
           <td style="vertical-align:middle;font-family:{_SANS};font-weight:700;
             font-size:17px;letter-spacing:.4px;"><span
             style="color:{_AMBER};vertical-align:middle;">KAPOT</span><span

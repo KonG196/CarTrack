@@ -208,7 +208,11 @@ function CarForm({ initial, onSubmit, onCancel, focusField }) {
           />
           <Button
             type="button"
-            variant="secondary"
+            variant={
+              !lookupLocked && (form.plate.trim().length > 3 || form.vin.trim().length > 3)
+                ? 'primary'
+                : 'secondary'
+            }
             onClick={handleLookup}
             disabled={looking || lookupLocked || (!form.plate.trim() && !form.vin.trim())}
             className="h-14 flex-shrink-0 px-4"

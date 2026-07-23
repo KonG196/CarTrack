@@ -210,22 +210,27 @@ export default function Dashboard() {
 
   if (carsLoaded && cars.length === 0) {
     return (
-      <Card className="rise-in mt-8 flex flex-col items-center gap-3 p-8 text-center">
-        <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-amber/15">
-          <Car className="h-7 w-7 text-amber" />
-        </span>
-        <h2 className="font-display text-lg font-semibold text-fg">{t('dashboard.welcomeTitle')}</h2>
-        <p className="text-sm text-mist">
-          {t('dashboard.welcomeSubtitle')}
-        </p>
-        <Link
-          to="/garage/new"
-          className="mt-2 inline-flex items-center gap-1 rounded-xl bg-amber px-5 py-2.5 text-sm font-medium text-amber-ink transition-colors hover:bg-amber-deep"
-        >
-          {t('dashboard.addCar')}
-          <ChevronRight className="h-4 w-4" />
-        </Link>
-      </Card>
+      <div className="space-y-4">
+        {/* The main dashboard's verify banner lives in the other branch, so the
+            empty-state (no cars yet) would miss it — surface it here too. */}
+        <VerifyEmailBanner />
+        <Card className="rise-in mt-4 flex flex-col items-center gap-3 p-8 text-center">
+          <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-amber/15">
+            <Car className="h-7 w-7 text-amber" />
+          </span>
+          <h2 className="font-display text-lg font-semibold text-fg">{t('dashboard.welcomeTitle')}</h2>
+          <p className="text-sm text-mist">
+            {t('dashboard.welcomeSubtitle')}
+          </p>
+          <Link
+            to="/garage/new"
+            className="mt-2 inline-flex items-center gap-1 rounded-xl bg-amber px-5 py-2.5 text-sm font-medium text-amber-ink transition-colors hover:bg-amber-deep"
+          >
+            {t('dashboard.addCar')}
+            <ChevronRight className="h-4 w-4" />
+          </Link>
+        </Card>
+      </div>
     );
   }
 
