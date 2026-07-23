@@ -1132,5 +1132,11 @@
     "summer": "Summer",
     "winter": "Winter",
     "allSeason": "All-season"
+  },
+  "currencyPrompt": {
+    "title": "Choose your currency",
+    "subtitle": "Which currency should amounts be shown in?",
+    "confirm": "Continue",
+    "note": "Display only — the symbol changes, amounts are never converted. You can change it anytime in Settings."
   }
 }

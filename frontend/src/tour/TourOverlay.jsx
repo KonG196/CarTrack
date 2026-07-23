@@ -61,9 +61,20 @@ export default function TourOverlay() {
   const tap = useRef(null);
 
   // Auto-show a section's tour the first time this account opens its page.
+  // Hold it back while the first-run currency prompt is still pending, so the
+  // two onboarding overlays don't fight over the screen on the very first visit.
   useEffect(() => {
     const name = PAGE_TOURS[location.pathname];
     if (!name || active || !userReady || !activeCarId || wasSeen(name)) return undefined;
+    let currencyPending = false;
+    try {
+      currencyPending =
+        !localStorage.getItem('kapot_currency') &&
+        !localStorage.getItem('kapot_currency_prompted');
+    } catch {
+      /* private mode — treat as resolved */
+    }
+    if (currencyPending) return undefined;
     const id = setTimeout(() => start(name), 800);
     return () => clearTimeout(id);
   }, [location.pathname, active, userReady, activeCarId, wasSeen, start]);

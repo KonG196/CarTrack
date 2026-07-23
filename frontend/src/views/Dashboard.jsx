@@ -19,12 +19,18 @@ import { getRefuelContext } from '../api/logs';
 import { canDo } from '../utils/permissions';
 import { fuelKindLabel } from '../utils/fuelKind';
 import { formatMoney, formatMoneyCompact, formatKm, formatDate } from '../utils/format';
+import { CURRENCY_KEY } from '../currency';
 import { Card, Spinner, ErrorMessage } from '../components/UI';
 import Toast from '../components/Toast';
 import NotificationsBanner from '../components/NotificationsBanner';
 import VerifyEmailBanner from '../components/VerifyEmailBanner';
 import CompleteIntervalModal from '../components/CompleteIntervalModal';
+import CurrencyPromptModal from '../components/CurrencyPromptModal';
 import CopyCarName from '../components/CopyCarName';
+
+// Once-only marker so the first-run currency prompt never re-opens after the
+// user has been asked (whether they picked or dismissed).
+const CURRENCY_PROMPT_KEY = 'kapot_currency_prompted';
 
 const STATUS_STYLES = {
   ok: { bar: 'bg-ok', text: 'text-ok', labelKey: 'statusOk' },
@@ -185,6 +191,30 @@ export default function Dashboard() {
   const [refuelContext, setRefuelContext] = useState(null);
   const noRefuelsYet = refuelContext != null && refuelContext.last_refuel_odometer == null;
 
+  // First-run currency prompt: ask once, when the user has made no explicit
+  // currency choice yet and hasn't been asked. Gated behind carsLoaded so it
+  // fires after the session is settled, not during the initial flash.
+  const [showCurrencyPrompt, setShowCurrencyPrompt] = useState(false);
+  useEffect(() => {
+    if (!carsLoaded) return;
+    try {
+      const chosen = localStorage.getItem(CURRENCY_KEY);
+      const asked = localStorage.getItem(CURRENCY_PROMPT_KEY);
+      if (!chosen && !asked) setShowCurrencyPrompt(true);
+    } catch {
+      /* private mode — skip the prompt rather than loop */
+    }
+  }, [carsLoaded]);
+
+  const dismissCurrencyPrompt = () => {
+    try {
+      localStorage.setItem(CURRENCY_PROMPT_KEY, '1');
+    } catch {
+      /* ignore */
+    }
+    setShowCurrencyPrompt(false);
+  };
+
   useEffect(() => {
     if (activeCarId) {
       fetchAnalytics().catch(() => {});
@@ -211,6 +241,7 @@ export default function Dashboard() {
   if (carsLoaded && cars.length === 0) {
     return (
       <div className="space-y-4">
+        <CurrencyPromptModal open={showCurrencyPrompt} onClose={dismissCurrencyPrompt} />
         {/* The main dashboard's verify banner lives in the other branch, so the
             empty-state (no cars yet) would miss it — surface it here too. */}
         <VerifyEmailBanner />
@@ -238,6 +269,7 @@ export default function Dashboard() {
 
   return (
     <div className="stagger space-y-4">
+      <CurrencyPromptModal open={showCurrencyPrompt} onClose={dismissCurrencyPrompt} />
       <Toast message={toast} onDone={() => setToast('')} />
       <VerifyEmailBanner />
       <NotificationsBanner />
