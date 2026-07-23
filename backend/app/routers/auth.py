@@ -6,7 +6,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.auth import (
@@ -20,7 +20,7 @@ from app.auth import (
 from app.config import settings
 from app.database import get_db
 from app.i18n import lang_from_accept, t
-from app.models import User
+from app.models import LogEntry, User
 from app.ratelimit import RateLimiter, client_ip
 from app.schemas import (
     AccountDeleteIn,
@@ -224,6 +224,15 @@ def delete_me(
             shutil.rmtree(user_uploads)
         except OSError as exc:
             logger.error("Failed to wipe uploads for user %s: %s", current_user.id, exc)
+    # Orphan this user's authorship on OTHER people's shared cars before deleting
+    # them. log_entries.author_id has no SET NULL FK on the migrated SQLite
+    # schema, and SQLite reuses the freed integer id — so a future signup could
+    # inherit it and be shown as the author of entries they never wrote (and have
+    # their email leaked). Null it explicitly; the user's own cars' logs go with
+    # the ORM cascade regardless.
+    db.execute(
+        update(LogEntry).where(LogEntry.author_id == current_user.id).values(author_id=None)
+    )
     db.delete(current_user)
     db.commit()
 

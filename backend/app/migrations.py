@@ -61,7 +61,20 @@ def run_migrations(engine: Engine) -> None:
     """
     config = _alembic_config(engine)
     tables = set(inspect(engine).get_table_names())
+    is_sqlite = engine.dialect.name == "sqlite"
     with engine.connect() as connection:
+        # The app runs SQLite with foreign_keys=ON (database.py). A batch
+        # migration rebuilds a table by copying and dropping the original — with
+        # FKs enforced, that drop cascade-deletes every dependent row. Disable
+        # enforcement for the migration run on the RAW dbapi connection: going
+        # through SQLAlchemy's exec would commit alembic's pending transaction
+        # and corrupt the run. It is restored on the next pooled checkout by the
+        # connect-event listener in database.py.
+        if is_sqlite:
+            raw = connection.connection.dbapi_connection
+            cur = raw.cursor()
+            cur.execute("PRAGMA foreign_keys=OFF")
+            cur.close()
         # Hand our live connection to alembic/env.py so migrations run on the
         # exact database this engine points at (crucial for test engines).
         config.attributes["connection"] = connection

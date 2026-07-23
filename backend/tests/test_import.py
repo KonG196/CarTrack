@@ -232,5 +232,36 @@ def test_round_trip_preserves_expense_category_and_fuel_kind(
     assert new_ref["refuel"]["fuel_kind"] == "lpg"
 
 
+def test_import_never_persists_two_mounted_tyre_sets(
+    client: TestClient, auth_headers: dict
+) -> None:
+    """A hand-edited backup with two installed sets must not break the invariant —
+    otherwise the bot's installed_tire_set() raises and every user's reminder
+    pass dies."""
+    payload = {
+        "schema_version": 2,
+        "cars": [
+            {
+                "brand": "VW",
+                "model": "Golf",
+                "year": 2016,
+                "fuel_type": "petrol",
+                "current_odometer": 100000,
+                "tire_sets": [
+                    {"name": "Winter", "season": "winter", "is_installed": True},
+                    {"name": "Summer", "season": "summer", "is_installed": True},
+                ],
+            }
+        ],
+    }
+    assert client.post("/api/import", json=payload, headers=auth_headers).status_code == 200
+
+    cars = client.get("/api/cars", headers=auth_headers).json()
+    car_id = cars[0]["id"]
+    sets = client.get(f"/api/cars/{car_id}/tires", headers=auth_headers).json()
+    installed = [s for s in sets if s["is_installed"]]
+    assert len(installed) == 1  # exactly one, not both
+
+
 def test_import_requires_auth(client: TestClient) -> None:
     assert client.post("/api/import", json=_import_payload()).status_code == 401

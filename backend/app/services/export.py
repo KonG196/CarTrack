@@ -313,18 +313,22 @@ def _build_log(car_id: int, payload: LogEntryCreate) -> LogEntry:
     return log
 
 
-def _build_tire_set(car_id: int, raw: dict, path: str) -> TireSet:
+def _build_tire_set(car_id: int, raw: dict, path: str, allow_installed: bool = True) -> TireSet:
     """Restore a tyre set, carrying its mounted state + odometer stamps.
 
     TireSetCreate validates the user-editable core (name/season/size/dot_year/
     purchased_at); is_installed and the odometer stamps are not part of the
     create schema (the app mounts a set through a dedicated endpoint), so they
-    are carried over here directly. The export enforces at most one mounted set
-    per car, so restoring is_installed verbatim keeps that invariant.
+    are carried over here directly.
+
+    ``allow_installed`` guards the "at most one mounted set per car" invariant on
+    import: a hand-edited or corrupted backup with two installed sets would
+    otherwise persist both, and the bot's installed_tire_set() (scalar_one_or_none)
+    then raises for that car — aborting the whole reminder pass for every user.
     """
     payload = _validate(TireSetCreate, raw, path)
     tire_set = TireSet(car_id=car_id, **payload.model_dump())
-    if raw.get("is_installed") is True:
+    if raw.get("is_installed") is True and allow_installed:
         tire_set.is_installed = True
     for attr in ("odometer_at_install", "odometer_at_rotation"):
         value = raw.get(attr)
@@ -375,8 +379,14 @@ def import_data(db: Session, user: User, payload: dict) -> dict:
             db.add(CarSpec(car_id=car.id, **spec_payload.model_dump()))
             specs_created += 1
 
+        car_has_installed = False
         for index, tire_raw in enumerate(_list_field(car_raw, "tire_sets", car_path)):
-            db.add(_build_tire_set(car.id, tire_raw, f"{car_path}.tire_sets[{index}]"))
+            tire_set = _build_tire_set(
+                car.id, tire_raw, f"{car_path}.tire_sets[{index}]", allow_installed=not car_has_installed
+            )
+            if tire_set.is_installed:
+                car_has_installed = True
+            db.add(tire_set)
             tire_sets_created += 1
 
         for index, log_raw in enumerate(_list_field(car_raw, "logs", car_path)):

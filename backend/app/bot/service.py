@@ -742,11 +742,14 @@ class SeasonalReminder:
 
 
 def installed_tire_set(db: Session, car: Car) -> Optional[TireSet]:
+    # .first(), not scalar_one_or_none(): a car should have at most one mounted
+    # set, but a corrupted import could leave two — and a raise here would abort
+    # the whole reminder pass for every user, not just this car. Tolerate it.
     return db.execute(
-        select(TireSet).where(
-            TireSet.car_id == car.id, TireSet.is_installed.is_(True)
-        )
-    ).scalar_one_or_none()
+        select(TireSet)
+        .where(TireSet.car_id == car.id, TireSet.is_installed.is_(True))
+        .order_by(TireSet.id)
+    ).scalars().first()
 
 
 def seasonal_reminder_targets(

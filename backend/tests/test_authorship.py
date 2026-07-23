@@ -458,3 +458,28 @@ def test_patch_me_only_touches_the_caller(
     friend = make_user(email=FRIEND_EMAIL)
     client.patch("/api/auth/me", json={"display_name": "Тато"}, headers=auth_headers)
     assert client.get("/api/auth/me", headers=friend).json()["display_name"] is None
+
+
+def test_deleting_an_author_orphans_their_shared_car_logs(
+    client: TestClient, auth_headers: dict, make_car: Callable, make_user: Callable
+) -> None:
+    """A member who deletes their account must not leave a dangling author_id: on
+    SQLite the freed user id is reused, so a future signup would inherit it and be
+    shown as the author of entries they never wrote."""
+    car = make_car()
+    friend = make_user(email=FRIEND_EMAIL)
+    _share_with(client, auth_headers, car["id"], friend)
+
+    created = client.post(f"/api/cars/{car['id']}/logs", json=_log_payload(), headers=friend)
+    assert created.status_code == 201
+    log_id = created.json()["id"]
+
+    # Friend deletes their account.
+    deleted = client.request(
+        "DELETE", "/api/auth/me", json={"password": "secret123"}, headers=friend
+    )
+    assert deleted.status_code in (200, 204)
+
+    # The owner still sees the entry, but it now has no author (not a reused one).
+    detail = client.get(f"/api/logs/{log_id}", headers=auth_headers).json()
+    assert detail["author"] is None
