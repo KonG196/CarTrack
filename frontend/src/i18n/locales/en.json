@@ -540,7 +540,9 @@
     "logout": "Log out",
     "languageTitle": "Language & currency",
     "languageDesc": "Choose the app language and display currency. The language also applies to emails and Telegram messages.",
-    "currencyLabel": "Currency"
+    "currencyLabel": "Currency",
+    "preferencesTitle": "Preferences",
+    "preferencesSubtitle": "Language, currency, units & notifications"
   },
   "yearReview": {
     "months": [
@@ -1158,5 +1160,13 @@
     "metric": "Metric",
     "imperial": "Imperial",
     "settingsLabel": "Units"
+  },
+  "preferences": {
+    "title": "Preferences",
+    "languageTitle": "Language & currency",
+    "languageDesc": "Choose the app language, display currency and units. The language also applies to emails and Telegram messages.",
+    "currencyLabel": "Currency",
+    "notificationsTitle": "Notifications",
+    "notificationsSubtitle": "Service reminders, weekly summary"
   }
 }

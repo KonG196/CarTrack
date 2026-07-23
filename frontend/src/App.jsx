@@ -18,6 +18,7 @@ import Analytics from './views/Analytics';
 import Diagnostics from './views/Diagnostics';
 import Garage from './views/Garage';
 import Intervals from './views/Intervals';
+import Preferences from './views/Preferences';
 import Profile from './views/Profile';
 import CarEditor from './views/CarEditor';
 import Tires from './views/Tires';
@@ -94,6 +95,7 @@ export default function App() {
         <Route path="/garage/new" element={<CarEditor />} />
         <Route path="/garage/:carId/edit" element={<CarEditor />} />
         <Route path="/intervals" element={<Intervals />} />
+        <Route path="/preferences" element={<Preferences />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/tires" element={<Tires />} />
         <Route path="/documents" element={<Documents />} />

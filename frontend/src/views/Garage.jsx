@@ -18,10 +18,9 @@ import {
   FileText,
   CircleDot,
   LogOut,
-  Bell,
   Sparkles,
   QrCode,
-  Languages,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -39,9 +38,6 @@ import CopyCarName from '../components/CopyCarName';
 import PassportDialog from '../components/PassportDialog';
 import Toast from '../components/Toast';
 import SharingCard from '../components/SharingCard';
-import LanguageToggle from '../components/LanguageToggle';
-import CurrencySelect from '../components/CurrencySelect';
-import UnitToggle from '../components/UnitToggle';
 
 const FUEL_TYPES = [
   { value: 'petrol', labelKey: 'fuelPetrol' },
@@ -535,22 +531,12 @@ export default function Garage() {
           divider is the seam the user asked for: garage above, settings below. */}
       {cars.length > 0 && <div className="border-t border-edge" />}
 
-      <Card>
-        <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-fg">
-          <Languages className="h-4 w-4 text-amber" />
-          {t('garage.languageTitle')}
-        </h2>
-        <p className="mt-1 text-xs text-mist">{t('garage.languageDesc')}</p>
-        <LanguageToggle variant="segmented" className="mt-3" />
-        <div className="mt-4">
-          <span className="text-xs text-mist">{t('garage.currencyLabel')}</span>
-          <CurrencySelect className="mt-1.5" />
-        </div>
-        <div className="mt-4">
-          <span className="text-xs text-mist">{t('units.settingsLabel')}</span>
-          <UnitToggle className="mt-1.5" />
-        </div>
-      </Card>
+      <SettingsRow
+        to="/preferences"
+        icon={SlidersHorizontal}
+        title={t('garage.preferencesTitle')}
+        subtitle={t('garage.preferencesSubtitle')}
+      />
 
       <SettingsRow
         to="/profile"
@@ -559,14 +545,6 @@ export default function Garage() {
         title={t('garage.profileTitle')}
         subtitle={t('garage.profileSubtitle')}
         tourId="settings-profile"
-      />
-
-      <SettingsRow
-        to="/notifications"
-        icon={Bell}
-        tone="signal"
-        title={t('garage.notificationsTitle')}
-        subtitle={t('garage.notificationsSubtitle')}
       />
 
       {activeCar && (

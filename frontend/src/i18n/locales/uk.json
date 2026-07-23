@@ -542,7 +542,9 @@
     "intervalsSummary_other": "{{count}} інтервалів · олива, фільтри, ГРМ",
     "languageTitle": "Мова та валюта",
     "languageDesc": "Оберіть мову застосунку та валюту відображення. Мова також застосовується до листів і повідомлень у Telegram.",
-    "currencyLabel": "Валюта"
+    "currencyLabel": "Валюта",
+    "preferencesTitle": "Уподобання",
+    "preferencesSubtitle": "Мова, валюта, одиниці та сповіщення"
   },
   "yearReview": {
     "months": [
@@ -1162,5 +1164,13 @@
     "metric": "Метрична",
     "imperial": "Імперіальна",
     "settingsLabel": "Одиниці"
+  },
+  "preferences": {
+    "title": "Уподобання",
+    "languageTitle": "Мова та валюта",
+    "languageDesc": "Оберіть мову застосунку, валюту та одиниці. Мова також застосовується до листів і повідомлень у Telegram.",
+    "currencyLabel": "Валюта",
+    "notificationsTitle": "Сповіщення",
+    "notificationsSubtitle": "Нагадування про ТО, щотижневий підсумок"
   }
 }
