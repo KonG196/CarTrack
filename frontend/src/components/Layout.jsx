@@ -192,7 +192,7 @@ export default function Layout() {
       <Toast message={syncToast} onDone={() => setSyncToast('')} />
 
       <main
-        className="mx-auto max-w-md px-4 pt-4 pb-[calc(env(safe-area-inset-bottom)+3.75rem)]"
+        className="mx-auto max-w-md px-4 pt-4 pb-[calc(env(safe-area-inset-bottom)+6.5rem)]"
         key={location.pathname}
       >
         <Outlet />
