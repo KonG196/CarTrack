@@ -1,5 +1,6 @@
 """Authentication endpoints: register, token, me, password reset via Telegram."""
 
+import json
 import logging
 import shutil
 from pathlib import Path
@@ -258,6 +259,34 @@ def update_me(
             setattr(current_user, flag, updates[flag])
     db.commit()
     db.refresh(current_user)
+    return current_user
+
+
+# The onboarding tours a client may report as seen. Kept here (not imported from
+# the frontend) as the server's own allowlist so junk names can't be stored.
+_KNOWN_TOURS = frozenset({"home", "logbook", "add", "analytics", "settings"})
+
+
+@router.post("/me/tours/{name}", response_model=UserOut)
+def mark_tour_seen(
+    name: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """Record that this account has seen a tour. Idempotent; unknown names 404."""
+    if name not in _KNOWN_TOURS:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown tour")
+    try:
+        seen = json.loads(current_user.tours_seen or "[]")
+        if not isinstance(seen, list):
+            seen = []
+    except (ValueError, TypeError):
+        seen = []
+    if name not in seen:
+        seen.append(name)
+        current_user.tours_seen = json.dumps(seen)
+        db.commit()
+        db.refresh(current_user)
     return current_user
 
 

@@ -34,6 +34,13 @@ export async function getMe() {
   return data;
 }
 
+// Record that this account has seen an onboarding tour (server-side, so a seen
+// tour never re-appears on another device). Returns the updated user.
+export async function markTourSeen(name) {
+  const { data } = await client.post(`/auth/me/tours/${name}`);
+  return data;
+}
+
 export async function updateMe(displayName) {
   const { data } = await client.patch('/auth/me', { display_name: displayName });
   return data;

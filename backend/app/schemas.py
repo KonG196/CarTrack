@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
 from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -153,9 +154,23 @@ class UserOut(BaseModel):
     # «password» or «google». The web hides the change-password UI for google
     # accounts — they have no password to change.
     auth_provider: str = "password"
+    # Onboarding tours already shown. Stored as a JSON string on the model; the
+    # validator turns it into a list for the client (and tolerates bad data).
+    tours_seen: list[str] = Field(default_factory=list)
     # How the user is signed on a shared car; None means «use the email
     # handle» (models.User.label decides that, not the client).
     display_name: Optional[str] = None
+
+    @field_validator("tours_seen", mode="before")
+    @classmethod
+    def parse_tours_seen(cls, value: object) -> list[str]:
+        if isinstance(value, list):
+            return value
+        try:
+            parsed = json.loads(value) if value else []
+            return [str(x) for x in parsed] if isinstance(parsed, list) else []
+        except (ValueError, TypeError):
+            return []
     # An address awaiting its code. Shown so the user knows a change is in
     # flight and where to look for it.
     pending_email: Optional[str] = None

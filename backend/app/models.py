@@ -44,6 +44,9 @@ class User(Base):
     auth_provider: Mapped[str] = mapped_column(
         String(20), nullable=False, server_default="password"
     )
+    # Onboarding tours the user has already been shown, as a JSON array of tour
+    # names. Server-side so a seen tour never re-appears on another device.
+    tours_seen: Mapped[str] = mapped_column(Text, nullable=False, server_default="[]")
     # How the user is signed under a shared car's entries. NULL means the
     # label falls back to the part of the email before the «@».
     display_name: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
