@@ -27,6 +27,7 @@ from app.schemas import (
     EmailChangeConfirmIn,
     EmailChangeIn,
     EmailChangeOut,
+    GoogleLoginIn,
     PasswordChangeIn,
     RefreshIn,
     RegisterOut,
@@ -38,6 +39,11 @@ from app.schemas import (
     UserUpdate,
     VerifyConfirmIn,
     VerifyRequestIn,
+)
+from app.services.google_auth import (
+    GoogleAuthError,
+    GoogleAuthUnavailable,
+    verify_id_token as verify_google_id_token,
 )
 from app.services.reset import confirm_reset, initiate_reset
 from app.services.mailer import mail_enabled
@@ -139,6 +145,65 @@ def _issue_tokens(user: User) -> Token:
         refresh_token=create_refresh_token(user.id, user.token_version),
         token_type="bearer",
     )
+
+
+@router.post("/google", response_model=Token)
+def google_login(
+    payload: GoogleLoginIn, request: Request, db: Session = Depends(get_db)
+) -> Token:
+    """Sign in (or sign up) with a Google ID token.
+
+    The token is verified with Google; then we merge by email — an existing
+    account logs in, a new one is created. A Google-verified email counts as
+    verified here too, so Google users skip the confirmation step and get scan /
+    plate lookup right away.
+    """
+    _enforce_rate_limit(login_limiter, client_ip(request))
+    try:
+        identity = verify_google_id_token(payload.id_token)
+    except GoogleAuthUnavailable:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=t("auth.google_unavailable", lang_from_accept(request.headers.get("accept-language"))),
+        )
+    except GoogleAuthError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=t("auth.google_failed", lang_from_accept(request.headers.get("accept-language"))),
+        )
+
+    # Google will only mint a token once it has confirmed ownership of the
+    # address, but honour the claim rather than assume it.
+    if not identity.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=t("auth.google_failed", lang_from_accept(request.headers.get("accept-language"))),
+        )
+
+    user = db.execute(
+        select(User).where(func.lower(User.email) == identity.email)
+    ).scalar_one_or_none()
+
+    if user is None:
+        lang = payload.language or lang_from_accept(request.headers.get("accept-language"))
+        user = User(
+            email=identity.email,
+            hashed_password=None,  # a Google account has no password of its own
+            auth_provider="google",
+            language=lang,
+            currency=payload.currency or "USD",
+            email_verified=True,  # Google vouched for the address
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    elif not user.email_verified:
+        # Merge into the existing (password) account. Google having verified the
+        # address is proof enough to lift our own verification gate.
+        user.email_verified = True
+        db.commit()
+
+    return _issue_tokens(user)
 
 
 @router.post("/refresh", response_model=Token)

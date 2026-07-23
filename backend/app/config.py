@@ -64,6 +64,12 @@ class Settings(BaseSettings):
     # an intermediary is the only lawful route and it is optional by design.
     BAZA_GAI_API_KEY: str = ""
 
+    # Google Sign-In (Google Identity Services). The frontend sends a Google ID
+    # token; the backend verifies its signature and that its `aud` matches this
+    # client id. Same public client id as the frontend's VITE_GOOGLE_CLIENT_ID.
+    # Empty → the /auth/google endpoint stays disabled (503).
+    GOOGLE_CLIENT_ID: str = ""
+
     # OCR.space: the free vision fallback (25k/month, no card). The demo key
     # works without registration, so the fallback is on by default — Gemini's
     # free tier is unavailable to any account that has touched billing.

@@ -36,7 +36,14 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
-    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    # NULL for a Google account: it has no password of its own. Password
+    # accounts always have one. See auth_provider.
+    hashed_password: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    # «password» (email + password) or «google» (created via Google Sign-In).
+    # Google accounts can't change/reset a password — there isn't one.
+    auth_provider: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default="password"
+    )
     # How the user is signed under a shared car's entries. NULL means the
     # label falls back to the part of the email before the «@».
     display_name: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)

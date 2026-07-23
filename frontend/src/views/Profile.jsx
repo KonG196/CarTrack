@@ -478,6 +478,9 @@ function DangerZone() {
 export default function Profile() {
   const { t } = useTranslation();
   const [toast, setToast] = useState('');
+  // A Google account has no password of its own, so the change-password card
+  // has nothing to change — hide it for them.
+  const isGoogle = useAuthStore((s) => s.user?.auth_provider) === 'google';
 
   return (
     <div className="stagger space-y-4">
@@ -487,7 +490,7 @@ export default function Profile() {
 
       <ProfileCard onToast={setToast} />
       <EmailCard onToast={setToast} />
-      <PasswordCard onToast={setToast} />
+      {!isGoogle && <PasswordCard onToast={setToast} />}
       <TelegramCard onToast={setToast} />
       <DangerZone />
 

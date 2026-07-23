@@ -54,6 +54,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Incorrect email or password",
         "uk": "Невірний email або пароль",
     },
+    "auth.google_failed": {
+        "en": "Could not sign in with Google",
+        "uk": "Не вдалося увійти через Google",
+    },
+    "auth.google_unavailable": {
+        "en": "Google sign-in is not available",
+        "uk": "Вхід через Google недоступний",
+    },
     "auth.verify_email_first": {
         "en": "Confirm your email — we've sent a code to your address.",
         "uk": "Підтвердіть пошту — ми надіслали код на вашу адресу.",

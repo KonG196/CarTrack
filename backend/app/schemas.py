@@ -150,6 +150,9 @@ class UserOut(BaseModel):
     # Whether the address is confirmed. Drives the «verify your email» banner and
     # the scan / plate-lookup gates on the web (login no longer depends on it).
     email_verified: bool = False
+    # «password» or «google». The web hides the change-password UI for google
+    # accounts — they have no password to change.
+    auth_provider: str = "password"
     # How the user is signed on a shared car; None means «use the email
     # handle» (models.User.label decides that, not the client).
     display_name: Optional[str] = None
@@ -223,6 +226,20 @@ class Token(BaseModel):
 
 class RefreshIn(BaseModel):
     refresh_token: str = Field(min_length=1)
+
+
+class GoogleLoginIn(BaseModel):
+    # The Google ID token (a JWT) from Google Identity Services on the client.
+    id_token: str = Field(min_length=1)
+    # Only used when this login creates a brand-new account, to seed its UI
+    # language and currency from what the browser was already using.
+    language: Optional[str] = None
+    currency: Optional[str] = None
+
+    @field_validator("currency")
+    @classmethod
+    def validate_currency(cls, value: Optional[str]) -> Optional[str]:
+        return None if value is None else normalize_currency(value)
 
 
 class RegisterOut(BaseModel):
