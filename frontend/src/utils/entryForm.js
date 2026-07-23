@@ -41,7 +41,15 @@ export const EXPENSE_CATEGORIES = [
 
 export const DEFAULT_EXPENSE_CATEGORY = 'Інше';
 
-export const todayIso = () => new Date().toISOString().slice(0, 10);
+// Local calendar date, not UTC: toISOString() rolls over at 00:00 UTC, so in
+// UA (UTC+2/+3) it returns the wrong day for a couple of hours before midnight —
+// giving the entry a wrong default date and a spurious "future date" warning.
+export const todayIso = () => {
+  const d = new Date();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${m}-${day}`;
+};
 
 export function emptyFormValues() {
   return {

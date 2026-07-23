@@ -7,6 +7,7 @@ import { getRefuelContext } from '../api/logs';
 import { useAuthStore } from '../store/authStore';
 import { num, deriveRefuel } from '../utils/refuelMath';
 import { formatDate } from '../utils/format';
+import { currentCurrencySymbol } from '../store/currencyStore';
 import { expenseCategoryFrom } from '../utils/expenseCategory';
 import { describeWorkOrder, workOrderToFormValues } from '../utils/workOrder';
 import {
@@ -183,7 +184,17 @@ export default function EntryForm({
   // --- refuel auto-math: compute the ONE field the user never entered, from
   //     the two they did — never a field they typed themselves or are typing
   //     right now, and only after they pause or leave the field. ---
-  const refuelOwnedRef = useRef(new Set()); // fields the user provided
+  // Fields the user provided. When editing an existing refuel, everything that
+  // arrived populated was already entered by a human — seed it as owned so a
+  // later edit to one field never re-derives (and overwrites) a total_cost the
+  // owner set by hand.
+  const refuelOwnedRef = useRef(
+    new Set(
+      ['liters', 'pricePerLiter', 'totalCost'].filter(
+        (f) => init[f] !== '' && init[f] != null,
+      ),
+    ),
+  );
   const refuelValsRef = useRef({ liters, pricePerLiter, totalCost });
   const refuelIdleRef = useRef(null);
   const REFUEL_IDLE_MS = 1400; // «більша затримка» — well after the last keystroke
@@ -299,9 +310,19 @@ export default function EntryForm({
         const parts = [];
         if (data.liters != null) parts.push(t('entryForm.unitLiters', { value: data.liters }));
         if (data.price_per_liter != null)
-          parts.push(t('entryForm.unitPricePerLiter', { value: data.price_per_liter }));
+          parts.push(
+            t('entryForm.unitPricePerLiter', {
+              value: data.price_per_liter,
+              currency: currentCurrencySymbol(),
+            }),
+          );
         if (data.total_cost != null)
-          parts.push(t('entryForm.unitUah', { value: Number(data.total_cost).toFixed(2) }));
+          parts.push(
+            t('entryForm.unitUah', {
+              value: Number(data.total_cost).toFixed(2),
+              currency: currentCurrencySymbol(),
+            }),
+          );
         if (data.date) parts.push(formatDate(data.date));
         if (data.gas_station) parts.push(data.gas_station);
         return parts.join(', ');
@@ -373,7 +394,12 @@ export default function EntryForm({
       describe: (data) => {
         const parts = [];
         if (data.total_cost != null)
-          parts.push(t('entryForm.unitUah', { value: Number(data.total_cost).toFixed(2) }));
+          parts.push(
+            t('entryForm.unitUah', {
+              value: Number(data.total_cost).toFixed(2),
+              currency: currentCurrencySymbol(),
+            }),
+          );
         if (data.date) parts.push(formatDate(data.date));
         const category = expenseCategoryFrom(data.raw_text);
         if (category) parts.push(expenseCategoryLabel(category).toLowerCase());

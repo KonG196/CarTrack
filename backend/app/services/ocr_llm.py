@@ -127,6 +127,22 @@ def _canonical_station(value: Any) -> Optional[str]:
     return value.strip()[:100]
 
 
+def _llm_raw_text(data: dict) -> str:
+    """The model's textual content, for keyword-based category detection.
+
+    Joins the human-readable string/list fields the model returned (vendor,
+    items, notes…) so the frontend's expenseCategoryFrom has something to match
+    on — a vision answer carries no OCR text of its own.
+    """
+    parts: list[str] = []
+    for value in data.values():
+        if isinstance(value, str):
+            parts.append(value)
+        elif isinstance(value, list):
+            parts.extend(str(v) for v in value if isinstance(v, (str, int, float)))
+    return " ".join(p.strip() for p in parts if str(p).strip())
+
+
 def parsed_receipt_from_llm(data: Any) -> Optional[ParsedReceipt]:
     if not isinstance(data, dict):
         return None
@@ -146,6 +162,10 @@ def parsed_receipt_from_llm(data: Any) -> Optional[ParsedReceipt]:
         date=_as_past_date(data.get("date")),
         gas_station=_canonical_station(data.get("gas_station")),
         found_in_text=sum(v is not None for v in (liters, price, total)),
+        # Category auto-detection (frontend) keys off raw_text; with a vision
+        # answer there is no OCR text, so surface the model's own textual fields
+        # instead — otherwise a scanned expense never auto-categorizes.
+        raw_text=_llm_raw_text(data),
     )
     _fill_missing_third(result)
     return result
@@ -355,7 +375,12 @@ def recognize_receipt(
         raise OcrUnavailable
 
     # No vision model configured at all: the full free rungs are the only option.
-    return parse_receipt_text(read_text(image_bytes, content_type, _receipt_score, 2))
+    # An unreadable/oversized image makes read_text raise ValueError — degrade to
+    # «scan unavailable» rather than crash the request (500) or the bot handler.
+    try:
+        return parse_receipt_text(read_text(image_bytes, content_type, _receipt_score, 2))
+    except ValueError as exc:
+        raise OcrUnavailable from exc
 
 
 def _score_of(parsed: ParsedWorkOrder) -> int:
@@ -437,6 +462,7 @@ def parsed_work_order_from_llm(data: Any) -> Optional[ParsedWorkOrder]:
         labor_cost=money(data.get("labor_cost")),
         total_cost=money(data.get("total_cost")),
         date=_as_past_date_str(data.get("date")),
+        raw_text=_llm_raw_text(data),
     )
     # The same arithmetic the text parser is held to. A model that read one of
     # the three wrong has no way to know it, so the split goes rather than the
@@ -484,9 +510,12 @@ def recognize_work_order(
         raise OcrUnavailable
 
     # No vision model configured at all: the full free rungs are the only option.
-    return parse_work_order(
-        read_text(image_bytes, content_type, _work_order_score, _ORDER_ENOUGH, is_table=True)
-    )
+    try:
+        return parse_work_order(
+            read_text(image_bytes, content_type, _work_order_score, _ORDER_ENOUGH, is_table=True)
+        )
+    except ValueError as exc:
+        raise OcrUnavailable from exc
 
 
 
@@ -601,6 +630,9 @@ def recognize_photo(
                 return reading
         raise OcrUnavailable
 
-    return _classify(
-        read_text(image_bytes, content_type, _photo_score, _ORDER_ENOUGH, is_table=True)
-    )
+    try:
+        return _classify(
+            read_text(image_bytes, content_type, _photo_score, _ORDER_ENOUGH, is_table=True)
+        )
+    except ValueError as exc:
+        raise OcrUnavailable from exc

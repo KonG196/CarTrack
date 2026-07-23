@@ -1223,6 +1223,13 @@ async def cb_interval_done(callback: CallbackQuery) -> None:
                 date=completion.log.date.isoformat(),
             )
         )
+    # Retire the button once used: without this every extra tap logs another
+    # maintenance entry and re-advances the interval. Best-effort — a failed
+    # edit (message too old to edit) must not undo the completion above.
+    try:
+        await message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
     await callback.answer()
 
 

@@ -49,7 +49,7 @@ INVITE_NOT_FOUND = "Invite not found"
 MEMBER_NOT_FOUND = "Member not found"
 
 
-def _assignable_role_or_400(role: str) -> str:
+def _assignable_role_or_400(role: str, current_user: User) -> str:
     """Hold a role to what may actually be granted, or refuse it.
 
     400 rather than 422 even for nonsense: the client asked for a role that
@@ -107,7 +107,7 @@ def create_car_invite(
 ) -> InviteCreatedOut:
     """Mint a share link for a car (owner only). The token is shown once."""
     car = get_accessible_car(db, current_user, car_id, min_role=ROLE_OWNER)
-    role = _assignable_role_or_400(payload.role)
+    role = _assignable_role_or_400(payload.role, current_user)
     invite, token = create_invite(db, car, current_user, role)
     return InviteCreatedOut(
         token=token,
@@ -243,7 +243,7 @@ def update_member(
         min_role=ROLE_OWNER,
         not_found_detail=MEMBER_NOT_FOUND,
     )
-    role = _assignable_role_or_400(payload.role)
+    role = _assignable_role_or_400(payload.role, current_user)
     if member.user_id == car.user_id:
         # Ownership lives in cars.user_id; this row only mirrors it, and
         # editing the mirror would say something that is not true.

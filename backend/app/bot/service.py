@@ -978,8 +978,10 @@ def digest_window(today: dt.date) -> tuple[dt.date, dt.date]:
     return today - dt.timedelta(days=DIGEST_DAYS - 1), today
 
 
-def _money(amount: float) -> str:
-    return f"{amount:.2f} ₴"
+def _money(amount: float, currency: str = "USD") -> str:
+    from app.currency import format_money
+
+    return format_money(amount, currency)
 
 
 def _week_distance_km(
@@ -1060,7 +1062,11 @@ def _nearest_interval_phrase(
 
 
 def build_weekly_digest(
-    db: Session, car: Car, today: dt.date | None = None, lang: str = "en"
+    db: Session,
+    car: Car,
+    today: dt.date | None = None,
+    lang: str = "en",
+    currency: str = "USD",
 ) -> Optional[str]:
     """One car's week in one Ukrainian message, or None when there was no week.
 
@@ -1091,11 +1097,11 @@ def build_weekly_digest(
     # describe the input set, not the calendar.
     totals = compute_analytics(week_logs, car, today=end)["totals"]
     breakdown = ", ".join(
-        f"{_type_word(log_type, lang)} {_money(amount)}"
+        f"{_type_word(log_type, lang)} {_money(amount, currency)}"
         for log_type, amount in totals["by_type"].items()
         if amount > 0
     )
-    spent = t("bot.svc.spent", lang, money=_money(totals["all_time"]))
+    spent = t("bot.svc.spent", lang, money=_money(totals["all_time"], currency))
 
     lines = [
         t("bot.svc.digestHeader", lang, label=car_label(car)),
@@ -1143,9 +1149,10 @@ def digest_targets(
     for user in users:
         digests: list[WeeklyDigest] = []
         lang = normalize_lang(user.language)
+        currency = getattr(user, "currency", None) or "USD"
         # Owned cars only — see the note above.
         for car in list_owned_cars(db, user):
-            text = build_weekly_digest(db, car, today=today, lang=lang)
+            text = build_weekly_digest(db, car, today=today, lang=lang, currency=currency)
             if text is not None:
                 digests.append(WeeklyDigest(car=car, text=text))
         if digests:
