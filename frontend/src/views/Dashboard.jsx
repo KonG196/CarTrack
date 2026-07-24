@@ -31,12 +31,12 @@ import { useUnitStore } from '../store/unitStore';
 import { CURRENCY_KEY } from '../currency';
 import { Card, Spinner, ErrorMessage } from '../components/UI';
 import Toast from '../components/Toast';
-import NotificationsBanner from '../components/NotificationsBanner';
 import VerifyEmailBanner from '../components/VerifyEmailBanner';
 import CompleteIntervalModal from '../components/CompleteIntervalModal';
 import CurrencyPromptModal from '../components/CurrencyPromptModal';
 import OdometerModal from '../components/OdometerModal';
 import CopyCarName from '../components/CopyCarName';
+import WelcomeTourCard from '../components/WelcomeTourCard';
 
 // Once-only marker so the first-run currency prompt never re-opens after the
 // user has been asked (whether they picked or dismissed).
@@ -283,7 +283,7 @@ export default function Dashboard() {
       <CurrencyPromptModal open={showCurrencyPrompt} onClose={dismissCurrencyPrompt} />
       <Toast message={toast} onDone={() => setToast('')} />
       <VerifyEmailBanner />
-      <NotificationsBanner />
+      {activeCar && <WelcomeTourCard />}
 
       <CompleteIntervalModal
         interval={completingInterval}

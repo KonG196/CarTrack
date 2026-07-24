@@ -957,6 +957,37 @@ class NotificationOut(BaseModel):
 class NotificationList(BaseModel):
     items: list[NotificationOut]
     count: int
+    # How many stored notifications the user hasn't opened the centre for — the
+    # header bell's badge.
+    unread: int = 0
+
+
+class NotificationHistoryItem(BaseModel):
+    """A stored notification (active or past) for the history page."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    notif_key: str
+    kind: str
+    severity: str
+    car_id: Optional[int] = None
+    car_label: Optional[str] = None
+    title: str
+    body: str
+    action: Optional[str] = None
+    first_seen_at: dt.datetime
+    read_at: Optional[dt.datetime] = None
+    resolved_at: Optional[dt.datetime] = None
+
+
+class NotificationHistory(BaseModel):
+    items: list[NotificationHistoryItem]
+    unread: int = 0
+
+
+class UnreadCount(BaseModel):
+    unread: int = 0
 
 
 class YearReviewStation(BaseModel):

@@ -6,7 +6,7 @@ import { Bell, CalendarClock, Send } from 'lucide-react';
 import { extractError } from '../api/client';
 import * as telegramApi from '../api/telegram';
 import BackLink from '../components/BackLink';
-import NotificationsPanel from '../components/NotificationsPanel';
+import NotificationHistoryList from '../components/NotificationHistoryList';
 import Toast from '../components/Toast';
 import { Card, ErrorMessage, Toggle } from '../components/UI';
 import { useAuthStore } from '../store/authStore';
@@ -74,7 +74,7 @@ export default function Notifications() {
       <Toast message={toast} onDone={() => setToast('')} />
       <BackLink to="/garage">{t('notifications.title')}</BackLink>
 
-      <NotificationsPanel />
+      <NotificationHistoryList />
 
       {telegramLinked === false && (
         <Link to="/profile" className="block">

@@ -647,3 +647,50 @@ class AdminAuditLog(Base):
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime, default=utcnow, nullable=False, index=True
     )
+
+
+class NotificationLog(Base):
+    """Persisted history of the in-app nudges, so "past notifications" is real.
+
+    Notifications themselves are still computed on read (services/notifications);
+    each carries a stable key. On every read we reconcile the computed set into
+    this table: new keys are inserted, still-present keys refresh last_active_at,
+    and keys that have dropped out are marked resolved. The title/body/etc. are
+    snapshotted at first sight so the history reads correctly even after the live
+    copy would have changed. One row per (user, notif_key).
+    """
+
+    __tablename__ = "notification_log"
+    __table_args__ = (
+        UniqueConstraint("user_id", "notif_key", name="uq_notiflog_user_key"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    # The stable id build_notifications assigns, e.g. "interval:12:overdue".
+    notif_key: Mapped[str] = mapped_column(String(120), nullable=False)
+    kind: Mapped[str] = mapped_column(String(30), nullable=False)
+    severity: Mapped[str] = mapped_column(String(10), nullable=False)
+    car_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    car_label: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    action: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    first_seen_at: Mapped[dt.datetime] = mapped_column(
+        DateTime, default=utcnow, nullable=False
+    )
+    # Refreshed every read the nudge is still active; set once it drops out.
+    last_active_at: Mapped[dt.datetime] = mapped_column(
+        DateTime, default=utcnow, nullable=False
+    )
+    # NULL until the user opens the centre after this appeared (drives the badge).
+    read_at: Mapped[Optional[dt.datetime]] = mapped_column(DateTime, nullable=True)
+    # NULL while active; set when the condition that raised it no longer holds.
+    resolved_at: Mapped[Optional[dt.datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime, default=utcnow, nullable=False, index=True
+    )
