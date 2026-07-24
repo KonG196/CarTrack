@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Kapot Tracker — недоступно</title>
+<style>
+  :root{
+    --bg:#0B1119; --panel:#121A26; --edge:#22304433;
+    --fg:#E9EEF6; --mist:#93A1B8; --amber:#FFB454; --blue:#4C8DFF;
+  }
+  *{box-sizing:border-box; margin:0}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--fg);
+    font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+    line-height:1.6; -webkit-font-smoothing:antialiased;
+    display:flex; align-items:center; justify-content:center;
+    padding:24px; text-align:center;
+  }
+  .card{
+    max-width:620px; background:var(--panel); border:1px solid var(--edge);
+    border-radius:20px; padding:clamp(28px,6vw,48px);
+  }
+  .flag{font-size:2.4rem; letter-spacing:.3em; margin-bottom:18px}
+  h1{
+    font-size:clamp(1.5rem,5vw,2.2rem); font-weight:800; line-height:1.2;
+    margin-bottom:18px; text-wrap:balance;
+  }
+  h1 .amber{color:var(--amber)}
+  p{color:var(--mist); font-size:clamp(1rem,2.6vw,1.12rem); margin:0 0 16px}
+  p.big{color:var(--fg); font-weight:600; font-size:clamp(1.1rem,3vw,1.3rem)}
+  .sep{height:1px; background:var(--edge); margin:26px 0}
+  .foot{font-size:.82rem; color:#5C6B84}
+  .glory{color:var(--amber); font-weight:800; letter-spacing:.02em}
+  .strike{text-decoration:line-through; opacity:.7}
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Здраствуй, пошёл нахуй! </h1>
+    <p class="glory">Слава Україні! 🇺🇦 Героям слава!</p>
+  </div>
+
+  <!-- The Ukrainian anthem, looped. Browsers forbid autoplay WITH sound and
+       ignore synthetic clicks, so: start MUTED (allowed on most browsers), then
+       unmute at full volume on the very first real interaction — the widest net
+       of gestures, so it feels automatic. Plain <audio>, no Web Audio graph
+       (routing the element through a suspended AudioContext silenced it). -->
+  <audio id="anthem" src="/gimn.mp3" loop preload="auto" playsinline></audio>
+  <script>
+    (function () {
+      var a = document.getElementById('anthem');
+      a.volume = 1;
+
+      // Try a muted autoplay so it's already spinning silently. If even that is
+      // blocked, no harm — the first gesture below starts it properly.
+      a.muted = true;
+      a.play().catch(function () {});
+
+      var done = false;
+      function go() {
+        if (done) return;
+        a.muted = false;
+        a.volume = 1;
+        var p = a.play();
+        if (p && p.then) {
+          p.then(function () { done = true; cleanup(); })
+           .catch(function () { /* still blocked — wait for the next gesture */ });
+        } else {
+          done = true;
+          cleanup();
+        }
+      }
+
+      // Anything a real visitor might do — the first successful one wins.
+      var events = [
+        'pointerdown', 'pointerup', 'pointermove', 'mousedown', 'mousemove',
+        'mouseover', 'click', 'dblclick', 'contextmenu', 'wheel', 'scroll',
+        'keydown', 'keyup', 'touchstart', 'touchmove', 'touchend',
+        'focus', 'visibilitychange', 'devicemotion', 'deviceorientation',
+      ];
+      function cleanup() {
+        events.forEach(function (ev) { window.removeEventListener(ev, go, true); });
+      }
+      events.forEach(function (ev) {
+        window.addEventListener(ev, go, { passive: true, capture: true });
+      });
+    })();
+  </script>
+</body>
+</html>
