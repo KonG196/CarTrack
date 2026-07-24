@@ -3,12 +3,7 @@ import {
   Car,
   Plus,
   ChevronRight,
-  Pencil,
-  Trash2,
-  Check,
-  Gauge,
   FileDown,
-  FileSpreadsheet,
   Loader2,
   Database,
   Upload,
@@ -19,7 +14,6 @@ import {
   CircleDot,
   LogOut,
   Sparkles,
-  QrCode,
   SlidersHorizontal,
   ShieldCheck,
 } from 'lucide-react';
@@ -32,13 +26,16 @@ import { useCarStore } from '../store/carStore';
 import { extractError } from '../api/client';
 import { downloadCarReport } from '../api/reports';
 import * as backupApi from '../api/backup';
-import { formatKm } from '../utils/format';
-import { canDo, roleLabel } from '../utils/permissions';
+import { canDo } from '../utils/permissions';
 import { Button, Card, Spinner, ErrorMessage, ConfirmDialog } from '../components/UI';
-import CopyCarName from '../components/CopyCarName';
 import PassportDialog from '../components/PassportDialog';
 import Toast from '../components/Toast';
 import SharingCard from '../components/SharingCard';
+import InstallAppCard from '../components/InstallAppCard';
+import GarageCarCard from '../components/GarageCarCard';
+
+// How many cars the settings page previews before offering "view all".
+const GARAGE_PREVIEW_COUNT = 2;
 
 const FUEL_TYPES = [
   { value: 'petrol', labelKey: 'fuelPetrol' },
@@ -403,131 +400,47 @@ export default function Garage() {
         </Card>
       )}
 
-      {cars.map((car, ci) => {
-        const isActive = String(car.id) === String(activeCarId);
-        const isOwner = canDo(car.your_role, 'car:edit');
-        return (
-          <Card
-            key={car.id}
-            data-tour={ci === 0 ? 'settings-cars' : undefined}
-            className={isActive ? 'border-amber/50 ring-1 ring-amber/30' : ''}
-          >
-            <>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-base font-semibold text-fg">
-                      <CopyCarName car={car} onCopied={setToast}>
-                        {car.brand} {car.model}
-                        {car.generation ? ` ${car.generation}` : ''}
-                      </CopyCarName>
-                    </p>
-                    <p className="mt-0.5 text-xs text-mist">
-                      {car.year} · {car.engine ? `${car.engine} · ` : ''}
-                      {fuelLabel(car.fuel_type)}
-                    </p>
-                  </div>
-                  <div className="flex flex-shrink-0 items-center gap-1.5">
-                    {!isOwner && (
-                      <span className="flex items-center gap-1 rounded-full bg-signal/15 px-2.5 py-1 text-xs font-medium text-signal">
-                        {roleLabel(car.your_role)}
-                      </span>
-                    )}
-                    {isActive && (
-                      <span className="flex items-center gap-1 rounded-full bg-amber/15 px-2.5 py-1 text-xs font-medium text-amber">
-                        <Check className="h-3 w-3" />
-                        {t('garage.active')}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="mt-3 flex items-center gap-1.5 text-sm text-fg">
-                  <Gauge className="h-4 w-4 text-mist" />
-                  {formatKm(car.current_odometer)}
-                  <span className="ml-2 text-xs text-mist/70">
-                    {t('garage.kmPerDay', { km: Math.round(car.avg_daily_km) })}
-                  </span>
-                </div>
-                <div className="mt-3 flex gap-2">
-                  {!isActive && (
-                    <Button
-                      variant="secondary"
-                      onClick={() => setActiveCar(car.id)}
-                      className="flex-1 py-2"
-                    >
-                      {t('garage.makeActive')}
-                    </Button>
-                  )}
-                  <Button
-                    variant="ghost"
-                    onClick={() => navigate(`/garage/${car.id}/specs`)}
-                    aria-label={t('garage.techSpecs')}
-                    title={t('garage.techSpecs')}
-                    className="px-3 py-2"
-                  >
-                    <Wrench className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    onClick={() => handleDownloadReport(car)}
-                    disabled={reportingCarId != null}
-                    aria-label={t('garage.downloadReportLabel')}
-                    title={t('garage.reportTitleShort')}
-                    className="px-3 py-2"
-                  >
-                    {String(reportingCarId) === String(car.id) ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <FileDown className="h-4 w-4" />
-                    )}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    onClick={() => handleDownloadCsv(car)}
-                    disabled={csvCarId != null}
-                    aria-label={t('garage.downloadCsvLabel')}
-                    title={t('garage.csvTitleShort')}
-                    className="px-3 py-2"
-                  >
-                    {String(csvCarId) === String(car.id) ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <FileSpreadsheet className="h-4 w-4" />
-                    )}
-                  </Button>
-                  {isOwner && (
-                    <>
-                      <Button
-                        variant="ghost"
-                        onClick={() => setPassportCar(car)}
-                        aria-label={t('garage.qrPassportLabel')}
-                        title={t('garage.qrPassportTitle')}
-                        className="px-3 py-2"
-                      >
-                        <QrCode className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        onClick={() => navigate(`/garage/${car.id}/edit`)}
-                        aria-label={t('garage.editCarLabel')}
-                        className="px-3 py-2"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="danger"
-                        onClick={() => setDeletingCar(car)}
-                        aria-label={t('garage.deleteCarLabel')}
-                        className="px-3 py-2"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </>
-                  )}
-                </div>
-            </>
-          </Card>
-        );
-      })}
+      {/* Only the first couple of cars live on the settings page — a long garage
+          gets its own page (below) so this one stays scannable. The active car is
+          floated to the front so it's always one of the two shown. */}
+      {[...cars]
+        .sort((a, b) => (String(b.id) === String(activeCarId)) - (String(a.id) === String(activeCarId)))
+        .slice(0, GARAGE_PREVIEW_COUNT)
+        .map((car, ci) => {
+          const isActive = String(car.id) === String(activeCarId);
+          const isOwner = canDo(car.your_role, 'car:edit');
+          return (
+            <GarageCarCard
+              key={car.id}
+              car={car}
+              isActive={isActive}
+              isOwner={isOwner}
+              tourId={ci === 0 ? 'settings-cars' : undefined}
+              fuelLabel={fuelLabel}
+              reporting={String(reportingCarId) === String(car.id)}
+              csvBusy={String(csvCarId) === String(car.id)}
+              anyBusy={reportingCarId != null || csvCarId != null}
+              onSetActive={() => setActiveCar(car.id)}
+              onEdit={() => navigate(`/garage/${car.id}/edit`)}
+              onSpecs={() => navigate(`/garage/${car.id}/specs`)}
+              onReport={() => handleDownloadReport(car)}
+              onCsv={() => handleDownloadCsv(car)}
+              onPassport={() => setPassportCar(car)}
+              onDelete={() => setDeletingCar(car)}
+              onCopied={setToast}
+            />
+          );
+        })}
+
+      {cars.length > GARAGE_PREVIEW_COUNT && (
+        <Link
+          to="/garage/cars"
+          className="flex items-center justify-center gap-1.5 rounded-2xl border border-edge py-3 text-sm font-medium text-mist transition-colors hover:border-edge-soft hover:text-fg"
+        >
+          {t('garage.viewAllCars', { count: cars.length })}
+          <ChevronRight className="h-4 w-4" />
+        </Link>
+      )}
 
       {/* Cars end here; what follows is the account and per-car tools. The
           divider is the seam the user asked for: garage above, settings below. */}
@@ -557,6 +470,8 @@ export default function Garage() {
           subtitle={t('admin.entryPointDesc')}
         />
       )}
+
+      <InstallAppCard />
 
       {activeCar && (
         <SettingsRow

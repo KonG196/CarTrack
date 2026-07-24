@@ -18,6 +18,8 @@ export default function Menu({
   // Stretch the panel to the trigger's width instead of the default min-width.
   // Used when the menu stands in for a full-width form field.
   matchWidth = false,
+  // Extra classes for the dropdown panel (e.g. a wider min-width).
+  panelClassName = '',
   // An action to offer under the choices — «add one» belongs next to the list
   // of what there is. It renders outside the listbox on purpose: a screen
   // reader is told these options are values one of which is selected, and an
@@ -112,7 +114,7 @@ export default function Menu({
             style={panelStyle}
             className={`menu-pop z-[1000] max-h-72 origin-top overflow-y-auto overscroll-contain rounded-xl border border-edge-soft p-1 shadow-2xl shadow-black/70 ring-1 ring-black/50 ${
               matchWidth ? '' : 'min-w-[12rem]'
-            }`}
+            } ${panelClassName}`}
           >
             <div role="listbox" aria-label={ariaLabel}>
               {items.map((item) => {

@@ -5,6 +5,8 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Home, BookOpen, PlusCircle, BarChart2, Settings, Car, Plus } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useCarStore } from '../store/carStore';
+import BrandLogo from './BrandLogo';
+import { brandSlug } from '../utils/carLogo';
 import { Menu } from './UI';
 import AppBadge from './AppBadge';
 import NotificationBell from './NotificationBell';
@@ -36,6 +38,24 @@ function directionFor(from, to) {
   return 'forward';
 }
 
+// Generation without the trailing colour ("7 (BA5), Сірий" → "7 (BA5)").
+const genOf = (car) => (car.generation ? car.generation.split(',')[0].trim() : '');
+
+// A row in the car switcher: a white marque logo on the left, the name, then the
+// engine on the right. Bigger and richer than a plain text line.
+function CarMenuRow({ car }) {
+  const name = [car.brand, car.model, genOf(car)].filter(Boolean).join(' ');
+  return (
+    <span className="flex min-w-0 flex-1 items-center gap-3 py-0.5">
+      <BrandLogo brand={car.brand} className="h-7 w-7" />
+      <span className="min-w-0 flex-1 truncate font-medium">{name}</span>
+      {car.engine ? (
+        <span className="flex-shrink-0 text-xs text-mist">{car.engine}</span>
+      ) : null}
+    </span>
+  );
+}
+
 function CarSelector() {
   const { t } = useTranslation();
   const cars = useCarStore((s) => s.cars);
@@ -45,8 +65,6 @@ function CarSelector() {
   if (cars.length === 0) return null;
 
   const active = cars.find((c) => String(c.id) === String(activeCarId)) || cars[0];
-  // Generation without the trailing colour ("7 (BA5), Сірий" → "7 (BA5)").
-  const genOf = (car) => (car.generation ? car.generation.split(',')[0].trim() : '');
   const activeGen = genOf(active);
 
   return (
@@ -54,17 +72,25 @@ function CarSelector() {
       ariaLabel={t('nav.activeCar')}
       value={String(active.id)}
       onSelect={setActiveCar}
-      items={cars.map((car) => {
-        const gen = genOf(car);
-        return {
-          value: String(car.id),
-          label: [car.brand, car.model, gen].filter(Boolean).join(' '),
-        };
-      })}
+      // A wider dropdown so the richer rows (name + engine) breathe.
+      panelClassName="min-w-[16rem]"
+      // The active car floats to the top of the list.
+      items={[...cars]
+        .sort(
+          (a, b) =>
+            (String(b.id) === String(activeCarId)) - (String(a.id) === String(activeCarId)),
+        )
+        .map((car) => ({ value: String(car.id), label: <CarMenuRow car={car} /> }))}
       buttonClassName="flex min-w-0 max-w-[60vw] items-center gap-1.5 rounded-xl border border-edge bg-panel py-1.5 pl-2.5 pr-3 text-sm text-fg transition-colors hover:border-edge-soft"
       button={
         <>
-          <Car className="h-4 w-4 flex-shrink-0 text-amber" />
+          {/* The active car's marque logo (white), with the generic car icon as a
+              fallback when the brand has no logo. */}
+          {brandSlug(active.brand) ? (
+            <BrandLogo brand={active.brand} className="h-5 w-5" />
+          ) : (
+            <Car className="h-4 w-4 flex-shrink-0 text-amber" />
+          )}
           {/* Model + generation, engine tail — the whole line truncates with an
               ellipsis rather than pushing the wordmark: min-w-0 lets it shrink. */}
           <span className="min-w-0 truncate">
