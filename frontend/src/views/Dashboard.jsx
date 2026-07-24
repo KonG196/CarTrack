@@ -36,6 +36,7 @@ import CompleteIntervalModal from '../components/CompleteIntervalModal';
 import CurrencyPromptModal from '../components/CurrencyPromptModal';
 import OdometerModal from '../components/OdometerModal';
 import CopyCarName from '../components/CopyCarName';
+import CarPhoto from '../components/CarPhoto';
 import WelcomeTourCard from '../components/WelcomeTourCard';
 
 // Once-only marker so the first-run currency prompt never re-opens after the
@@ -305,20 +306,23 @@ export default function Dashboard() {
           {/* Odometer vertically centred against the (possibly three-line)
               name, not pinned to the top. */}
           <div className="flex items-center justify-between gap-2 px-1">
-            <div className="min-w-0" data-tour="car-name">
-              {/* The colour lives in `generation` after a comma («7 (BA5),
-                  Urano Gray»); the dashboard shows the generation but not the
-                  colour, so it is trimmed off here. */}
-              <h1 className="font-display text-lg font-semibold leading-tight text-fg">
-                <CopyCarName car={activeCar} onCopied={setToast}>
-                  {activeCar.brand} {activeCar.model}
-                  {activeCar.generation ? ` ${activeCar.generation.split(',')[0].trim()}` : ''}
-                </CopyCarName>
-              </h1>
-              <p className="mt-0.5 text-xs text-mist">
-                {activeCar.year}
-                {activeCar.engine ? ` · ${activeCar.engine}` : ''} · {fuelKindLabel(activeCar.fuel_type)}
-              </p>
+            <div className="flex min-w-0 items-center gap-3" data-tour="car-name">
+              <CarPhoto carId={activeCar.id} />
+              <div className="min-w-0">
+                {/* The colour lives in `generation` after a comma («7 (BA5),
+                    Urano Gray»); the dashboard shows the generation but not the
+                    colour, so it is trimmed off here. */}
+                <h1 className="font-display text-lg font-semibold leading-tight text-fg">
+                  <CopyCarName car={activeCar} onCopied={setToast}>
+                    {activeCar.brand} {activeCar.model}
+                    {activeCar.generation ? ` ${activeCar.generation.split(',')[0].trim()}` : ''}
+                  </CopyCarName>
+                </h1>
+                <p className="mt-0.5 text-xs text-mist">
+                  {activeCar.year}
+                  {activeCar.engine ? ` · ${activeCar.engine}` : ''} · {fuelKindLabel(activeCar.fuel_type)}
+                </p>
+              </div>
             </div>
             {canEditCar ? (
               <button

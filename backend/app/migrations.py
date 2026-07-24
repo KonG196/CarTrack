@@ -28,6 +28,10 @@ EXPECTED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     ("users", "is_superadmin", "BOOLEAN DEFAULT 0 NOT NULL"),
     ("users", "blocked", "BOOLEAN DEFAULT 0 NOT NULL"),
     ("users", "blocked_reason", "VARCHAR(500)"),
+    ("cars", "image_url", "TEXT"),
+    ("cars", "image_expires_at", "DATETIME"),
+    ("cars", "image_checked_at", "DATETIME"),
+    ("cars", "image_missing", "BOOLEAN DEFAULT 0 NOT NULL"),
     ("service_intervals", "last_notified_at", "DATE"),
 )
 

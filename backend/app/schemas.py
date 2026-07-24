@@ -465,6 +465,15 @@ class CarOut(BaseModel):
     updated_at: Optional[dt.datetime]
 
 
+class CarImageOut(BaseModel):
+    """Imagery for a car: a real photo URL (Wikimedia CC0) when one exists, and a
+    marque-logo URL as a fallback. Either may be null; the client shows the photo
+    if present, else the logo, else nothing."""
+
+    url: Optional[str] = None
+    logo: Optional[str] = None
+
+
 class PassportTokenOut(BaseModel):
     """The minted passport link and a ready-to-print QR of it."""
 

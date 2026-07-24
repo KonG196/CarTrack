@@ -14,9 +14,10 @@ from app.access import (
 from app.auth import get_current_user
 from app.database import get_db
 from app.models import Car, LogEntry, RefuelDetails, User
-from app.schemas import CarCreate, CarOut, CarUpdate, PassportTokenOut
+from app.schemas import CarCreate, CarImageOut, CarOut, CarUpdate, PassportTokenOut
 from app.services import passport
 from app.services.admin_notify import notify_first_car
+from app.services.car_image import brand_logo_url, get_car_image
 from app.services.fuel import resolve_fuel_kind
 from app.services.intervals import compute_avg_daily_km, effective_avg_daily_km
 
@@ -129,6 +130,22 @@ def get_car(
 ) -> CarOut:
     car = get_accessible_car(db, current_user, car_id)
     return serialize_car(db, car, current_user)
+
+
+@router.get("/{car_id}/image", response_model=CarImageOut)
+def car_image(
+    car_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> CarImageOut:
+    """A real CC0 photo of the car (Wikimedia) when one exists, plus a marque
+    logo as a fallback. URLs point at external CDNs (never re-hosted); the photo
+    is resolved once per car and cached — see services/car_image.py."""
+    car = get_accessible_car(db, current_user, car_id)
+    return CarImageOut(
+        url=get_car_image(db, car),
+        logo=brand_logo_url(car.brand),
+    )
 
 
 @router.patch("/{car_id}", response_model=CarOut)

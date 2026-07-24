@@ -14,6 +14,14 @@ export async function getCar(carId) {
   return withRole(data);
 }
 
+// Imagery for the car: { url, logo } — a real CC0 photo (Wikimedia) when one
+// exists, plus the marque logo as a fallback. Either may be null. URLs point at
+// external CDNs the browser caches, so this stays cheap.
+export async function getCarImage(carId) {
+  const { data } = await client.get(`/cars/${carId}/image`);
+  return { url: data.url || null, logo: data.logo || null };
+}
+
 export async function createCar(payload) {
   const { data } = await client.post('/cars', payload);
   return withRole(data);

@@ -242,6 +242,20 @@ class Car(Base):
     insurance_until: Mapped[Optional[dt.date]] = mapped_column(Date, nullable=True)
     tire_pressure: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     fuel_approval: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    # Cached car photo URL from Wikimedia CC0 (services/car_image.py). The
+    # resolved upload.wikimedia.org URL is cached (~30d) so we resolve once per
+    # car, not per dashboard load; the file itself is never stored.
+    # image_missing latches when no CC0 photo exists, so we stop asking.
+    image_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    image_expires_at: Mapped[Optional[dt.datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
+    image_checked_at: Mapped[Optional[dt.datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
+    image_missing: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
     # Nullable for pre-0003 rows; future offline sync keys on this stamp.
     updated_at: Mapped[Optional[dt.datetime]] = mapped_column(
