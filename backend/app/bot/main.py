@@ -27,6 +27,7 @@ def bot_commands(lang: str) -> list[BotCommand]:
         BotCommand(command="report", description=t("bot.cmd.report", lang)),
         BotCommand(command="note", description=t("bot.cmd.note", lang)),
         BotCommand(command="backup", description=t("bot.cmd.backup", lang)),
+        BotCommand(command="admin", description=t("bot.cmd.admin", lang)),
     ]
 
 

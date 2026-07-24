@@ -24,6 +24,7 @@ from aiogram.types import (
 from sqlalchemy.orm import Session
 
 from app.bot import service
+from app.bot import admin as bot_admin
 from app.bot.ai_intent import parse_message_intent, refuel_fields_from_intent
 from app.bot.parsers import (
     parse_bare_odometer,
@@ -548,6 +549,36 @@ async def cmd_backup(message: Message) -> None:
         await progress.edit_text(t("bot.h.backupFailed", lang))
 
 
+def _admin_lang(user: Optional[User], message: Message) -> str:
+    return (
+        normalize_lang(user.language)
+        if user
+        else normalize_lang(getattr(message.from_user, "language_code", None))
+    )
+
+
+@router.message(Command("admin"))
+async def cmd_admin(message: Message) -> None:
+    """Toggle owner-only admin mode. Gated by is_superadmin, so a non-owner who
+    discovers the command sees only the plain rejection."""
+    with SessionLocal() as db:
+        user = service.get_user_by_chat(db, str(message.chat.id))
+    lang = _admin_lang(user, message)
+    if user is None or not user.is_superadmin:
+        await message.answer(t("bot.admin.notAdmin", lang))
+        return
+    chat_id = message.chat.id
+    if bot_admin.is_admin_mode(chat_id):
+        bot_admin.set_admin_mode(chat_id, False)
+        await message.answer(t("bot.admin.off", lang))
+        return
+    bot_admin.set_admin_mode(chat_id, True)
+    await message.answer(
+        t("bot.admin.on", lang) + "\n\n" + t("bot.admin.menuTitle", lang),
+        reply_markup=bot_admin.menu_keyboard(lang),
+    )
+
+
 def _was_asked_for_odometer(chat_id: int) -> bool:
     asked_at = _awaiting_odometer.get(chat_id)
     if asked_at is None:
@@ -812,6 +843,83 @@ async def cb_odometer(callback: CallbackQuery) -> None:
         if await _writable_car(callback, message, db, user, car_id) is None:
             return
         await _apply_odometer(message, db, car_id, value, user)
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("adm:"))
+async def cb_admin(callback: CallbackQuery) -> None:
+    """Render an admin page in place. Re-checks is_superadmin every time — the
+    callback data is client-supplied, and admin rights can change between the
+    keyboard being drawn and a button being tapped."""
+    message = callback.message
+    if not isinstance(message, Message):
+        await callback.answer()
+        return
+    with SessionLocal() as db:
+        user = service.get_user_by_chat(db, str(message.chat.id))
+        lang = _admin_lang(user, message)
+        if user is None or not user.is_superadmin:
+            await callback.answer(t("bot.admin.notAdmin", lang), show_alert=True)
+            return
+        try:
+            _, kind, page_raw = (callback.data or "").split(":")
+            page_index = max(0, int(page_raw))
+        except ValueError:
+            await callback.answer(t("bot.h.badData", lang))
+            return
+
+        if kind == "close":
+            try:
+                await message.edit_text(t("bot.admin.closed", lang))
+            except TelegramBadRequest:
+                pass
+            await callback.answer()
+            return
+
+        if kind == "menu":
+            try:
+                await message.edit_text(
+                    t("bot.admin.menuTitle", lang),
+                    reply_markup=bot_admin.menu_keyboard(lang),
+                )
+            except TelegramBadRequest:
+                pass
+            await callback.answer()
+            return
+
+        if kind == "stats":
+            text = bot_admin.format_stats(service.admin_stats(db), lang)
+            keyboard = bot_admin.menu_keyboard(lang)
+        elif kind == "users":
+            total = service.admin_count_users(db)
+            pages = max(1, (total + bot_admin._ADMIN_PAGE - 1) // bot_admin._ADMIN_PAGE)
+            page_index = min(page_index, pages - 1)
+            rows = service.admin_list_users(
+                db, page_index * bot_admin._ADMIN_PAGE, bot_admin._ADMIN_PAGE
+            )
+            text = bot_admin.format_users(
+                db, rows, page_index + 1, pages, total, lang
+            )
+            keyboard = bot_admin.page_keyboard("users", page_index + 1, pages, lang)
+        elif kind == "cars":
+            total = service.admin_count_cars(db)
+            pages = max(1, (total + bot_admin._ADMIN_PAGE - 1) // bot_admin._ADMIN_PAGE)
+            page_index = min(page_index, pages - 1)
+            rows = service.admin_list_cars(
+                db, page_index * bot_admin._ADMIN_PAGE, bot_admin._ADMIN_PAGE
+            )
+            text = bot_admin.format_cars(rows, page_index + 1, pages, total, lang)
+            keyboard = bot_admin.page_keyboard("cars", page_index + 1, pages, lang)
+        else:
+            await callback.answer(t("bot.h.badData", lang))
+            return
+
+    try:
+        await message.edit_text(text, reply_markup=keyboard)
+    except TelegramBadRequest:
+        # Telegram rejects an edit to identical text/markup — e.g. tapping the
+        # same page twice. Nothing to change; just acknowledge the tap.
+        pass
     await callback.answer()
 
 
