@@ -1,25 +1,10 @@
-import { useEffect, useState } from 'react';
-import { getCarImage } from '../api/cars';
+import useCarImage from '../hooks/useCarImage';
 
-// The car's picture beside its name: a real CC0 photo (Wikimedia) when one
-// exists, otherwise the marque logo, otherwise nothing (no box, no broken image,
-// no layout shift). The endpoint returns {url, logo}; a photo fills the frame
-// (object-cover), a logo sits contained with padding so it reads as a badge.
+// A small thumbnail of the car (photo, else marque logo, else nothing). Kept for
+// places that want the car picture inline; the dashboard header uses the
+// photo-as-background treatment instead (see Dashboard).
 export default function CarPhoto({ carId, className = '' }) {
-  const [data, setData] = useState(null); // { url, logo }
-  const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    setData(null);
-    setFailed(false);
-    getCarImage(carId)
-      .then((d) => !cancelled && setData(d))
-      .catch(() => !cancelled && setFailed(true));
-    return () => {
-      cancelled = true;
-    };
-  }, [carId]);
+  const { data, failed, setFailed } = useCarImage(carId);
 
   if (failed || !data) return null;
   const src = data.url || data.logo;

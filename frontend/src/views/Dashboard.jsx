@@ -5,7 +5,6 @@ import {
   Car,
   Fuel,
   ArrowUpRight,
-  Wallet,
   Droplets,
   Route,
   Gauge,
@@ -20,7 +19,6 @@ import { canDo } from '../utils/permissions';
 import { fuelKindLabel } from '../utils/fuelKind';
 import {
   formatMoney,
-  formatMoneyCompact,
   formatKm,
   formatDate,
   formatConsumptionValue,
@@ -36,7 +34,8 @@ import CompleteIntervalModal from '../components/CompleteIntervalModal';
 import CurrencyPromptModal from '../components/CurrencyPromptModal';
 import OdometerModal from '../components/OdometerModal';
 import CopyCarName from '../components/CopyCarName';
-import CarPhoto from '../components/CarPhoto';
+import CarHeaderCard from '../components/CarHeaderCard';
+import LicensePlate from '../components/LicensePlate';
 import WelcomeTourCard from '../components/WelcomeTourCard';
 
 // Once-only marker so the first-run currency prompt never re-opens after the
@@ -55,17 +54,19 @@ const BUDGET_STYLES = {
   over: { bar: 'bg-crit', text: 'text-crit' },
 };
 
-function StatCard({ icon: Icon, label, value }) {
+// A stat tile that sits ON the car photo inside the header card: translucent and
+// blurred so the photo shows through faintly while the figure stays crisp.
+function GlassTile({ icon: Icon, label, value }) {
   return (
-    <Card className="flex flex-col gap-1.5 p-3.5">
-      <span className="flex items-start gap-1.5 text-xs text-mist">
-        <Icon className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
-        {label}
-      </span>
-      <span className="mt-auto whitespace-nowrap font-mono text-base font-semibold leading-tight tabular-nums text-fg">
-        {value}
-      </span>
-    </Card>
+    <div className="flex items-center gap-2 rounded-lg  bg-white/5  backdrop-blur-[1.5px] px-2.5 py-1.5">
+      <Icon className="h-3.5 w-3.5 flex-shrink-0 text-mist" />
+      <div className="min-w-0">
+        <span className="block truncate text-[10px] leading-tight text-mist">{label}</span>
+        <span className="block whitespace-nowrap font-mono text-[13px] font-semibold leading-tight tabular-nums text-fg">
+          {value}
+        </span>
+      </div>
+    </div>
   );
 }
 
@@ -302,27 +303,24 @@ export default function Dashboard() {
       />
 
       {activeCar && (
-        <>
+        <CarHeaderCard carId={activeCar.id}>
           {/* Odometer vertically centred against the (possibly three-line)
               name, not pinned to the top. */}
-          <div className="flex items-center justify-between gap-2 px-1">
-            <div className="flex min-w-0 items-center gap-3" data-tour="car-name">
-              <CarPhoto carId={activeCar.id} />
-              <div className="min-w-0">
-                {/* The colour lives in `generation` after a comma («7 (BA5),
-                    Urano Gray»); the dashboard shows the generation but not the
-                    colour, so it is trimmed off here. */}
-                <h1 className="font-display text-lg font-semibold leading-tight text-fg">
-                  <CopyCarName car={activeCar} onCopied={setToast}>
-                    {activeCar.brand} {activeCar.model}
-                    {activeCar.generation ? ` ${activeCar.generation.split(',')[0].trim()}` : ''}
-                  </CopyCarName>
-                </h1>
-                <p className="mt-0.5 text-xs text-mist">
-                  {activeCar.year}
-                  {activeCar.engine ? ` · ${activeCar.engine}` : ''} · {fuelKindLabel(activeCar.fuel_type)}
-                </p>
-              </div>
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0" data-tour="car-name">
+              {/* The colour lives in `generation` after a comma («7 (BA5),
+                  Urano Gray»); the dashboard shows the generation but not the
+                  colour, so it is trimmed off here. */}
+              <h1 className="font-display text-lg font-semibold leading-tight text-fg">
+                <CopyCarName car={activeCar} onCopied={setToast}>
+                  {activeCar.brand} {activeCar.model}
+                  {activeCar.generation ? ` ${activeCar.generation.split(',')[0].trim()}` : ''}
+                </CopyCarName>
+              </h1>
+              <p className="mt-0.5 text-xs text-mist">
+                {activeCar.year}
+                {activeCar.engine ? ` · ${activeCar.engine}` : ''} · {fuelKindLabel(activeCar.fuel_type)}
+              </p>
             </div>
             {canEditCar ? (
               <button
@@ -344,48 +342,56 @@ export default function Dashboard() {
               </span>
             )}
           </div>
-        </>
+
+          {/* Bottom row of the car block: the plate on the left (only for a
+              standard UA plate — LicensePlate renders nothing otherwise), the two
+              compact figures ALWAYS pinned to the right regardless. Consumption +
+              cost-per-distance live here now so the block is tall enough for the
+              photo to read; «This month» was dropped — the Monthly budget below
+              already shows it. */}
+          <div className="mt-4 flex items-center justify-between gap-3" data-tour="stats">
+            {/* A flex-1 left slot keeps the tiles fixed on the right even when the
+                plate is absent (empty slot instead of a shifting layout). */}
+            <div className="min-w-0 flex-1">
+              <LicensePlate plate={activeCar.plate} />
+            </div>
+            {analytics && (
+              <div className="flex flex-shrink-0 gap-2">
+                <GlassTile
+                  icon={Droplets}
+                  label={consumptionUnitLabel()}
+                  value={
+                    fuel?.avg_consumption_l_100km != null
+                      ? formatConsumptionValue(fuel.avg_consumption_l_100km)
+                      : '—'
+                  }
+                />
+                <GlassTile
+                  icon={Route}
+                  label={
+                    isImperial(units)
+                      ? t('dashboard.statPerMile')
+                      : t('dashboard.statPer100km')
+                  }
+                  value={
+                    analytics.tco?.cost_per_km != null
+                      ? isImperial(units)
+                        ? formatMoney(costPerDistanceFromPerKm(analytics.tco.cost_per_km, units))
+                        : formatMoney(Math.round(analytics.tco.cost_per_km * 100))
+                      : '—'
+                  }
+                />
+              </div>
+            )}
+          </div>
+        </CarHeaderCard>
       )}
 
       {analyticsError && <ErrorMessage>{analyticsError}</ErrorMessage>}
 
       {analyticsLoading && !analytics ? (
         <Spinner />
-      ) : (
-        analytics && (
-          <div className="grid grid-cols-3 gap-2.5" data-tour="stats">
-            <StatCard
-              icon={Wallet}
-              label={t('dashboard.statThisMonth')}
-              value={formatMoneyCompact(analytics.totals.this_month)}
-            />
-            <StatCard
-              icon={Droplets}
-              label={consumptionUnitLabel()}
-              value={
-                fuel?.avg_consumption_l_100km != null
-                  ? formatConsumptionValue(fuel.avg_consumption_l_100km)
-                  : '—'
-              }
-            />
-            <StatCard
-              icon={Route}
-              label={
-                isImperial(units)
-                  ? t('dashboard.statPerMile')
-                  : t('dashboard.statPer100km')
-              }
-              value={
-                analytics.tco?.cost_per_km != null
-                  ? isImperial(units)
-                    ? formatMoney(costPerDistanceFromPerKm(analytics.tco.cost_per_km, units))
-                    : formatMoney(Math.round(analytics.tco.cost_per_km * 100))
-                  : '—'
-              }
-            />
-          </div>
-        )
-      )}
+      ) : null}
 
       {analytics?.budget && <BudgetCard budget={analytics.budget} />}
 
