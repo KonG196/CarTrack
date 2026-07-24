@@ -1189,3 +1189,56 @@ def digest_targets(
 def set_digest_enabled(db: Session, user: User, enabled: bool) -> None:
     user.digest_enabled = enabled
     db.commit()
+
+
+# ── Admin read-only helpers ──────────────────────────────────────────────
+# Used by the bot's /admin mode. Read-only, newest-first, and they never
+# select sensitive columns — the caller formats only safe fields.
+
+
+def admin_count_users(db: Session) -> int:
+    return db.scalar(select(func.count(User.id))) or 0
+
+
+def admin_list_users(db: Session, offset: int, limit: int) -> list[User]:
+    return list(
+        db.execute(
+            select(User).order_by(User.created_at.desc()).offset(offset).limit(limit)
+        )
+        .scalars()
+        .all()
+    )
+
+
+def admin_count_cars(db: Session) -> int:
+    return db.scalar(select(func.count(Car.id))) or 0
+
+
+def admin_list_cars(db: Session, offset: int, limit: int) -> list[Car]:
+    return list(
+        db.execute(
+            select(Car).order_by(Car.created_at.desc()).offset(offset).limit(limit)
+        )
+        .scalars()
+        .all()
+    )
+
+
+def admin_user_car_count(db: Session, user_id: int) -> int:
+    return db.scalar(select(func.count(Car.id)).where(Car.user_id == user_id)) or 0
+
+
+def admin_stats(db: Session) -> dict:
+    return {
+        "users": db.scalar(select(func.count(User.id))) or 0,
+        "verified_users": db.scalar(
+            select(func.count(User.id)).where(User.email_verified.is_(True))
+        )
+        or 0,
+        "cars": db.scalar(select(func.count(Car.id))) or 0,
+        "log_entries": db.scalar(select(func.count(LogEntry.id))) or 0,
+        "users_with_telegram": db.scalar(
+            select(func.count(User.id)).where(User.telegram_chat_id.is_not(None))
+        )
+        or 0,
+    }
