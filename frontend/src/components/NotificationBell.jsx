@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Bell } from 'lucide-react';
+import { Bell, X } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useNotificationStore } from '../store/notificationStore';
 import NotificationModal from './NotificationModal';
@@ -27,7 +27,13 @@ export default function NotificationBell() {
     return () => window.removeEventListener('focus', onFocus);
   }, [token, location.pathname, refresh]);
 
-  const openCentre = () => {
+  // The bell toggles the tray: tapping it while open closes it (the icon is an X
+  // then), so it doubles as the close control the user expects.
+  const toggle = () => {
+    if (open) {
+      setOpen(false);
+      return;
+    }
     setOpen(true);
     markRead(); // opening the centre clears the badge
   };
@@ -38,12 +44,13 @@ export default function NotificationBell() {
     <>
       <button
         type="button"
-        onClick={openCentre}
-        aria-label={t('notificationCentre.open')}
+        onClick={toggle}
+        aria-label={open ? t('common.close') : t('notificationCentre.open')}
+        aria-expanded={open}
         className="relative flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl text-mist transition-colors hover:bg-panel hover:text-fg"
       >
-        <Bell className="h-5 w-5" />
-        {unread > 0 && (
+        {open ? <X className="h-5 w-5" /> : <Bell className="h-5 w-5" />}
+        {!open && unread > 0 && (
           <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-crit px-1 text-[10px] font-bold leading-none text-white">
             {badge}
           </span>

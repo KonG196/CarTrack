@@ -163,6 +163,34 @@
     }
   }
 
+  /* The notifications tray drops down from under the header. */
+  @keyframes kt-tray-in {
+    from {
+      opacity: 0;
+      transform: translateY(-0.5rem);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @keyframes kt-tray-out {
+    from {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateY(-0.5rem);
+    }
+  }
+  .notif-tray {
+    animation: kt-tray-in 0.16s ease-out both;
+  }
+  .notif-tray.is-closing {
+    animation: kt-tray-out 0.16s ease-in both;
+  }
+
   .menu-pop {
     animation: kt-menu-in 0.15s ease-out both;
   }
@@ -350,6 +378,8 @@
     .modal-backdrop[data-closing='true'] .modal-dialog,
     .menu-pop,
     .menu-pop[data-closing='true'],
+    .notif-tray,
+    .notif-tray.is-closing,
     .toast-pop,
     .toast-pop[data-closing='true'],
     .rise-in,

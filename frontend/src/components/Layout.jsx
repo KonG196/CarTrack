@@ -61,7 +61,7 @@ function CarSelector() {
           label: [car.brand, car.model, gen].filter(Boolean).join(' '),
         };
       })}
-      buttonClassName="flex w-full min-w-0 items-center gap-1.5 rounded-xl border border-edge bg-panel py-1.5 pl-2.5 pr-3 text-sm text-fg transition-colors hover:border-edge-soft"
+      buttonClassName="flex min-w-0 max-w-[60vw] items-center gap-1.5 rounded-xl border border-edge bg-panel py-1.5 pl-2.5 pr-3 text-sm text-fg transition-colors hover:border-edge-soft"
       button={
         <>
           <Car className="h-4 w-4 flex-shrink-0 text-amber" />
@@ -179,13 +179,17 @@ export default function Layout() {
     <div className="min-h-screen bg-garage">
       <AppBadge />
       <header className="app-header sticky top-0 z-40 border-b border-edge bg-garage/90 pt-[env(safe-area-inset-top)] backdrop-blur">
-        <div className="mx-auto flex max-w-md items-center justify-between gap-2 px-4 py-3">
+        <div className="mx-auto flex max-w-md items-center gap-2 px-4 py-3">
           <NavLink to="/" aria-label={t('nav.toHome')} className="shrink-0">
             <Wordmark />
           </NavLink>
-          <span data-tour="car-switcher" className="min-w-0 flex-1">
+          {/* The switcher takes only the width its label needs (min-w-0 lets it
+              truncate on a long name); the spacer pushes the bell to the edge so
+              the button never stretches with empty padding on the right. */}
+          <span data-tour="car-switcher" className="min-w-0">
             <CarSelector />
           </span>
+          <span className="flex-1" />
           <NotificationBell />
         </div>
       </header>
