@@ -6,6 +6,7 @@ import datetime as dt
 
 from sqlalchemy.orm import sessionmaker
 
+from app.bot import admin as bot_admin
 from app.bot import service
 from app.models import Car, LogEntry, User
 
@@ -73,3 +74,57 @@ def test_admin_user_car_count(db_session_factory: sessionmaker) -> None:
         db.commit()
         assert service.admin_user_car_count(db, owner.id) == 3
         assert service.admin_user_car_count(db, other.id) == 0
+
+
+def test_admin_mode_toggle_is_per_chat() -> None:
+    bot_admin.set_admin_mode(999, True)
+    assert bot_admin.is_admin_mode(999) is True
+    assert bot_admin.is_admin_mode(1000) is False
+    bot_admin.set_admin_mode(999, False)
+    assert bot_admin.is_admin_mode(999) is False
+
+
+def test_format_users_hides_sensitive_and_lists_rows(db_session_factory: sessionmaker) -> None:
+    with db_session_factory() as db:
+        a = _make_user(db, "person@x.com", verified=True, chat="55")
+        a.hashed_password = "SECRET-HASH"
+        a.verify_code_hash = "SECRET-CODE"
+        db.commit()
+        users = service.admin_list_users(db, 0, 20)
+        text = bot_admin.format_users(db, users, page=1, pages=1, total=1, lang="en")
+        assert "person@x.com" in text
+        assert "SECRET-HASH" not in text
+        assert "SECRET-CODE" not in text
+
+
+def test_format_cars_renders_label(db_session_factory: sessionmaker) -> None:
+    with db_session_factory() as db:
+        owner = _make_user(db, "owner@x.com")
+        db.add(Car(user_id=owner.id, brand="VW", model="Golf", year=2015,
+                   fuel_type="petrol", current_odometer=123456))
+        db.commit()
+        cars = service.admin_list_cars(db, 0, 20)
+        text = bot_admin.format_cars(cars, page=1, pages=1, total=1, lang="en")
+        assert "VW" in text and "Golf" in text
+        assert "123456" in text
+
+
+def test_page_keyboard_has_nav_callbacks() -> None:
+    kb = bot_admin.page_keyboard("users", page=1, pages=3, lang="en")
+    all_data = [b.callback_data for row in kb.inline_keyboard for b in row]
+    assert "adm:users:1" in all_data  # next from page 1 → target page 2 (0-based index 1)
+    assert "adm:menu:0" in all_data
+
+
+def test_page_keyboard_first_page_has_no_prev() -> None:
+    kb = bot_admin.page_keyboard("cars", page=1, pages=3, lang="en")
+    all_data = [b.callback_data for row in kb.inline_keyboard for b in row]
+    assert not any(d.startswith("adm:cars:") and d.endswith(":-1") for d in all_data)
+    # page 1 → prev would point to index -1, which must never be produced
+    assert "adm:cars:0" not in all_data  # no prev button on first page
+
+
+def test_format_stats_shows_all_counts() -> None:
+    stats = {"users": 5, "verified_users": 3, "cars": 4, "log_entries": 99, "users_with_telegram": 2}
+    text = bot_admin.format_stats(stats, lang="en")
+    assert "5" in text and "3" in text and "4" in text and "99" in text and "2" in text
