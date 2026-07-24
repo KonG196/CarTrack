@@ -1,19 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { X } from 'lucide-react';
 
-import { useAuthStore } from '../store/authStore';
 import { useCarStore } from '../store/carStore';
 import { useTour } from './TourContext';
-
-// The section tour that auto-shows the first time the account lands on a page.
-const PAGE_TOURS = {
-  '/': 'home',
-  '/logbook': 'logbook',
-  '/add': 'add',
-  '/analytics': 'analytics',
-  '/garage': 'settings',
-};
 
 const PAD = 8;
 // Room the callout needs on one side of the spotlight. If the target sits too
@@ -42,13 +33,11 @@ function place(el, top, left, width, height) {
 
 export default function TourOverlay() {
   const { t } = useTranslation();
-  const { active, tour, index, steps, next, prev, stop, start, wasSeen } = useTour();
+  const { active, tour, index, steps, next, prev, stop } = useTour();
   const step = active ? steps[index] : null;
   const navigate = useNavigate();
   const location = useLocation();
   const firstLogId = useCarStore((s) => s.logs?.items?.[0]?.id);
-  const activeCarId = useCarStore((s) => s.activeCarId);
-  const userReady = useAuthStore((s) => !!s.user);
   const [ready, setReady] = useState(false);
   const [calloutPos, setCalloutPos] = useState('bottom');
 
@@ -59,25 +48,6 @@ export default function TourOverlay() {
   const blocker = useRef(null);
   const ring = useRef(null);
   const tap = useRef(null);
-
-  // Auto-show a section's tour the first time this account opens its page.
-  // Hold it back while the first-run currency prompt is still pending, so the
-  // two onboarding overlays don't fight over the screen on the very first visit.
-  useEffect(() => {
-    const name = PAGE_TOURS[location.pathname];
-    if (!name || active || !userReady || !activeCarId || wasSeen(name)) return undefined;
-    let currencyPending = false;
-    try {
-      currencyPending =
-        !localStorage.getItem('kapot_currency') &&
-        !localStorage.getItem('kapot_currency_prompted');
-    } catch {
-      /* private mode — treat as resolved */
-    }
-    if (currencyPending) return undefined;
-    const id = setTimeout(() => start(name), 800);
-    return () => clearTimeout(id);
-  }, [location.pathname, active, userReady, activeCarId, wasSeen, start]);
 
   // A step's page: a string, or a function of context. null means «skip». May
   // carry a query (?tab=), so compare against the full URL.
@@ -91,9 +61,32 @@ export default function TourOverlay() {
     if (step?.path && stepPath === null) next();
   }, [step, stepPath, next]);
 
+  // A route change is staged as a visible tap on the bottom-nav item, THEN the
+  // navigation — so moving between pages reads as a deliberate press, not a
+  // teleport. navTap holds the {x, y} the finger animates over; it clears once
+  // we navigate. A step with no `nav` (or a missing element) just navigates.
+  const [navTap, setNavTap] = useState(null);
   useEffect(() => {
-    if (stepPath && stepPath !== currentUrl) navigate(stepPath);
-  }, [stepPath, currentUrl, navigate]);
+    if (!stepPath || stepPath === currentUrl) {
+      setNavTap(null);
+      return undefined;
+    }
+    const navEl = step?.nav
+      ? document.querySelector(`[data-tour="${step.nav}"]`)
+      : null;
+    if (!navEl) {
+      navigate(stepPath);
+      return undefined;
+    }
+    const r = navEl.getBoundingClientRect();
+    setNavTap({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
+    // Let the tap animation play before the route swaps.
+    const id = setTimeout(() => {
+      setNavTap(null);
+      navigate(stepPath);
+    }, 620);
+    return () => clearTimeout(id);
+  }, [stepPath, currentUrl, step, navigate]);
 
   // Position and TRACK the spotlight imperatively, once per frame, straight off
   // the element's live rect. This is what keeps the highlight exactly on target
@@ -128,6 +121,19 @@ export default function TourOverlay() {
     let lastTapKey = '';
     let lastPos = null;
     let shown = false;
+    // Step-change animation: when the spotlight moves to a NEW target it should
+    // glide there; while tracking the SAME (possibly scrolling) target it must
+    // stay frame-exact. So transitions are switched on only for the ~360ms after
+    // a step key changes, then off. `stepKey` is the current step, `moveTimer`
+    // the handle that turns the glide back off.
+    let stepKey = null;
+    let moveTimer = null;
+    const movers = () =>
+      [panelTop, panelBottom, panelLeft, panelRight, blocker, ring]
+        .map((r) => r.current)
+        .filter(Boolean);
+    const setMoving = (on) =>
+      movers().forEach((el) => el.classList.toggle('tour-move', on));
 
     const tick = (now) => {
       raf = requestAnimationFrame(tick);
@@ -149,15 +155,28 @@ export default function TourOverlay() {
         if (now - pollStart > 2500) next();
         return;
       }
+      // On a new step, glide the spotlight to it — but only if one was already
+      // showing (so the very first target appears instantly, not sliding in from
+      // the corner). Turn the transition back off after it settles so per-frame
+      // tracking of the target stays exact.
+      if (stepKey !== cur.key) {
+        stepKey = cur.key;
+        if (shown) {
+          setMoving(true);
+          if (moveTimer) clearTimeout(moveTimer);
+          moveTimer = setTimeout(() => setMoving(false), 380);
+        }
+      }
       let r = el.getBoundingClientRect();
       // Scroll into the safe-area centre once per step, and only if meaningfully
-      // off — an in-view target is left alone (no jumping).
+      // off — an in-view target is left alone (no jumping). Smooth so it reads as
+      // guided movement, matching the spotlight glide.
       if (scrolledKey !== cur.key) {
         scrolledKey = cur.key;
         const safeCentre = (SAFE_TOP + (window.innerHeight - SAFE_BOTTOM)) / 2;
         const delta = r.top + r.height / 2 - safeCentre;
         if (Math.abs(delta) > 40) {
-          window.scrollBy({ top: delta });
+          window.scrollBy({ top: delta, behavior: 'smooth' });
           r = el.getBoundingClientRect();
         }
       }
@@ -233,6 +252,22 @@ export default function TourOverlay() {
     return () => document.removeEventListener('keydown', onKey);
   }, [active, next, prev, stop]);
 
+  // Block MANUAL scroll while the tour runs — a stray swipe would knock the
+  // spotlight off its target — while still letting the tour's own scrollBy move
+  // the page. So this cancels user gestures (wheel / touchmove) rather than
+  // setting overflow:hidden, which would also freeze the programmatic scroll.
+  useEffect(() => {
+    if (!active) return undefined;
+    const block = (e) => e.preventDefault();
+    // passive:false is required for preventDefault to take on these listeners.
+    window.addEventListener('wheel', block, { passive: false });
+    window.addEventListener('touchmove', block, { passive: false });
+    return () => {
+      window.removeEventListener('wheel', block, { passive: false });
+      window.removeEventListener('touchmove', block, { passive: false });
+    };
+  }, [active]);
+
   if (!step) return null;
 
   const isLast = index === steps.length - 1;
@@ -265,6 +300,21 @@ export default function TourOverlay() {
         </div>
       )}
 
+      {/* One-shot tap over the bottom-nav item being opened, just before the
+          route changes — so a page jump reads as a deliberate press. `key` on
+          the coords restarts the animation for each navigation. */}
+      {navTap && (
+        <div
+          key={`${navTap.x},${navTap.y}`}
+          className="tour-nav-tap pointer-events-none fixed z-[64] h-9 w-9"
+          style={{ left: navTap.x, top: navTap.y, transform: 'translate(-50%, -50%)' }}
+          aria-hidden="true"
+        >
+          <span className="absolute inset-0 rounded-full border-2 border-amber" />
+          <span className="absolute inset-[7px] rounded-full bg-amber shadow-lg shadow-amber/60" />
+        </div>
+      )}
+
       {/* The callout sits opposite the spotlight — bottom by default, top when
           the highlighted element is low — so it never covers the target. */}
       <div
@@ -278,7 +328,7 @@ export default function TourOverlay() {
           key={`${tour}-${index}`}
           className="tour-callout mx-auto max-w-md rounded-2xl border border-amber/60 bg-panel p-4 shadow-xl shadow-black/60"
         >
-          <div className="mb-1 flex items-center justify-between gap-2">
+          <div className="mb-2 flex items-center justify-between gap-2">
             <div className="flex gap-1" aria-hidden="true">
               {steps.map((_, i) => (
                 <span
@@ -289,18 +339,29 @@ export default function TourOverlay() {
                 />
               ))}
             </div>
+            {/* An obvious close: the tiny text «Skip» went unnoticed. */}
             <button
               type="button"
               onClick={stop}
-              className="text-xs text-mist transition-colors hover:text-fg"
+              aria-label={t('tour.skip')}
+              className="-mr-1 -mt-1 flex h-9 w-9 items-center justify-center rounded-lg text-mist transition-colors hover:bg-raised hover:text-fg"
             >
-              {t('tour.skip')}
+              <X className="h-5 w-5" />
             </button>
           </div>
           <h3 className="font-display text-base font-semibold text-fg">{step.title}</h3>
           <p className="mt-1 text-sm leading-snug text-mist">{step.body}</p>
           <div className="mt-3 flex items-center justify-between gap-2">
-            <span className="font-mono text-[11px] tabular-nums text-mist/70">
+            {/* A clearly-labelled way out, next to the step counter, since the
+                spotlight leaves no doubt the tour is running. */}
+            <button
+              type="button"
+              onClick={stop}
+              className="text-xs font-medium text-mist underline decoration-mist/40 underline-offset-2 transition-colors hover:text-fg"
+            >
+              {t('tour.skipTour')}
+            </button>
+            <span className="ml-auto mr-2 font-mono text-[11px] tabular-nums text-mist/70">
               {index + 1} / {steps.length}
             </span>
             <div className="flex items-center gap-2">

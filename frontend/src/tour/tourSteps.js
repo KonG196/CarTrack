@@ -1,11 +1,11 @@
-// Several small tours, one per section, instead of one long walk. Each step
-// spotlights the element carrying `data-tour="<target>"`. `path` moves the tour
-// to another route first (the engine navigates and waits for the element to
+// One guided overview walk. Each step spotlights the element carrying
+// `data-tour="<target>"`. `path` moves the tour to another route first (the
+// engine plays a tap on the `nav` item, navigates, and waits for the element to
 // mount); a step whose element never appears is skipped, so an empty logbook or
 // a car with no analytics does not dead-end the tour.
 //
-// `path` may be a function of a small context ({ firstLogId }) for routes that
-// need a real id — the logbook detail. Returning null skips the step.
+// `path` may also be a function of a small context ({ firstLogId }) for routes
+// that need a real id. Returning null skips the step.
 //
 // `tap: true` plays a looping «finger tap» gesture over the spotlight — use it
 // on steps whose element is meant to be pressed. `demo` is a CSS selector,
@@ -45,43 +45,29 @@ function makeTour(base, steps) {
   };
 }
 
+// One guided walk of the whole app instead of five per-page tours. It is never
+// auto-shown — a welcome card on the dashboard offers it, and the Settings
+// launcher replays it. `path` steps carry a `nav` target: the data-tour name of
+// the bottom-nav item the engine "taps" (animated finger) before navigating, so
+// a route change reads as a deliberate press, not a teleport.
 export const TOURS = {
-  home: makeTour('tour.home', [
+  overview: makeTour('tour.overview', [
+    // Home — where you are and what it tells you.
     { target: 'car-switcher', tap: true },
     { target: 'car-name', tap: true, demo: DEMO_COPY },
-    { target: 'odometer', tap: true },
     { target: 'stats' },
     { target: 'interval-row', tap: true },
-  ]),
-
-  logbook: makeTour('tour.logbook', [
-    { path: '/logbook', target: 'logbook-search' },
-    { path: '/logbook', target: 'logbook-filters', tap: true },
-    { path: '/logbook', target: 'log-row', tap: true },
-    { path: (ctx) => (ctx.firstLogId ? `/logbook/${ctx.firstLogId}` : null), target: 'log-detail' },
-  ]),
-
-  add: makeTour('tour.add', [
-    { path: '/add', target: 'add-type', tap: true },
-    { path: '/add', target: 'add-scan', tap: true },
-    { path: '/add', target: 'add-form' },
-  ]),
-
-  analytics: makeTour('tour.analytics', [
-    { path: '/analytics?tab=costs', target: 'analytics-forecast' },
-    { path: '/analytics?tab=costs', target: 'analytics-charts' },
-    { path: '/analytics?tab=fuel', target: 'analytics-trip' },
-    { path: '/analytics?tab=fuel', target: 'analytics-report', tap: true },
-  ]),
-
-  settings: makeTour('tour.settings', [
-    { path: '/garage', target: 'settings-cars', tap: true, demo: DEMO_COPY },
-    { path: '/garage', target: 'settings-profile', tap: true },
-    { path: '/profile', target: 'profile-telegram', tap: true },
-    { path: '/notifications', target: 'notif-reminders', tap: true },
-    { path: '/garage', target: 'settings-more' },
+    // Logbook — your history.
+    { path: '/logbook', nav: 'nav-logbook', target: 'logbook-filters', tap: true },
+    { path: '/logbook', nav: 'nav-logbook', target: 'log-row', tap: true },
+    // Add — the one big action, including receipt scan.
+    { path: '/add', nav: 'nav-add', target: 'add-type', tap: true },
+    { path: '/add', nav: 'nav-add', target: 'add-scan', tap: true },
+    // Analytics — the payoff.
+    { path: '/analytics?tab=costs', nav: 'nav-analytics', target: 'analytics-forecast' },
+    { path: '/analytics?tab=fuel', nav: 'nav-analytics', target: 'analytics-report', tap: true },
   ]),
 };
 
 // The order tours appear in the Settings launcher.
-export const TOUR_ORDER = ['home', 'logbook', 'add', 'analytics', 'settings'];
+export const TOUR_ORDER = ['overview'];

@@ -287,7 +287,11 @@ def update_me(
 
 # The onboarding tours a client may report as seen. Kept here (not imported from
 # the frontend) as the server's own allowlist so junk names can't be stored.
-_KNOWN_TOURS = frozenset({"home", "logbook", "add", "analytics", "settings"})
+# "overview" is the current single tour; the per-page names are retained so a
+# legacy account that recorded them stays valid and older clients don't 404.
+_KNOWN_TOURS = frozenset(
+    {"overview", "home", "logbook", "add", "analytics", "settings"}
+)
 
 
 @router.post("/me/tours/{name}", response_model=UserOut)

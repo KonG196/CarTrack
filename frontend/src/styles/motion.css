@@ -311,6 +311,38 @@
     animation: kt-tap-press 1.3s ease-in-out infinite;
   }
 
+  /* The spotlight glide between steps. Added to the mask panels + ring only for
+     the ~360ms after a step change, then removed, so live per-frame tracking of
+     a moving target stays exact (see TourOverlay's setMoving). */
+  .tour-move {
+    transition: top 0.36s cubic-bezier(0.4, 0, 0.2, 1),
+      left 0.36s cubic-bezier(0.4, 0, 0.2, 1),
+      width 0.36s cubic-bezier(0.4, 0, 0.2, 1),
+      height 0.36s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* A one-shot finger tap on the bottom-nav item the tour is about to open,
+     played just before the route changes so a page jump reads as a press. */
+  @keyframes kt-nav-tap {
+    0% {
+      transform: translate(-50%, -50%) scale(0.9);
+      opacity: 0;
+    }
+    25% {
+      opacity: 1;
+    }
+    45% {
+      transform: translate(-50%, -50%) scale(0.6);
+    }
+    100% {
+      transform: translate(-50%, -50%) scale(1.15);
+      opacity: 0;
+    }
+  }
+  .tour-nav-tap {
+    animation: kt-nav-tap 0.62s ease-out both;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .modal-backdrop,
     .modal-backdrop[data-closing='true'],
@@ -326,8 +358,12 @@
     .banner-drop,
     .tour-callout,
     .tour-tap-ripple,
-    .tour-tap-dot {
+    .tour-tap-dot,
+    .tour-nav-tap {
       animation: none;
+    }
+    .tour-move {
+      transition: none;
     }
     /* No pulsing, but the mark itself stays: it is information, not decoration. */
     .autofilled .field-input {

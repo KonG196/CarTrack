@@ -139,106 +139,51 @@
   },
   "tour": {
     "skip": "Skip",
+    "skipTour": "Skip tour",
     "back": "Back",
     "done": "Done",
     "next": "Next",
-    "home": {
-      "label": "Home screen",
+    "overview": {
+      "label": "Quick tour",
       "s1": {
         "title": "Your cars",
-        "body": "This is your active car. Tap to switch cars or add a new one."
+        "body": "This is your active car. Tap here to switch cars or add a new one."
       },
       "s2": {
         "title": "Shop details",
-        "body": "Tap the car name — the VIN, engine and oil approvals copy as a single line. Watch: the icon turns into a checkmark once copied."
+        "body": "Tap the car name and its VIN, engine and oil specs copy as one line — handy at the counter. The icon flips to a checkmark when it's copied."
       },
       "s3": {
-        "title": "Mileage",
-        "body": "The pencil next to the mileage opens the car editor to update the odometer."
-      },
-      "s4": {
         "title": "Key numbers",
-        "body": "Monthly spending, fuel consumption and cost per kilometre — all calculated automatically from your entries."
+        "body": "Monthly spend, fuel use and cost per km — all worked out automatically from what you log."
+      },
+      "s4": {
+        "title": "Service intervals",
+        "body": "When a job is done, tap its interval: the work is logged, progress resets, and a reminder reaches you in Telegram as the next one comes due."
       },
       "s5": {
-        "title": "Tap a service interval",
-        "body": "When the work is done, tap this interval. The \"Completed\" form opens, the job is logged to history, and progress resets. A reminder as it comes due arrives in Telegram."
-      }
-    },
-    "logbook": {
-      "label": "Logbook",
-      "s1": {
-        "title": "Search",
-        "body": "Find an entry by title, gas station or note."
+        "title": "Your logbook",
+        "body": "Every fuel-up, service, repair and expense lives here. Filter to just what you're after."
       },
-      "s2": {
-        "title": "Filters",
-        "body": "Only fuel-ups, service, repairs or expenses — or all at once."
+      "s6": {
+        "title": "Open an entry",
+        "body": "Tap any entry for full details, the receipt photo, and editing."
       },
-      "s3": {
-        "title": "Entry",
-        "body": "Tap an entry to open its details, photo and editing."
+      "s7": {
+        "title": "Add anything",
+        "body": "Fuel-up, service, repair or expense — each with the right fields. This is the one button you'll use most."
       },
-      "s4": {
-        "title": "Entry details",
-        "body": "Full information, the attached receipt photo, plus editing and deleting."
-      }
-    },
-    "add": {
-      "label": "Adding an entry",
-      "s1": {
-        "title": "Entry type",
-        "body": "Fuel-up, service, repair or expense — each with its own fields."
+      "s8": {
+        "title": "Scan a receipt",
+        "body": "Photograph a fuel receipt or a shop work order — the amount, date and line items are read in automatically."
       },
-      "s2": {
-        "title": "Scanning",
-        "body": "Photograph a gas-station receipt or a shop work order — amounts, date and line items are recognized automatically."
+      "s9": {
+        "title": "Where your money goes",
+        "body": "Costs, forecasts and trends — so you know what the car really costs to run."
       },
-      "s3": {
-        "title": "The rest of the fields",
-        "body": "Mileage is filled in automatically. Complete what you need and save."
-      }
-    },
-    "analytics": {
-      "label": "Analytics",
-      "s1": {
-        "title": "Forecast",
-        "body": "Average monthly spending, a forecast for the current month, and upcoming services with an estimated price."
-      },
-      "s2": {
-        "title": "Spending by month",
-        "body": "The \"Spending\" tab shows a by-month chart and a breakdown by category. The trend is clear at a glance."
-      },
-      "s3": {
-        "title": "The \"Fuel\" tab",
-        "body": "Here you'll find consumption and fuel price, plus a trip calculator: how much everyone chips in for fuel, based on your car's real consumption."
-      },
-      "s4": {
-        "title": "PDF report",
-        "body": "Your entire service history in a single file — handy as a pre-sale passport. And the \"Efficiency\" tab shows the cost per kilometre."
-      }
-    },
-    "settings": {
-      "label": "Settings",
-      "s1": {
-        "title": "Your cars",
-        "body": "Each car: edit, report, delete. Tap the name to copy the shop details."
-      },
-      "s2": {
-        "title": "Profile",
-        "body": "Name, email, password and Telegram linking."
-      },
-      "s3": {
-        "title": "Telegram bot",
-        "body": "Link the bot and service reminders will start arriving in your chat."
-      },
-      "s4": {
-        "title": "Notifications",
-        "body": "This is where you turn on service reminders and the weekly summary."
-      },
-      "s5": {
-        "title": "And more",
-        "body": "Documents, tires, OBD diagnostics, data export — all here on the settings page."
+      "s10": {
+        "title": "Share a report",
+        "body": "Turn any period into a clean summary you can send or save. That's the tour — enjoy Kapot!"
       }
     }
   },
@@ -1243,5 +1188,23 @@
     "action_send_reset": "emailed reset link",
     "action_send_verify": "emailed verify link",
     "action_delete_user": "deleted account"
+  },
+  "welcomeTour": {
+    "title": "New to Kapot?",
+    "body": "A 30-second walkthrough of the essentials — logbook, costs, service reminders and receipt scanning.",
+    "start": "Show me around",
+    "skip": "Not now",
+    "dismiss": "Dismiss"
+  },
+  "notificationCentre": {
+    "open": "Notifications",
+    "title": "Notifications",
+    "empty": "You're all caught up",
+    "seeAll": "See all",
+    "loadError": "Couldn't load notifications",
+    "historyEmpty": "No notifications yet",
+    "activeHeader": "Active",
+    "pastHeader": "Past",
+    "resolvedOn": "resolved {{date}}"
   }
 }

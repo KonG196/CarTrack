@@ -71,8 +71,8 @@ export function TourProvider({ children }) {
       if (!TOURS[name]) return;
       setTour(name);
       setIndex(0);
-      // Starting a tour (manually or automatically) means it never auto-shows
-      // again for this account.
+      // Starting the tour records it as seen so the dashboard welcome card that
+      // offers it doesn't reappear for this account.
       markSeen(name);
     },
     [markSeen],
@@ -96,8 +96,20 @@ export function TourProvider({ children }) {
   const goTo = useCallback((i) => setIndex(i), []);
 
   const value = useMemo(
-    () => ({ tour, steps, index, active: tour !== null, start, stop, next, prev, goTo, wasSeen }),
-    [tour, steps, index, start, stop, next, prev, goTo, wasSeen],
+    () => ({
+      tour,
+      steps,
+      index,
+      active: tour !== null,
+      start,
+      stop,
+      next,
+      prev,
+      goTo,
+      wasSeen,
+      markSeen,
+    }),
+    [tour, steps, index, start, stop, next, prev, goTo, wasSeen, markSeen],
   );
 
   return <TourContext.Provider value={value}>{children}</TourContext.Provider>;
