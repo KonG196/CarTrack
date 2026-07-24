@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Copy, Check, Car } from 'lucide-react';
+import { ArrowLeft, Copy, Check } from 'lucide-react';
+import BrandLogo from '../components/BrandLogo';
 import * as adminApi from '../api/admin';
 import { useAuthStore } from '../store/authStore';
 import {
@@ -363,7 +364,16 @@ export default function AdminUserDetail() {
             {detail.cars.map((c) => (
               <li key={c.id}>
                 <Card className="flex items-center gap-3">
-                  <Car className="h-4 w-4 flex-shrink-0 text-amber" />
+                  {c.image_url ? (
+                    <img
+                      src={c.image_url}
+                      alt=""
+                      loading="lazy"
+                      className="h-12 w-16 flex-shrink-0 rounded-lg object-cover"
+                    />
+                  ) : (
+                    <BrandLogo brand={c.brand} className="h-9 w-9 rounded-lg" />
+                  )}
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm text-fg">
                       {c.brand} {c.model} · {c.year}

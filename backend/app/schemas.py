@@ -1365,6 +1365,9 @@ class AdminCarRow(BaseModel):
     plate: Optional[str] = None
     vin: Optional[str] = None
     created_at: dt.datetime
+    # Cached car photo URL (Wikimedia) + marque-logo fallback, for the thumbnail.
+    image_url: Optional[str] = None
+    image_logo: Optional[str] = None
 
 
 class AdminAuditRow(BaseModel):

@@ -17,7 +17,8 @@
     "toHome": "На головну",
     "yes": "Так",
     "no": "Ні",
-    "done": "Готово"
+    "done": "Готово",
+    "gotIt": "Зрозуміло"
   },
   "lang": {
     "label": "Мова",
@@ -340,7 +341,9 @@
     "deleteForeverMessage": "Уся сервісна історія ваших авто буде знищена без можливості відновлення.",
     "yesDelete": "Так, видалити",
     "aboutLicense": "Відкритий код за некомерційною ліцензією",
-    "aboutSource": "Код на GitHub"
+    "aboutSource": "Код на GitHub",
+    "emailChangeViaSupport": "Щоб змінити — зверніться до підтримки нижче.",
+    "openBotLink": "Відкрити @{{username}}"
   },
   "carSpecs": {
     "errNameRequired": "Вкажіть назву",
@@ -489,7 +492,10 @@
     "languageDesc": "Оберіть мову застосунку та валюту відображення. Мова також застосовується до листів і повідомлень у Telegram.",
     "currencyLabel": "Валюта",
     "preferencesTitle": "Уподобання",
-    "preferencesSubtitle": "Мова, валюта, одиниці та сповіщення"
+    "preferencesSubtitle": "Мова, валюта, одиниці та сповіщення",
+    "moreActions": "Ще",
+    "viewAllCars": "Переглянути всі авто ({{count}})",
+    "allCarsTitle": "Ваші авто"
   },
   "yearReview": {
     "months": [
@@ -1210,5 +1216,23 @@
     "activeHeader": "Активні",
     "pastHeader": "Минулі",
     "resolvedOn": "вирішено {{date}}"
+  },
+  "installApp": {
+    "title": "Додати на головний екран",
+    "subtitleInstall": "Встановіть додаток для швидкого доступу",
+    "subtitleHow": "Щоб Kapot був за один тап на телефоні",
+    "iosStep1": "Тапніть кнопку «Поділитися»",
+    "iosStep2": "Оберіть «На екран Домівка»",
+    "iosStep3": "Тапніть «Додати» — готово!",
+    "iosOpenInSafari": "На iPhone додавання на головний екран працює лише в Safari. Відкрийте kapot-tracker у Safari і спробуйте знову.",
+    "genericHint": "Відкрийте меню браузера й оберіть «Встановити» або «На екран Домівка»."
+  },
+  "support": {
+    "title": "Підтримка",
+    "desc": "Треба змінити пошту чи інше питання по акаунту? Напишіть нам.",
+    "email": "Написати на пошту",
+    "telegram": "Написати в Telegram",
+    "emailSubject": "Kapot Tracker — допомога з акаунтом",
+    "emailBody": "Вітаю! Мій акаунт: {{email}}\n\nМоє питання: "
   }
 }

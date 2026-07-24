@@ -23,6 +23,7 @@ from app.database import get_db
 from app.models import AdminAuditLog, Car, LogEntry, User
 from app.schemas import (
     AdminAuditRow,
+    AdminCarRow,
     AdminLinkOut,
     AdminStatusUpdate,
     AdminUserDetail,
@@ -32,6 +33,7 @@ from app.schemas import (
 )
 from app.services import audit
 from app.services.accounts import purge_account
+from app.services.car_image import brand_logo_url, get_car_image
 from app.services.mailer import (
     reset_link,
     send_reset_code_mail,
@@ -117,6 +119,17 @@ def get_user(
         .scalars()
         .all()
     )
+    car_rows = []
+    for car in cars:
+        row = AdminCarRow.model_validate(car)
+        # Resolve the thumbnail (cached per car, so this is cheap) + a logo
+        # fallback, so the admin sees the same picture the owner does.
+        try:
+            row.image_url = get_car_image(db, car)
+        except Exception:  # noqa: BLE001 — a photo must never break the panel
+            row.image_url = car.image_url
+        row.image_logo = brand_logo_url(car.brand)
+        car_rows.append(row)
     audit_rows = (
         db.execute(
             select(AdminAuditLog)
@@ -129,7 +142,7 @@ def get_user(
     )
     return AdminUserDetail(
         user=_row(db, user),
-        cars=cars,
+        cars=car_rows,
         audit=[AdminAuditRow.model_validate(r) for r in audit_rows],
     )
 

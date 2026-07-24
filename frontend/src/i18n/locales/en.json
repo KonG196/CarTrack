@@ -17,7 +17,8 @@
     "toHome": "Go home",
     "yes": "Yes",
     "no": "No",
-    "done": "Done"
+    "done": "Done",
+    "gotIt": "Got it"
   },
   "lang": {
     "label": "Language",
@@ -340,7 +341,9 @@
     "deleteForeverMessage": "All service history for your cars will be destroyed with no way to recover it.",
     "yesDelete": "Yes, delete",
     "aboutLicense": "Source-available under a noncommercial license",
-    "aboutSource": "Source on GitHub"
+    "aboutSource": "Source on GitHub",
+    "emailChangeViaSupport": "To change it, contact support below.",
+    "openBotLink": "Open @{{username}}"
   },
   "carSpecs": {
     "errNameRequired": "Enter a name",
@@ -487,7 +490,10 @@
     "languageDesc": "Choose the app language and display currency. The language also applies to emails and Telegram messages.",
     "currencyLabel": "Currency",
     "preferencesTitle": "Preferences",
-    "preferencesSubtitle": "Language, currency, units & notifications"
+    "preferencesSubtitle": "Language, currency, units & notifications",
+    "moreActions": "More",
+    "viewAllCars": "View all cars ({{count}})",
+    "allCarsTitle": "Your cars"
   },
   "yearReview": {
     "months": [
@@ -1206,5 +1212,23 @@
     "activeHeader": "Active",
     "pastHeader": "Past",
     "resolvedOn": "resolved {{date}}"
+  },
+  "installApp": {
+    "title": "Add to Home Screen",
+    "subtitleInstall": "Install the app for one-tap access",
+    "subtitleHow": "Keep Kapot one tap away on your phone",
+    "iosStep1": "Tap the Share button",
+    "iosStep2": "Choose “Add to Home Screen”",
+    "iosStep3": "Tap “Add” — done!",
+    "iosOpenInSafari": "On iPhone, adding to the Home Screen only works in Safari. Open kapot-tracker in Safari, then try again.",
+    "genericHint": "Use your browser’s menu and choose “Install” or “Add to Home Screen”."
+  },
+  "support": {
+    "title": "Support",
+    "desc": "Need to change your email or have another account question? Write to us.",
+    "email": "Email support",
+    "telegram": "Message on Telegram",
+    "emailSubject": "Kapot Tracker — account help",
+    "emailBody": "Hi! My account: {{email}}\n\nMy question: "
   }
 }

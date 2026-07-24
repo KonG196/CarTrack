@@ -6,6 +6,7 @@ import {
   Copy,
   ExternalLink,
   KeyRound,
+  LifeBuoy,
   Mail,
   Send,
   Trash2,
@@ -14,11 +15,21 @@ import {
 import BackLink from '../components/BackLink';
 
 import { extractError } from '../api/client';
-import { confirmEmailChange, requestEmailChange } from '../api/auth';
 import * as telegramApi from '../api/telegram';
 import Toast from '../components/Toast';
 import { Button, Card, ConfirmDialog, ErrorMessage, Spinner, TextField } from '../components/UI';
 import { useAuthStore } from '../store/authStore';
+
+// Where account-help requests (e.g. changing the sign-in email) go. Both channels
+// are offered. Not secrets — safe to ship in the client.
+const SUPPORT_EMAIL = 'maks060691@gmail.com';
+const SUPPORT_TELEGRAM = 'KonG196';
+const SUPPORT_TELEGRAM_URL = `https://t.me/${SUPPORT_TELEGRAM}`;
+
+// The app's Telegram bot — a direct link so users can open it any time (for
+// reminders, quick logging), separate from the account-linking flow below.
+const BOT_USERNAME = 'Kapot_Tracker_bot';
+const BOT_URL = `https://t.me/${BOT_USERNAME}`;
 
 function ProfileCard({ onToast }) {
   const { t } = useTranslation();
@@ -228,6 +239,18 @@ function TelegramCard({ onToast }) {
           {busy ? t('profile.creatingCode') : t('profile.linkTelegram')}
         </Button>
       )}
+
+      {/* A direct link to the bot, always available — open it to chat with the
+          bot regardless of whether the account is linked. */}
+      <a
+        href={BOT_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mt-3 flex items-center justify-center gap-1.5 text-xs font-medium text-signal transition-colors hover:text-fg"
+      >
+        <ExternalLink className="h-3.5 w-3.5" />
+        {t('profile.openBotLink', { username: BOT_USERNAME })}
+      </a>
     </Card>
   );
 }
@@ -304,50 +327,12 @@ function PasswordCard({ onToast }) {
   );
 }
 
-function EmailCard({ onToast }) {
+// The account's email is read-only now: self-service address change was removed
+// (too easy to lock yourself out over a typo). Changing it is a support request —
+// see SupportCard below.
+function EmailCard() {
   const { t } = useTranslation();
   const user = useAuthStore((s) => s.user);
-  const fetchMe = useAuthStore((s) => s.fetchMe);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [code, setCode] = useState('');
-  const [pending, setPending] = useState(user?.pending_email || null);
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  const handleRequest = async (e) => {
-    e.preventDefault();
-    setError('');
-    setBusy(true);
-    try {
-      const { pending_email: parked } = await requestEmailChange(email.trim(), password);
-      setPending(parked);
-      setPassword('');
-      onToast(t('profile.codeSentTo', { email: parked }));
-    } catch (err) {
-      setError(extractError(err, t('profile.emailChangeFailed')));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const handleConfirm = async (e) => {
-    e.preventDefault();
-    setError('');
-    setBusy(true);
-    try {
-      await confirmEmailChange(code.trim());
-      await fetchMe();
-      setPending(null);
-      setEmail('');
-      setCode('');
-      onToast(t('profile.emailChanged'));
-    } catch (err) {
-      setError(extractError(err, t('profile.codeInvalid')));
-    } finally {
-      setBusy(false);
-    }
-  };
 
   return (
     <Card>
@@ -355,58 +340,49 @@ function EmailCard({ onToast }) {
         <Mail className="h-4 w-4 text-mist" />
         {t('profile.email')}
       </h2>
-      <p className="mt-1 text-xs text-mist">
-        {t('profile.currentLoginLabel')} <span className="text-fg">{user?.email}</span>.
-      </p>
+      <p className="mt-1 text-sm text-fg">{user?.email}</p>
+      <p className="mt-1 text-xs text-mist">{t('profile.emailChangeViaSupport')}</p>
+    </Card>
+  );
+}
 
-      {pending ? (
-        <form onSubmit={handleConfirm} className="mt-3 space-y-3">
-          {/* The address moves only when a code from it comes back. Until then
-              the old one still logs in — a typo costs a retry, not the account. */}
-          <p className="rounded-xl border border-edge bg-raised px-3 py-2 text-xs text-mist">
-            {t('profile.codeSentToPrefix')} <span className="text-fg">{pending}</span>.{' '}
-            {t('profile.untilConfirmed')}
-          </p>
-          <TextField
-            label={t('profile.codeFromEmail')}
-            inputMode="numeric"
-            maxLength={6}
-            numeric
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-          />
-          <ErrorMessage>{error}</ErrorMessage>
-          <div className="flex gap-2">
-            <Button type="submit" disabled={busy || !code.trim()} className="flex-1">
-              {busy ? t('profile.verifying') : t('common.confirm')}
-            </Button>
-            <Button variant="secondary" onClick={() => setPending(null)} disabled={busy}>
-              {t('common.cancel')}
-            </Button>
-          </div>
-        </form>
-      ) : (
-        <form onSubmit={handleRequest} className="mt-3 space-y-3">
-          <TextField
-            label={t('profile.newEmail')}
-            type="email"
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <TextField
-            label={t('profile.password')}
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-          <ErrorMessage>{error}</ErrorMessage>
-          <Button type="submit" disabled={busy || !email.trim() || !password}>
-            {busy ? t('profile.sending') : t('profile.sendCodeToNewEmail')}
-          </Button>
-        </form>
-      )}
+// Where users write in for account help (changing their email, etc.). Both
+// channels: a mailto to the owner, and a Telegram link.
+function SupportCard() {
+  const { t } = useTranslation();
+  const user = useAuthStore((s) => s.user);
+  const subject = encodeURIComponent(t('support.emailSubject'));
+  const body = encodeURIComponent(
+    t('support.emailBody', { email: user?.email || '' }),
+  );
+
+  return (
+    <Card>
+      <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-fg">
+        <LifeBuoy className="h-4 w-4 text-mist" />
+        {t('support.title')}
+      </h2>
+      <p className="mt-1 text-xs text-mist">{t('support.desc')}</p>
+      <div className="mt-3 flex flex-col gap-2">
+        <a
+          href={`mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`}
+          className="flex items-center gap-2.5 rounded-xl border border-edge bg-raised px-3 py-2.5 text-sm text-fg transition-colors hover:border-edge-soft"
+        >
+          <Mail className="h-4 w-4 flex-shrink-0 text-amber" />
+          <span className="min-w-0 flex-1">{t('support.email')}</span>
+          <span className="truncate text-xs text-mist">{SUPPORT_EMAIL}</span>
+        </a>
+        <a
+          href={SUPPORT_TELEGRAM_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2.5 rounded-xl border border-edge bg-raised px-3 py-2.5 text-sm text-fg transition-colors hover:border-edge-soft"
+        >
+          <Send className="h-4 w-4 flex-shrink-0 text-signal" />
+          <span className="min-w-0 flex-1">{t('support.telegram')}</span>
+          <span className="truncate text-xs text-mist">@{SUPPORT_TELEGRAM}</span>
+        </a>
+      </div>
     </Card>
   );
 }
@@ -490,8 +466,9 @@ export default function Profile() {
 
       <ProfileCard onToast={setToast} />
       <TelegramCard onToast={setToast} />
-      <EmailCard onToast={setToast} />
+      <EmailCard />
       {!isGoogle && <PasswordCard onToast={setToast} />}
+      <SupportCard />
       <DangerZone />
 
       <p className="pt-2 text-center text-xs text-mist">
