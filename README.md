@@ -67,13 +67,19 @@ Mobile-first PWA, Ukrainian and English.
 - **Tyres**: seasonal changeover (region inferred from the plate), axle-rotation every
   ~10 000 km, and **tyre-age** («these are 9 years old — inspect or replace»).
 - **Document / ОСЦПВ expiry** reminders, escalating in the last week.
-- An **in-app notification centre** (nothing stored — computed on read), a Dashboard
-  banner, an **app-icon badge**, and **Telegram push** with a weekly digest.
+- An **in-app notification centre** — a bell in the header opens a tray, with a full
+  **history page** that persists to the database (so nothing is lost when a reminder
+  clears), a Dashboard banner, an **app-icon badge**, and **Telegram push** with a
+  weekly digest.
 
 ### Records
 - **Documents** with expiry tracking (insurance, technical inspection…).
 - A public **QR car passport** for service/parking, and a **tyres** module.
 - **OBD** diagnostics from a Car Scanner CSV, and a per-car **spec cheat-sheet**.
+- A **photo of your car** on the dashboard and garage cards — matched to make, model,
+  generation and year from **Wikimedia Commons (CC0 only)**, cached per car, with a clean
+  **white marque logo** as the fallback. A Ukrainian **license plate** is drawn when the
+  plate matches the local format.
 
 ### Sharing, data & accounts
 - **Multi-driver sharing** per car (owner / editor / viewer) with invite links and
@@ -81,10 +87,19 @@ Mobile-first PWA, Ukrainian and English.
 - Full **JSON backup & restore** (identity, config, specs, tyres, logs) and CSV export.
 - JWT auth (access + refresh, token-version revocation), **password reset via Telegram**,
   rate limiting, and full **account deletion**.
+- A **support card** (email + Telegram) in Settings for anything the owner has to do —
+  email changes are handled by support, not self-service.
+- A **superadmin panel** (`/admin/users`) for the owner: search users, edit their details,
+  block/verify/promote, generate reset & verification links, delete accounts — every action
+  written to an **audit log**, with self-block / self-demote / self-delete refused server-side.
+- **Admin alerts to a private Telegram bot** on the first signups, cars, verifications and
+  scans — so onboarding is visible without burning the email quota.
 - Alembic migrations applied automatically on startup.
 
 ### Platform
-- **PWA** — installable, works offline, icon badge.
+- **PWA** — installable, works offline, icon badge. A platform-aware **"Add to Home Screen"**
+  card in Settings fires Chrome's native install prompt, or shows illustrated Safari steps on
+  iOS (where Apple allows no programmatic install).
 - **Localized** — **English by default** with a one-tap **Ukrainian** toggle on every screen
   (auth screens and Settings). The language follows the account across the **UI, emails,
   Telegram bot and API errors**.
@@ -156,6 +171,7 @@ docker compose --profile bot up -d       # (optional) the Telegram bot
 | `CORS_ORIGINS` | Comma-separated allowed origins |
 | `GEMINI_API_KEY` / `GEMINI_MODEL` | Vision OCR + free-text bot parsing (optional) |
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_BOT_USERNAME` | The Telegram bot (optional) |
+| `ADMIN_BOT_TOKEN` / `ADMIN_TELEGRAM_CHAT_ID` | Private bot for owner onboarding alerts (optional) |
 | `BAZA_GAI_API_KEY` | Ukrainian plate/VIN lookup (optional) |
 | `SMTP_*` | Email verification & password reset (required when `ENV=production`) |
 | `UPLOADS_DIR` / `BACKUP_DIR` / `BACKUP_KEEP` | Photo storage and DB backups |
