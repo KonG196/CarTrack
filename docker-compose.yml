@@ -43,6 +43,8 @@ services:
       BACKUP_DIR: /app/backups
       BACKUP_KEEP: ${BACKUP_KEEP:-14}
       BACKUP_TELEGRAM_CHAT_ID: ${BACKUP_TELEGRAM_CHAT_ID:-}
+      ADMIN_BOT_TOKEN: ${ADMIN_BOT_TOKEN:-}
+      ADMIN_TELEGRAM_CHAT_ID: ${ADMIN_TELEGRAM_CHAT_ID:-}
     volumes:
       - uploads:/app/uploads
       - backups:/app/backups
@@ -69,6 +71,8 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-flash-latest}
       BACKUP_TELEGRAM_CHAT_ID: ${BACKUP_TELEGRAM_CHAT_ID:-}
+      ADMIN_BOT_TOKEN: ${ADMIN_BOT_TOKEN:-}
+      ADMIN_TELEGRAM_CHAT_ID: ${ADMIN_TELEGRAM_CHAT_ID:-}
     volumes:
       - backups:/app/backups
     depends_on:
