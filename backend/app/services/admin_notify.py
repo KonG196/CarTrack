@@ -1,16 +1,16 @@
 """Owner alerts for the four moments that mean the app is being used for real:
 a new signup, a first car, a first verified address, a first OCR scan.
 
-Each helper is a one-shot: it flips the matching `admin_notified_*` flag on the
-user, commits, then sends the mail. Committing the flag *before* the send means a
-dead SMTP server or a crash costs at most one missed alert, never a duplicate on
-the next request. Everything is best-effort — a mail failure must never surface
-to the user or roll back the action that triggered it, so the whole body runs
-under a broad except that only logs.
+Delivered over a dedicated admin Telegram bot (services.admin_telegram) — NOT
+email, which burned the free SMTP tier. Each helper is a one-shot: it flips the
+matching `admin_notified_*` flag on the user, commits, then sends. Committing the
+flag *before* the send means a dead bot or a crash costs at most one missed
+alert, never a duplicate on the next request. Everything is best-effort — a send
+failure must never surface to the user or roll back the action that triggered
+it, so the whole body runs under a broad except that only logs.
 
-These letters go to the owner (settings.ADMIN_EMAIL), not to the user, so the
-copy is plain Ukrainian and internal — no branding niceties beyond the shared
-template. With no ADMIN_EMAIL set, the whole thing is a no-op.
+Messages are plain Ukrainian text (a spec-sheet block for the car / scan), sent
+to the owner's personal chat. With the admin bot unconfigured, it is a no-op.
 """
 
 from __future__ import annotations
@@ -19,15 +19,10 @@ import logging
 
 from sqlalchemy.orm import Session
 
-from app.config import settings
 from app.models import Car, User
-from app.services.mailer import _render_email, send_mail
+from app.services.admin_telegram import send_admin_message
 
 logger = logging.getLogger(__name__)
-
-# App URL for the little "open the app" convenience link at the foot of each
-# note — the owner reads these on a phone and may want to jump straight in.
-_APP_URL = settings.PUBLIC_URL.rstrip("/") or "https://kapot.app"
 
 
 def _who(user: User) -> str:
@@ -36,47 +31,19 @@ def _who(user: User) -> str:
     return f"{name} ({user.email})" if name else user.email
 
 
-def _escape(text: str) -> str:
-    """The notes are our own strings, but a user's plate/VIN/station name rides
-    inside them — escape so an odd character can never break the HTML letter."""
-    return (
-        text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    )
-
-
 def _send_admin(
-    subject: str,
     heading: str,
     lede: str,
     note: str | None = None,
-    attachments: list[tuple[str, bytes, str]] | None = None,
+    photo: tuple[str, bytes, str] | None = None,
 ) -> bool:
-    """Render and send one owner note. Returns False when admin mail is off.
-
-    `note` may be multi-line: the plain-text part keeps the newlines, the HTML
-    part turns them into <br> so the little spec-sheet blocks (car facts, scan
-    results) render on separate lines.
-    """
-    to = (settings.ADMIN_EMAIL or "").strip()
-    if not to:
-        return False
-    text = f"{heading}\n\n{lede}"
+    """Compose and send one owner alert to the admin Telegram bot. `note` may be
+    multi-line (a labelled spec sheet). `photo` rides as an image with the text
+    as its caption. Returns False when admin Telegram is off."""
+    text = f"🔔 {heading}\n\n{lede}"
     if note:
         text += f"\n\n{note}"
-    html_note = _escape(note).replace("\n", "<br>") if note else None
-    return send_mail(
-        to,
-        subject,
-        text,
-        html=_render_email(
-            lang="uk",
-            heading=heading,
-            lede=lede,
-            button=("Відкрити Kapot", _APP_URL),
-            note=html_note,
-        ),
-        attachments=attachments,
-    )
+    return send_admin_message(text, photo=photo)
 
 
 def notify_new_signup(db: Session, user: User) -> None:
@@ -87,7 +54,6 @@ def notify_new_signup(db: Session, user: User) -> None:
         user.admin_notified_signup = True
         db.commit()
         _send_admin(
-            subject="Kapot: новий користувач",
             heading="Новий користувач",
             lede=f"Щойно зареєструвався: {_who(user)}.",
         )
@@ -125,7 +91,6 @@ def notify_first_car(db: Session, user: User, car: Car) -> None:
         user.admin_notified_first_car = True
         db.commit()
         _send_admin(
-            subject="Kapot: перша машина",
             heading="Перша машина додана",
             lede=f"{_who(user)} додав(-ла) першу машину.",
             note=_car_lines(car) or None,
@@ -142,7 +107,6 @@ def notify_first_verified(db: Session, user: User) -> None:
         user.admin_notified_verified = True
         db.commit()
         _send_admin(
-            subject="Kapot: підтверджена пошта",
             heading="Пошту підтверджено",
             lede=f"{_who(user)} вперше підтвердив(-ла) email.",
         )
@@ -181,11 +145,10 @@ def notify_first_ocr(
         user.admin_notified_first_ocr = True
         db.commit()
         _send_admin(
-            subject="Kapot: перше сканування",
             heading="Перше сканування (OCR)",
             lede=f"{_who(user)} вперше скористав(-ла)ся розпізнаванням.",
             note=_scan_lines(kind, fields) or None,
-            attachments=[image] if image else None,
+            photo=image,
         )
     except Exception:  # noqa: BLE001
         logger.exception("admin OCR notification failed for user %s", user.id)

@@ -71,8 +71,8 @@ def send_mail(
 
     `body` is the plain-text part; when `html` is given the letter is sent as
     multipart/alternative so text-only clients still get a readable message.
-    `attachments` is a list of (filename, data, content_type) — used for e.g.
-    the scanned receipt photo on the owner's first-OCR alert.
+    `attachments` is an optional list of (filename, data, content_type) for any
+    caller that needs to enclose a file.
     """
     if not mail_enabled():
         logger.info("SMTP disabled, would send to %s: %s", to, subject)

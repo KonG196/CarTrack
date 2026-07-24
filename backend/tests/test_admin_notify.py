@@ -1,51 +1,39 @@
-"""The owner's "new activity" alerts: one mail per moment, never a repeat.
+"""The owner's "new activity" alerts: one Telegram message per moment, never a
+repeat.
 
 Each of the four events (signup / first car / first verify / first OCR) must
-flip its own `admin_notified_*` flag, address the mail to settings.ADMIN_EMAIL,
+flip its own `admin_notified_*` flag, send exactly one message to the admin bot,
 and — the whole point of the flags — stay silent on every later trigger.
 """
 
 from __future__ import annotations
 
-from typing import Callable
-
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import select
 from sqlalchemy.orm import sessionmaker
 
-from app.config import settings
-from app.models import User
 from app.services import admin_notify, verification
 
 
 @pytest.fixture
 def sent_admin(monkeypatch: pytest.MonkeyPatch) -> list[dict]:
-    """Capture every admin mail admin_notify tries to send.
+    """Capture every admin Telegram message admin_notify tries to send.
 
-    admin_notify imports send_mail by name, so the patch lands on its module.
-    ADMIN_EMAIL is pinned so the recipient assertion is independent of env.
-    """
+    admin_notify imports send_admin_message by name, so the patch lands on its
+    module. The real sender is bypassed entirely (no config, no network)."""
     sent: list[dict] = []
 
-    def fake_send_mail(to, subject, body, html=None, attachments=None):
-        sent.append(
-            {
-                "to": to,
-                "subject": subject,
-                "body": body,
-                "html": html or "",
-                "attachments": attachments or [],
-            }
-        )
+    def fake_send(text, photo=None):
+        sent.append({"text": text, "photo": photo})
         return True
 
-    monkeypatch.setattr(admin_notify, "send_mail", fake_send_mail)
-    monkeypatch.setattr(settings, "ADMIN_EMAIL", "owner@example.com")
+    monkeypatch.setattr(admin_notify, "send_admin_message", fake_send)
     return sent
 
 
-def _user(session_factory: sessionmaker, **overrides) -> User:
+def _user(session_factory: sessionmaker, **overrides) -> "object":
+    from app.models import User
+
     with session_factory() as db:
         user = User(
             email=overrides.pop("email", "u@example.com"),
@@ -68,13 +56,12 @@ def test_signup_notifies_owner_once(
         user = db.merge(user)
         admin_notify.notify_new_signup(db, user)
         assert user.admin_notified_signup is True
-        # A second call is a no-op: no new mail, flag already latched.
+        # A second call is a no-op: no new message, flag already latched.
         admin_notify.notify_new_signup(db, user)
 
     assert len(sent_admin) == 1
-    assert sent_admin[0]["to"] == "owner@example.com"
-    assert "u@example.com" in sent_admin[0]["body"]
-    assert "Maks" in sent_admin[0]["body"]
+    assert "u@example.com" in sent_admin[0]["text"]
+    assert "Maks" in sent_admin[0]["text"]
 
 
 def test_first_car_includes_car_line(
@@ -103,14 +90,14 @@ def test_first_car_includes_car_line(
         assert user.admin_notified_first_car is True
 
     assert len(sent_admin) == 1
-    body = sent_admin[0]["body"]
+    text = sent_admin[0]["text"]
     # No display name → the raw address stands in for the person.
-    assert "carowner@example.com" in body
+    assert "carowner@example.com" in text
     # Every filled-in fact makes it into the spec-sheet note.
-    assert "Mitsubishi" in body and "L200" in body and "2008" in body
-    assert "II" in body and "2.5 DID" in body and "diesel" in body
-    assert "258 000 км" in body  # odometer, thin-space grouped
-    assert "JMBLYV98H8J000123" in body and "AA1234BB" in body
+    assert "Mitsubishi" in text and "L200" in text and "2008" in text
+    assert "II" in text and "2.5 DID" in text and "diesel" in text
+    assert "258 000 км" in text  # odometer, thin-space grouped
+    assert "JMBLYV98H8J000123" in text and "AA1234BB" in text
 
 
 def test_first_verified_latches(
@@ -125,7 +112,7 @@ def test_first_verified_latches(
     assert len(sent_admin) == 1
 
 
-def test_first_ocr_names_the_kind(
+def test_first_ocr_names_the_kind_and_attaches_photo(
     sent_admin: list[dict], db_session_factory: sessionmaker
 ) -> None:
     user = _user(db_session_factory)
@@ -137,43 +124,44 @@ def test_first_ocr_names_the_kind(
         admin_notify.notify_first_ocr(db, user, "чек", fields, image)
         assert user.admin_notified_first_ocr is True
     assert len(sent_admin) == 1
-    body = sent_admin[0]["body"]
-    assert "чек" in body
+    text = sent_admin[0]["text"]
+    assert "чек" in text
     # Recognised fields land in the note; empty ones are dropped.
-    assert "42.5 л" in body and "2473" in body and "ОККО" in body
-    assert "Порожнє" not in body
-    # The original photo rides along as an attachment.
-    assert sent_admin[0]["attachments"] == [image]
+    assert "42.5 л" in text and "2473" in text and "ОККО" in text
+    assert "Порожнє" not in text
+    # The original photo rides along as the Telegram photo.
+    assert sent_admin[0]["photo"] == image
 
 
-def test_no_admin_email_sends_nothing(
+def test_disabled_admin_bot_sends_nothing(
     monkeypatch: pytest.MonkeyPatch, db_session_factory: sessionmaker
 ) -> None:
-    """An empty ADMIN_EMAIL disables the whole feature — flag still latches so a
-    later config change does not retroactively fire an alert for old activity."""
-    sent: list = []
-    monkeypatch.setattr(admin_notify, "send_mail", lambda *a, **k: sent.append(a))
-    monkeypatch.setattr(settings, "ADMIN_EMAIL", "")
+    """With the admin bot unconfigured the real sender returns False and nothing
+    goes out — but the flag still latches so a later config change does not
+    retroactively fire an alert for old activity."""
+    from app.config import settings
+
+    # Real sender, but no token/chat → admin_telegram_enabled() is False.
+    monkeypatch.setattr(settings, "ADMIN_BOT_TOKEN", "")
+    monkeypatch.setattr(settings, "ADMIN_TELEGRAM_CHAT_ID", "")
 
     user = _user(db_session_factory)
     with db_session_factory() as db:
         user = db.merge(user)
         admin_notify.notify_new_signup(db, user)
-        assert user.admin_notified_signup is True
-    assert sent == []
+        assert user.admin_notified_signup is True  # latched regardless
 
 
 def test_signup_survives_send_failure(
     monkeypatch: pytest.MonkeyPatch, db_session_factory: sessionmaker
 ) -> None:
-    """A throwing mailer must not bubble out of the notify helper — the flag is
+    """A throwing sender must not bubble out of the notify helper — the flag is
     committed first, so the failed alert is simply skipped, never retried."""
-    monkeypatch.setattr(settings, "ADMIN_EMAIL", "owner@example.com")
 
     def boom(*a, **k):
-        raise RuntimeError("smtp down")
+        raise RuntimeError("telegram down")
 
-    monkeypatch.setattr(admin_notify, "send_mail", boom)
+    monkeypatch.setattr(admin_notify, "send_admin_message", boom)
 
     user = _user(db_session_factory)
     with db_session_factory() as db:
@@ -187,14 +175,11 @@ def test_verification_flow_fires_admin_alert(
     monkeypatch: pytest.MonkeyPatch, client: TestClient, db_session_factory: sessionmaker
 ) -> None:
     """End-to-end: register with mail on, then confirm the code, and exactly one
-    'verified' alert reaches the owner."""
-    sent: list[dict] = []
+    'verified' alert reaches the owner (plus the signup alert on register)."""
+    sent: list[str] = []
     monkeypatch.setattr(
-        admin_notify,
-        "send_mail",
-        lambda to, s, b, html=None, attachments=None: sent.append({"to": to, "subject": s}) or True,
+        admin_notify, "send_admin_message", lambda text, photo=None: sent.append(text) or True
     )
-    monkeypatch.setattr(settings, "ADMIN_EMAIL", "owner@example.com")
     monkeypatch.setattr(verification, "mail_enabled", lambda: True)
 
     codes: list[str] = []
@@ -207,18 +192,11 @@ def test_verification_flow_fires_admin_alert(
         json={"email": "verifyme@example.com", "password": "password123"},
     )
     assert resp.status_code == 201
-    signup_alerts = [m for m in sent if "користувач" in m["subject"]]
+    signup_alerts = [m for m in sent if "Новий користувач" in m]
     assert len(signup_alerts) == 1  # signup alert fired on register
 
-    ok = verification.confirm_verification(
-        _session_db(db_session_factory), "verifyme@example.com", codes[-1]
-    )
+    with db_session_factory() as db:
+        ok = verification.confirm_verification(db, "verifyme@example.com", codes[-1])
     assert ok is True
-    verify_alerts = [m for m in sent if "пошта" in m["subject"]]
+    verify_alerts = [m for m in sent if "Пошту підтверджено" in m]
     assert len(verify_alerts) == 1
-    assert verify_alerts[0]["to"] == "owner@example.com"
-
-
-def _session_db(session_factory: sessionmaker):
-    """confirm_verification wants a live Session; hand it a fresh one."""
-    return session_factory()
