@@ -97,3 +97,49 @@ def test_slugify_brand():
     assert car_image._slugify_brand("Mercedes-Benz") == "mercedes-benz"
     assert car_image._slugify_brand("Alfa Romeo") == "alfa-romeo"
     assert car_image._slugify_brand("Rolls  Royce") == "rolls-royce"
+
+
+def test_logo_url_cyrillic_marques():
+    # Post-Soviet brands written in Cyrillic map to their Latin dataset slug.
+    assert car_image.brand_logo_url("ЗАЗ").endswith("/zaz.png")
+    assert car_image.brand_logo_url("ГАЗ").endswith("/gaz.png")
+    assert car_image.brand_logo_url("ВАЗ").endswith("/lada.png")
+    assert car_image.brand_logo_url("Таврія").endswith("/zaz.png")
+    # Uses the lighter thumb, not the optimized asset.
+    assert "/logos/thumb/" in car_image.brand_logo_url("MAN")
+
+
+# ── query building: model cleanup, generation, year ──────────────────────────
+
+
+def test_clean_model_strips_trim_keeps_model():
+    # First token always kept (may be the model, e.g. "3" in "3 Series").
+    assert car_image._clean_model("3 Series 320d") == "3 Series"
+    assert car_image._clean_model("1 Series 118i") == "1 Series"
+    assert car_image._clean_model("Gls 350") == "Gls"
+    assert car_image._clean_model("Passat 2.0") == "Passat"
+    assert car_image._clean_model("A4 2.0 TDI") == "A4"
+    assert car_image._clean_model("GLE 400 d") == "GLE"
+    # Plain models are left alone.
+    assert car_image._clean_model("Golf") == "Golf"
+    assert car_image._clean_model("L200") == "L200"
+    assert car_image._clean_model("C-Class") == "C-Class"
+
+
+def test_generation_terms():
+    class C:
+        def __init__(self, g):
+            self.generation = g
+
+    assert car_image._generation_terms(C("7 (BA5)")) == ["Mk7", "VII"]
+    assert car_image._generation_terms(C("B7")) == ["B7"]
+    assert car_image._generation_terms(C("W205")) == ["W205"]
+    assert car_image._generation_terms(C("G20")) == ["G20"]
+    assert car_image._generation_terms(C("")) == []
+    assert car_image._generation_terms(C(None)) == []
+
+
+def test_title_year():
+    assert car_image._title_year("bmw 320d (e90) front poznan 2011.jpg") == 2011
+    assert car_image._title_year("2013 kia sportage sl.jpg") == 2013
+    assert car_image._title_year("volkswagen golf.jpg") is None
