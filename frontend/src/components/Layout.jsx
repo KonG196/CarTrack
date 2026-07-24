@@ -183,13 +183,14 @@ export default function Layout() {
           <NavLink to="/" aria-label={t('nav.toHome')} className="shrink-0">
             <Wordmark />
           </NavLink>
-          {/* The switcher takes only the width its label needs (min-w-0 lets it
-              truncate on a long name); the spacer pushes the bell to the edge so
-              the button never stretches with empty padding on the right. */}
+          {/* Spacer BEFORE the switcher: the empty room falls between the
+              wordmark and the switcher, so the car button sits over on the right
+              next to the bell rather than stranded in the middle. min-w-0 still
+              lets a long name truncate. */}
+          <span className="flex-1" />
           <span data-tour="car-switcher" className="min-w-0">
             <CarSelector />
           </span>
-          <span className="flex-1" />
           <NotificationBell />
         </div>
       </header>
