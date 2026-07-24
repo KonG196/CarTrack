@@ -31,7 +31,16 @@ htmlcov/
 coverage.xml
 
 # User notes (chat log with project spec)
-.txt
+*.txt
+
+# Internal docs — my own working notes, not for the public repo.
+# Kept on disk, never committed. README + docs/media/** + docs/DEPLOY.md stay tracked.
+docs/GEMINI-BRIEF.md
+docs/FEATURE-MAP.md
+docs/logo-brief.md
+docs/research/
+docs/security/
+docs/superpowers/
 
 # Ключі та сертифікати — ніколи в репозиторій
 *.pem
