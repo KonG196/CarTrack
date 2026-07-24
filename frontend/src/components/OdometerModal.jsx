@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Gauge } from 'lucide-react';
 import Modal from './UI/Modal';
@@ -18,8 +18,12 @@ export default function OdometerModal({ open, onClose, car, onSaved }) {
   const [value, setValue] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const inputRef = useRef(null);
 
-  // Seed with the current reading (in display units) each time it opens.
+  // Seed with the current reading (in display units) each time it opens, then
+  // focus with the caret at the END — the reading is pre-filled and the user
+  // appends to it, so a caret at position 0 (the old autoFocus behaviour) meant
+  // typing landed before the first digit. Focus AFTER the seed paints.
   useEffect(() => {
     if (open && car) {
       const km = car.current_odometer ?? '';
@@ -27,6 +31,13 @@ export default function OdometerModal({ open, onClose, car, onSaved }) {
         km === '' ? '' : isImperial(currentUnits()) ? Math.round(km / KM_PER_MILE) : km;
       setValue(String(shown));
       setError('');
+      requestAnimationFrame(() => {
+        const el = inputRef.current;
+        if (!el) return;
+        el.focus();
+        const end = el.value.length;
+        el.setSelectionRange(end, end);
+      });
     }
   }, [open, car]);
 
@@ -67,13 +78,13 @@ export default function OdometerModal({ open, onClose, car, onSaved }) {
         <p className="text-sm text-mist">{t('odometerModal.subtitle')}</p>
       </div>
       <TextField
+        ref={inputRef}
         label={t('carEditor.odometer', { unit: distanceUnitLabel() })}
         type="number"
         inputMode="numeric"
         enterKeyHint="done"
         min="0"
         numeric
-        autoFocus
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => {

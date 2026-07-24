@@ -110,7 +110,7 @@ export default function Menu({
             ref={popRef}
             data-closing={closing ? 'true' : undefined}
             style={panelStyle}
-            className={`menu-pop z-[1000] max-h-72 origin-top overflow-y-auto rounded-xl border border-edge-soft p-1 shadow-2xl shadow-black/70 ring-1 ring-black/50 ${
+            className={`menu-pop z-[1000] max-h-72 origin-top overflow-y-auto overscroll-contain rounded-xl border border-edge-soft p-1 shadow-2xl shadow-black/70 ring-1 ring-black/50 ${
               matchWidth ? '' : 'min-w-[12rem]'
             }`}
           >

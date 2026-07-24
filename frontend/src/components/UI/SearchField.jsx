@@ -25,7 +25,7 @@ const SearchField = forwardRef(function SearchField(
         onChange={onChange}
         placeholder={resolvedPlaceholder}
         aria-label={resolvedLabel}
-        className="w-full rounded-xl border border-edge-soft bg-raised py-3 pl-10 pr-10 text-sm text-fg outline-none transition-colors placeholder:text-mist focus:border-amber"
+        className="w-full rounded-xl border border-edge-soft bg-raised py-3 pl-10 pr-10 text-base text-fg outline-none transition-colors placeholder:text-mist focus:border-amber"
         {...props}
       />
       {value ? (
@@ -33,7 +33,7 @@ const SearchField = forwardRef(function SearchField(
           type="button"
           onClick={onClear}
           aria-label={t('uiSearchField.clear')}
-          className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-mist transition-colors hover:bg-panel hover:text-fg"
+          className="absolute right-1 top-1/2 flex min-h-[44px] min-w-[44px] -translate-y-1/2 items-center justify-center rounded-lg text-mist transition-colors hover:bg-panel hover:text-fg"
         >
           <X className="h-4 w-4" />
         </button>

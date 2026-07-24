@@ -368,7 +368,7 @@ function CarForm({ initial, onSubmit, onCancel, focusField }) {
           value={form.scratchpad}
           onChange={set('scratchpad')}
           placeholder={t('carEditor.notesPlaceholder')}
-          className="w-full resize-none rounded-xl border border-edge bg-panel px-3.5 py-2.5 text-sm text-fg placeholder:text-mist/50 focus:border-amber focus:outline-none"
+          className="w-full resize-none rounded-xl border border-edge bg-panel px-3.5 py-2.5 text-base text-fg placeholder:text-mist/50 focus:border-amber focus:outline-none"
         />
         <p className="mt-1 px-1 text-xs text-mist/70">
           {t('carEditor.telegramNote')}

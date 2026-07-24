@@ -138,7 +138,10 @@
   }
 
   .modal-dialog {
-    @apply flex max-h-[calc(100vh-3rem)] w-full flex-col overflow-hidden rounded-2xl border
+    /* dvh, not vh: on mobile Safari vh counts the space under the URL bar, so a
+       tall modal spilled below the visible screen ("показується нижче екрана").
+       dvh tracks the actually-visible viewport. */
+    @apply flex max-h-[calc(100dvh-3rem)] w-full flex-col overflow-hidden rounded-2xl border
       border-edge bg-panel shadow-2xl shadow-black/60;
     animation: kt-dialog-in 0.2s cubic-bezier(0.2, 0.8, 0.3, 1) both;
   }
@@ -151,7 +154,7 @@
       @apply items-end p-0;
     }
     .modal-dialog {
-      @apply max-h-[92vh] rounded-b-none border-x-0 border-b-0;
+      @apply max-h-[92dvh] rounded-b-none border-x-0 border-b-0;
       animation: kt-sheet-in 0.3s cubic-bezier(0.32, 0.72, 0, 1) both;
       will-change: transform;
     }

@@ -12,6 +12,14 @@ const SIZES = {
   lg: 'max-w-lg',
 };
 
+// Body scroll lock shared across all open modals. A per-instance capture broke
+// with stacked modals: the inner modal captured overflow:'hidden' (already set
+// by the outer one) and restored *that* on close, leaving the page permanently
+// unscrollable. A reference count locks while ANY modal is mounted and restores
+// the true pre-lock value only when the last one closes.
+let lockCount = 0;
+let savedOverflow = '';
+
 export default function Modal({
   open,
   onClose,
@@ -39,10 +47,16 @@ export default function Modal({
 
   useEffect(() => {
     if (!mounted) return undefined;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    if (lockCount === 0) {
+      savedOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+    }
+    lockCount += 1;
     return () => {
-      document.body.style.overflow = previous;
+      lockCount -= 1;
+      if (lockCount === 0) {
+        document.body.style.overflow = savedOverflow;
+      }
     };
   }, [mounted]);
 
@@ -89,7 +103,7 @@ export default function Modal({
                 type="button"
                 onClick={requestClose}
                 aria-label={t('common.close')}
-                className="-mr-1 rounded-lg p-1.5 text-mist transition-colors hover:bg-raised hover:text-fg"
+                className="-mr-1 flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-mist transition-colors hover:bg-raised hover:text-fg"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -97,7 +111,16 @@ export default function Modal({
           </header>
         )}
 
-        <div className={`min-h-0 flex-1 overflow-y-auto p-4 ${bodyClassName}`}>{children}</div>
+        <div
+          className={`min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 ${
+            // Footered modals get their safe-area inset from the footer; a
+            // footerless one would otherwise put its last control under the iOS
+            // home indicator, so pad the scroll region itself.
+            footer ? '' : 'pb-[max(1rem,env(safe-area-inset-bottom))]'
+          } ${bodyClassName}`}
+        >
+          {children}
+        </div>
 
         {footer && (
           <footer className="flex flex-shrink-0 gap-2 border-t border-edge p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">

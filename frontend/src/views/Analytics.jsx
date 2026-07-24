@@ -244,9 +244,9 @@ function TabBar({ tab, onTab }) {
 // A big-number tile for the Efficiency tab.
 function TcoTile({ label, value, unit, hint }) {
   return (
-    <Card className="p-4">
+    <Card className="min-w-0 p-4">
       <p className="text-xs text-mist">{label}</p>
-      <p className="mt-1.5 font-mono text-2xl font-semibold tabular-nums text-fg">
+      <p className="mt-1.5 break-words font-mono text-2xl font-semibold tabular-nums text-fg">
         {value}
         {unit ? <span className="ml-1 text-base font-normal text-mist">{unit}</span> : null}
       </p>
@@ -816,7 +816,7 @@ export default function Analytics() {
               label={t('analytics.tcoCostPerDay', { currency: currentCurrencySymbol() })}
               value={
                 analytics.tco?.cost_per_day != null
-                  ? formatMoney(analytics.tco.cost_per_day)
+                  ? formatMoneyCompact(analytics.tco.cost_per_day)
                   : '—'
               }
               hint={t('analytics.tcoCostPerDayHint')}
@@ -834,7 +834,7 @@ export default function Analytics() {
               label={t('analytics.tcoSpendPerMonth')}
               value={
                 analytics.forecast?.avg_monthly_spend != null
-                  ? formatMoney(analytics.forecast.avg_monthly_spend)
+                  ? formatMoneyCompact(analytics.forecast.avg_monthly_spend)
                   : '—'
               }
             />

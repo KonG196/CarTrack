@@ -501,7 +501,7 @@ export default function LogDetail() {
           <img
             src={photoUrls[lightboxPhoto.id]}
             alt={lightboxPhoto.filename}
-            className="max-h-[70vh] w-full rounded-xl object-contain"
+            className="max-h-[70dvh] w-full rounded-xl object-contain"
           />
         ) : (
           <Spinner className="py-8" />

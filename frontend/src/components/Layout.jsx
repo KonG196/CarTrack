@@ -60,7 +60,7 @@ function CarSelector() {
           label: [car.brand, car.model, gen].filter(Boolean).join(' '),
         };
       })}
-      buttonClassName="flex min-w-0 max-w-[46vw] items-center gap-1.5 rounded-xl border border-edge bg-panel py-1.5 pl-2.5 pr-3 text-sm text-fg transition-colors hover:border-edge-soft"
+      buttonClassName="flex w-full min-w-0 items-center gap-1.5 rounded-xl border border-edge bg-panel py-1.5 pl-2.5 pr-3 text-sm text-fg transition-colors hover:border-edge-soft"
       button={
         <>
           <Car className="h-4 w-4 flex-shrink-0 text-amber" />
@@ -182,7 +182,7 @@ export default function Layout() {
           <NavLink to="/" aria-label={t('nav.toHome')} className="shrink-0">
             <Wordmark />
           </NavLink>
-          <span data-tour="car-switcher" className="min-w-0">
+          <span data-tour="car-switcher" className="min-w-0 flex-1">
             <CarSelector />
           </span>
         </div>

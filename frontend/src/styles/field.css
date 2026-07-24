@@ -5,8 +5,12 @@
   }
 
   .field-input {
+    /* 16px, not 15: iOS Safari zooms the whole page when a focused input is
+       under 16px and often never zooms back — users saw everything "scale up"
+       and scrolling get stuck after touching a field. 16px is the smallest size
+       that never triggers it. */
     @apply h-14 w-full rounded-xl border-[1.5px] border-edge bg-raised px-3.5 pb-2 pt-6
-      text-[15px] text-fg outline-none transition-colors duration-150;
+      text-base text-fg outline-none transition-colors duration-150;
   }
   .field-input:focus {
     @apply border-amber bg-panel;
