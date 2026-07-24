@@ -57,6 +57,10 @@ export default defineConfig({
         // Типовий набір Workbox не містить woff2, тож встановлений застосунок
         // офлайн лишався б без своїх шрифтів і падав на системний.
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // The iOS install-instruction screenshots are only ever seen in the
+        // "Add to Home Screen" modal, before install — no need to precache them
+        // for offline (that install flow is inherently online).
+        globIgnores: ['**/install-ios-step*.png'],
         navigateFallbackDenylist: [/^\/welcome$/, /^\/landing(\/(en|uk))?\/?$/, /^\/landing\.html$/],
         runtimeCaching: [
           {
